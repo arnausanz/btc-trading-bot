@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "btc-trading-bot"
+version = "0.1.0"
+description = "Algorithmic trading platform for BTC"
+authors = ["Arnau"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+[tool.poetry.group.dev.dependencies]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
