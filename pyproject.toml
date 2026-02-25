@@ -8,6 +8,10 @@ package-mode = false
 [tool.poetry.dependencies]
 python = "^3.10"
 pydantic = "^2.12.5"
+sqlalchemy = "^2.0.47"
+asyncpg = "^0.31.0"
+alembic = "^1.18.4"
+psycopg2-binary = "^2.9.11"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.2"
