@@ -1,0 +1,11 @@
+# config/bots/dca.yaml
+bot_id: dca_v1
+symbol: BTC/USDT
+timeframe: 1h
+lookback: 50
+features:
+  - close
+
+# Compra cada N ticks
+buy_every_n_ticks: 24   # cada 24 hores (timeframe 1h)
+buy_size: 0.1           # 10% del capital disponible per compra
