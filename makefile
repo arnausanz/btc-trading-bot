@@ -44,3 +44,6 @@ clean:
 
 validate-data:
 	poetry run python scripts/validate_data.py
+
+compare:
+	poetry run python scripts/run_comparison.py
