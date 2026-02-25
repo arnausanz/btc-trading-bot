@@ -7,4 +7,5 @@ __pycache__/
 dist/
 .pytest_cache/
 .mypy_cache/
-.idea
+.idea/
+logs/

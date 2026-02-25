@@ -1,0 +1,30 @@
+# config/settings.yaml
+app:
+  name: btc-trading-bot
+  env: development  # development | production
+
+database:
+  host: localhost
+  port: 5432
+  name: btc_trading
+  user: btc_user
+  password: btc_password
+
+exchanges:
+  default: paper
+  binance:
+    api_key: ""
+    api_secret: ""
+    testnet: true
+
+data:
+  default_symbol: BTC/USDT
+  default_timeframes:
+    - 1h
+    - 4h
+    - 1d
+  historical_years: 3
+
+logging:
+  level: INFO
+  format: json
