@@ -1,0 +1,18 @@
+# config/bots/grid.yaml
+bot_id: grid_v1
+symbol: BTC/USDT
+timeframe: 1h
+lookback: 50
+features:
+  - close
+  - bb_upper_20
+  - bb_lower_20
+  - bb_middle_20
+  - rsi_14
+
+# Rang del grid en percentatge sobre el preu actual
+grid_spread: 0.02      # 2% entre nivells
+num_levels: 5          # nivells per sobre i per sota del preu
+level_size: 0.05       # 5% del capital per nivell
+rsi_filter_high: 75    # no compra si RSI > 75
+rsi_filter_low: 25     # no ven si RSI < 25

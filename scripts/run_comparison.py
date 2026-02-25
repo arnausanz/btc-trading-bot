@@ -8,6 +8,8 @@ from bots.classical.hold_bot import HoldBot
 from bots.classical.dca_bot import DCABot
 from bots.classical.trend_bot import TrendBot
 from core.backtesting.comparator import BotComparator
+from bots.classical.grid_bot import GridBot
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,6 +21,7 @@ if __name__ == "__main__":
         HoldBot(config_path="config/bots/hold.yaml"),
         DCABot(config_path="config/bots/dca.yaml"),
         TrendBot(config_path="config/bots/trend.yaml"),
+        GridBot(config_path="config/bots/grid.yaml"),
     ]
 
     comparator = BotComparator(

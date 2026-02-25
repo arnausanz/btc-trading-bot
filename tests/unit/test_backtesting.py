@@ -5,6 +5,7 @@ import pytest
 from core.backtesting.metrics import BacktestMetrics
 from core.backtesting.engine import BacktestEngine
 from bots.classical.hold_bot import HoldBot
+from bots.classical.grid_bot import GridBot
 
 
 def make_history(n: int = 100, initial: float = 10_000.0) -> list[dict]:
@@ -57,3 +58,11 @@ def test_backtest_hold_bot():
     summary = metrics.summary()
     assert summary["total_return_pct"] == 0.0
     assert summary["total_ticks"] > 0
+
+def test_grid_bot_backtest():
+    bot = GridBot(config_path="config/bots/grid.yaml")
+    engine = BacktestEngine(bot=bot)
+    metrics = engine.run(symbol="BTC/USDT", timeframe="1h")
+    summary = metrics.summary()
+    assert summary["total_ticks"] > 0
+    assert "sharpe_ratio" in summary
