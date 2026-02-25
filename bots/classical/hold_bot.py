@@ -25,6 +25,7 @@ class HoldBot(BaseBot):
         )
 
     def on_observation(self, observation: dict) -> Signal:
+        # L'observació ara és {'1h': {'features': df, 'current_price': float, 'timestamp': ...}, 'portfolio': {...}}
         return Signal(
             bot_id=self.bot_id,
             timestamp=datetime.now(timezone.utc),
