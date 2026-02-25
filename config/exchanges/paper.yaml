@@ -1,0 +1,4 @@
+# config/exchanges/paper.yaml
+initial_capital: 10000.0
+fee_rate: 0.001       # 0.1% — equivalent a Binance spot
+slippage_rate: 0.0005 # 0.05% — slippage mig en mercat líquid
