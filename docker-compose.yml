@@ -1,0 +1,21 @@
+# docker-compose.yml
+services:
+  db:
+    image: timescale/timescaledb:latest-pg15
+    container_name: btc_trading_db
+    environment:
+      POSTGRES_DB: btc_trading
+      POSTGRES_USER: btc_user
+      POSTGRES_PASSWORD: btc_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U btc_user -d btc_trading"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
