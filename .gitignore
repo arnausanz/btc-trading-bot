@@ -9,3 +9,5 @@ dist/
 .mypy_cache/
 .idea/
 logs/
+mlflow.db
+mlruns/

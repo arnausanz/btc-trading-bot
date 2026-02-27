@@ -47,3 +47,6 @@ validate-data:
 
 compare:
 	poetry run python scripts/run_comparison.py
+
+mlflow:
+	poetry run mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5001

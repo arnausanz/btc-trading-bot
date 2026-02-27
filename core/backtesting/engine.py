@@ -1,5 +1,6 @@
 # core/backtesting/engine.py
 import logging
+import mlflow
 from core.interfaces.base_bot import BaseBot
 from core.engine.runner import Runner
 from core.backtesting.metrics import BacktestMetrics
@@ -7,11 +8,13 @@ from exchanges.paper import PaperExchange
 
 logger = logging.getLogger(__name__)
 
+MLFLOW_TRACKING_URI = "sqlite:///mlflow.db"
+
 
 class BacktestEngine:
     """
     Executa un backtest complet d'un bot i retorna les mètriques de rendiment.
-    Usa el Runner i el PaperExchange internament.
+    Cada execució queda registrada automàticament a MLflow.
     """
 
     def __init__(
@@ -21,22 +24,42 @@ class BacktestEngine:
     ):
         self.bot = bot
         self.exchange_config_path = exchange_config_path
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
     def run(self, symbol: str, timeframe: str) -> BacktestMetrics:
-        """
-        Executa el backtest i retorna les mètriques.
-        Crea un exchange net per cada execució — cap estat residual entre backtests.
-        """
         exchange = PaperExchange(config_path=self.exchange_config_path)
         initial_capital = exchange.get_balance("USDT")
 
-        runner = Runner(bot=self.bot, exchange=exchange)
-        history = runner.run(symbol=symbol, timeframe=timeframe)
+        mlflow.set_experiment(self.bot.bot_id)
 
-        metrics = BacktestMetrics(history=history, initial_capital=initial_capital)
+        with mlflow.start_run():
+            # Registra els paràmetres de configuració del bot
+            mlflow.log_params({
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "initial_capital": initial_capital,
+                **{k: v for k, v in self.bot.config.items()
+                   if isinstance(v, (str, int, float, bool))},
+            })
 
-        logger.info("=== BACKTEST RESULTS ===")
-        for key, value in metrics.summary().items():
-            logger.info(f"  {key}: {value}")
+            runner = Runner(bot=self.bot, exchange=exchange)
+            history = runner.run(symbol=symbol, timeframe=timeframe)
+
+            metrics = BacktestMetrics(history=history, initial_capital=initial_capital)
+            summary = metrics.summary()
+
+            # Registra les mètriques a MLflow
+            mlflow.log_metrics({
+                "total_return_pct": summary["total_return_pct"],
+                "sharpe_ratio": summary["sharpe_ratio"],
+                "max_drawdown_pct": summary["max_drawdown_pct"],
+                "calmar_ratio": summary["calmar_ratio"],
+                "win_rate_pct": summary["win_rate_pct"],
+                "final_capital": summary["final_capital"],
+            })
+
+            logger.info("=== BACKTEST RESULTS ===")
+            for key, value in summary.items():
+                logger.info(f"  {key}: {value}")
 
         return metrics
