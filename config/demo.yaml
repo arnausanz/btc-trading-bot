@@ -1,0 +1,22 @@
+# config/demo.yaml
+demo:
+  symbol: BTC/USDT
+  timeframe: 1h
+  update_interval_seconds: 60  # comprova nou preu cada minut
+
+bots:
+  - config_path: config/bots/trend.yaml
+    enabled: true
+  - config_path: config/bots/dca.yaml
+    enabled: true
+
+exchange:
+  config_path: config/exchanges/paper.yaml
+
+telegram:
+  enabled: false  # activar quan tinguem el token
+  token: ""
+  chat_id: ""
+
+logging:
+  level: INFO

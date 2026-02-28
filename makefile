@@ -59,3 +59,6 @@ train:
 
 train-rl:
 	poetry run python scripts/train_rl.py
+
+demo:
+	poetry run python scripts/run_demo.py
