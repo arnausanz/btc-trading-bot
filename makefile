@@ -53,3 +53,6 @@ mlflow:
 
 optimize:
 	poetry run python scripts/optimize_bots.py
+
+train:
+	poetry run python scripts/train_models.py

@@ -1,0 +1,19 @@
+# config/training/xgb_experiment_1.yaml
+experiment_name: xgboost_v1
+model_type: xgboost
+
+data:
+  symbol: BTC/USDT
+  timeframes:
+    - 1h
+  forward_window: 24
+  threshold_pct: 0.005
+
+model:
+  n_estimators: 200
+  max_depth: 6
+  learning_rate: 0.05
+  scale_pos_weight: 2.0
+
+output:
+  model_path: models/xgboost_v1.pkl

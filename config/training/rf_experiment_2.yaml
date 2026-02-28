@@ -1,0 +1,18 @@
+# config/training/rf_experiment_2.yaml
+experiment_name: random_forest_v2_multiframe
+model_type: random_forest
+
+data:
+  symbol: BTC/USDT
+  timeframes:
+    - 1h
+    - 4h
+  forward_window: 24
+  threshold_pct: 0.01
+
+model:
+  n_estimators: 200
+  max_depth: 15
+
+output:
+  model_path: models/random_forest_v2.pkl

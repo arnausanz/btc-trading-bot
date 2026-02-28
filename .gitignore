@@ -11,3 +11,4 @@ dist/
 logs/
 mlflow.db
 mlruns/
+models/*.pkl

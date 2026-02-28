@@ -1,0 +1,17 @@
+# config/training/rf_experiment_1.yaml
+experiment_name: random_forest_v1
+model_type: random_forest
+
+data:
+  symbol: BTC/USDT
+  timeframes:
+    - 1h
+  forward_window: 24      # hores vista per a la predicció
+  threshold_pct: 0.005     # mínim 0.5% de moviment per considerar senyal
+
+model:
+  n_estimators: 100
+  max_depth: 10
+
+output:
+  model_path: models/random_forest_v1.pkl
