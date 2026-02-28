@@ -62,3 +62,6 @@ train-rl:
 
 demo:
 	poetry run python scripts/run_demo.py
+
+dashboard:
+	poetry run streamlit run monitoring/dashboard.py

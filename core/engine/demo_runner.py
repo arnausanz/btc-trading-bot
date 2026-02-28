@@ -8,6 +8,8 @@ from data.observation.builder import ObservationBuilder
 from exchanges.paper import PaperExchange
 from core.interfaces.base_bot import BaseBot
 from core.models import Signal, Action, Order
+from monitoring.telegram_notifier import TelegramNotifier
+
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,11 @@ class DemoRunner:
         self.histories: dict[str, list[dict]] = {}
 
         self._load_bots()
+
+        if self.config["telegram"]["enabled"]:
+            self.notifier = TelegramNotifier()
+        else:
+            self.notifier = None
 
     def _load_bots(self) -> None:
         """Carrega els bots definits al config."""
@@ -131,6 +138,15 @@ class DemoRunner:
                         f"Motiu: {signal.reason}"
                     )
 
+                if signal.action != Action.HOLD and self.notifier:
+                    self.notifier.notify_trade(
+                        bot_id=bot_id,
+                        action=signal.action.value,
+                        price=current_price,
+                        portfolio_value=portfolio_value,
+                        reason=signal.reason,
+                    )
+
             except Exception as e:
                 logger.error(f"Error processant tick per {bot_id}: {e}")
 
@@ -155,6 +171,8 @@ class DemoRunner:
     def run(self) -> None:
         """Loop principal del demo — corre indefinidament."""
         logger.info(f"Demo Runner iniciat: {[b.bot_id for b in self.bots]}")
+        if self.notifier:
+            self.notifier.notify_startup([b.bot_id for b in self.bots])
         logger.info(f"Interval d'actualització: {self.update_interval}s")
 
         while True:
@@ -171,6 +189,12 @@ class DemoRunner:
                         f"BTC: {s['btc_balance']:.6f} | "
                         f"USDT: {s['usdt_balance']:.2f}"
                     )
+
+                # Envia estat cada hora (3600 / update_interval ticks)
+                ticks_per_hour = 3600 // self.update_interval
+                if len(list(self.histories.values())[0]) % ticks_per_hour == 0:
+                    if self.notifier:
+                        self.notifier.notify_status(self.get_status())
 
                 time.sleep(self.update_interval)
 

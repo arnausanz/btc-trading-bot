@@ -14,9 +14,7 @@ exchange:
   config_path: config/exchanges/paper.yaml
 
 telegram:
-  enabled: false  # activar quan tinguem el token
-  token: ""
-  chat_id: ""
+  enabled: true
 
 logging:
   level: INFO
