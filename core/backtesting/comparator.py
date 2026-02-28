@@ -8,12 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 class BotComparator:
-    """
-    Executa backtests de múltiples bots sobre el mateix període i capital
-    i retorna un ranking objectiu basat en les mètriques.
-    Tots els bots s'executen amb les mateixes condicions — comparació justa.
-    """
-
     def __init__(
         self,
         bots: list[BaseBot],
@@ -27,13 +21,10 @@ class BotComparator:
         self.exchange_config_path = exchange_config_path
 
     def run(self) -> list[dict]:
-        """
-        Executa el backtest de cada bot i retorna els resultats ordenats per Sharpe Ratio.
-        """
         results = []
 
         for bot in self.bots:
-            logger.info(f"Executant backtest: {bot.bot_id}...")
+            print(f"\n▶ Executant backtest: {bot.bot_id}")
             engine = BacktestEngine(
                 bot=bot,
                 exchange_config_path=self.exchange_config_path,
@@ -41,24 +32,51 @@ class BotComparator:
             metrics = engine.run(symbol=self.symbol, timeframe=self.timeframe)
             summary = metrics.summary()
             summary["bot_id"] = bot.bot_id
+            summary["trade_counts"] = self._count_trades(metrics)
             results.append(summary)
 
-        # Ordenem per Sharpe Ratio descendent
         results.sort(key=lambda x: x["sharpe_ratio"], reverse=True)
-
-        self._print_ranking(results)
+        self._print_summary(results)
         return results
 
-    def _print_ranking(self, results: list[dict]) -> None:
-        logger.info("=== RANKING DE BOTS ===")
-        logger.info(f"{'Bot':<20} {'Return%':>10} {'Sharpe':>10} {'Drawdown%':>12} {'Calmar':>10} {'WinRate%':>10}")
-        logger.info("-" * 75)
+    def _count_trades(self, metrics: BacktestMetrics) -> dict:
+        df = metrics.df
+        signals = df["signal"].astype(str)
+        return {
+            "buy":  signals.str.contains("buy").sum(),
+            "sell": signals.str.contains("sell").sum(),
+            "hold": signals.str.contains("hold").sum(),
+        }
+
+    def _print_summary(self, results: list[dict]) -> None:
+        print("\n" + "═" * 80)
+        print("  RANKING FINAL DE BOTS")
+        print("═" * 80)
+
+        # Ranking per mètriques
+        print(f"\n  {'Bot':<20} {'Return%':>9} {'Sharpe':>8} {'Drawdown%':>11} {'Calmar':>8} {'WinRate%':>10}")
+        print("  " + "─" * 70)
         for r in results:
-            logger.info(
-                f"{r['bot_id']:<20} "
-                f"{r['total_return_pct']:>10.2f} "
-                f"{r['sharpe_ratio']:>10.3f} "
-                f"{r['max_drawdown_pct']:>12.2f} "
-                f"{r['calmar_ratio']:>10.3f} "
+            print(
+                f"  {r['bot_id']:<20} "
+                f"{r['total_return_pct']:>9.2f} "
+                f"{r['sharpe_ratio']:>8.3f} "
+                f"{r['max_drawdown_pct']:>11.2f} "
+                f"{r['calmar_ratio']:>8.3f} "
                 f"{r['win_rate_pct']:>10.2f}"
             )
+
+        # Resum de transaccions
+        print(f"\n  {'Bot':<20} {'BUY':>8} {'SELL':>8} {'HOLD':>10} {'Capital Final':>15}")
+        print("  " + "─" * 65)
+        for r in results:
+            tc = r["trade_counts"]
+            print(
+                f"  {r['bot_id']:<20} "
+                f"{tc['buy']:>8} "
+                f"{tc['sell']:>8} "
+                f"{tc['hold']:>10} "
+                f"{r['final_capital']:>14.2f}€"
+            )
+
+        print("\n" + "═" * 80)

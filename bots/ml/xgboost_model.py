@@ -50,6 +50,7 @@ class XGBoostModel:
         """
         Entrena amb TimeSeriesSplit i registra a MLflow.
         """
+        self.feature_names = list(X.columns)
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         mlflow.set_experiment("xgboost")
 
@@ -111,15 +112,17 @@ class XGBoostModel:
         return int(pred), float(proba_positive)
 
     def save(self, path: str) -> None:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as f:
-            pickle.dump({"model": self.model, "scaler": self.scaler}, f)
-        logger.info(f"Model guardat a {path}")
+            pickle.dump({
+                "model": self.model,
+                "scaler": self.scaler,
+                "feature_names": self.feature_names,
+            }, f)
 
     def load(self, path: str) -> None:
         with open(path, "rb") as f:
             data = pickle.load(f)
         self.model = data["model"]
         self.scaler = data["scaler"]
+        self.feature_names = data["feature_names"]
         self.is_trained = True
-        logger.info(f"Model carregat des de {path}")

@@ -53,14 +53,12 @@ class BacktestMetrics:
         return annualized_return / dd
 
     def win_rate(self) -> float:
-        """
-        Percentatge de trades tancats amb benefici.
-        Només compta ordres filled.
-        """
         filled = self.df[self.df["order_status"].astype(str).str.contains("filled")]
-        if len(filled) == 0:
-            return 0.0
+        if len(filled) < 2:
+            return 0.0  # sense trades tancats, win rate és 0
         returns = filled["portfolio_value"].pct_change().dropna()
+        if len(returns) == 0:
+            return 0.0
         wins = (returns > 0).sum()
         return float(wins / len(returns) * 100)
 

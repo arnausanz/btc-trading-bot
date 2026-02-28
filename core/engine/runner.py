@@ -9,11 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 class Runner:
-    """
-    Connecta un bot amb un exchange i executa el loop de trading.
-    Delega la construcció d'observacions a l'ObservationBuilder.
-    """
-
     def __init__(self, bot: BaseBot, exchange: BaseExchange):
         self.bot = bot
         self.exchange = exchange
@@ -21,17 +16,10 @@ class Runner:
 
     def run(self, symbol: str, timeframe: str) -> list[dict]:
         schema = self.bot.observation_schema()
-
-        # Precarrega totes les dades necessàries
         self.builder.load(schema=schema, symbol=symbol)
         df = self.builder.get_dataframe(symbol=symbol, timeframe=timeframe)
 
-        if len(df) < schema.lookback:
-            raise ValueError(
-                f"No hi ha prou dades. Necessites {schema.lookback} candles, "
-                f"tens {len(df)}."
-            )
-
+        total_ticks = len(df) - schema.lookback
         self.bot.on_start()
         history = []
 
@@ -41,11 +29,7 @@ class Runner:
             if isinstance(self.exchange, PaperExchange):
                 self.exchange.set_current_price(current_price)
 
-            observation = self.builder.build(
-                schema=schema,
-                symbol=symbol,
-                index=i,
-            )
+            observation = self.builder.build(schema=schema, symbol=symbol, index=i)
             observation["portfolio"] = self.exchange.get_portfolio()
 
             signal = self.bot.on_observation(observation)
@@ -63,6 +47,14 @@ class Runner:
                 ),
             })
 
+            # Barra de progrés cada 5%
+            tick = i - schema.lookback + 1
+            if tick % max(1, total_ticks // 1000) == 0 or tick == total_ticks:
+                pct = tick / total_ticks * 100
+                filled = int(pct / 5)
+                bar = "█" * filled + "░" * (20 - filled)
+                print(f"\r  [{bar}] {pct:5.1f}% ({tick}/{total_ticks})", end="", flush=True)
+
+        print()  # nova línia al acabar
         self.bot.on_stop()
-        logger.info(f"Runner completat: {len(history)} ticks processats")
         return history

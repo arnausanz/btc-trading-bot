@@ -126,7 +126,7 @@ class PaperExchange(BaseExchange):
         )
 
         self._orders.append(order)
-        logger.info(
+        logger.debug(  # canvia INFO per DEBUG
             f"Ordre executada: {side.value} {btc_amount:.6f} BTC "
             f"@ {fill_price:.2f} USDT (fees: {fees:.4f} USDT)"
         )

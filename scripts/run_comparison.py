@@ -9,6 +9,7 @@ from bots.classical.dca_bot import DCABot
 from bots.classical.trend_bot import TrendBot
 from core.backtesting.comparator import BotComparator
 from bots.classical.grid_bot import GridBot
+from bots.ml.ml_bot import MLBot
 
 
 logging.basicConfig(
@@ -22,6 +23,8 @@ if __name__ == "__main__":
         DCABot(config_path="config/bots/dca.yaml"),
         TrendBot(config_path="config/bots/trend.yaml"),
         GridBot(config_path="config/bots/grid.yaml"),
+        MLBot(config_path="config/bots/ml_bot.yaml"),
+
     ]
 
     comparator = BotComparator(
