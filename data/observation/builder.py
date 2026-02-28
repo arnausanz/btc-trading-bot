@@ -20,13 +20,25 @@ class ObservationBuilder:
     def load(self, schema: ObservationSchema, symbol: str) -> None:
         """
         Precarrega totes les dades necessàries per al schema donat.
-        S'executa una vegada abans d'iniciar el loop del Runner.
+        Detecta automàticament quins períodes d'EMA necessita el bot.
         """
         for timeframe in schema.timeframes:
             key = f"{symbol}_{timeframe}"
             if key not in self._cache:
                 logger.info(f"Carregant features per {symbol} {timeframe}...")
-                self._cache[key] = compute_features(symbol=symbol, timeframe=timeframe)
+
+                # Detecta períodes d'EMA a partir dels noms de features
+                ema_periods = [
+                    int(f.split("_")[1])
+                    for f in schema.features
+                    if f.startswith("ema_")
+                ]
+
+                self._cache[key] = compute_features(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    ema_periods=ema_periods,
+                )
                 logger.info(f"  {len(self._cache[key])} files carregades")
 
     def build(

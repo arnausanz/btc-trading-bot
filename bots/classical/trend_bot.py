@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 class TrendBot(BaseBot):
     """
     Trend Following Bot basat en EMA crossover + filtre RSI.
-    Compra quan EMA ràpida creua EMA lenta cap amunt (i RSI no és sobrecomprat).
-    Ven quan EMA ràpida creua EMA lenta cap avall (i RSI no és sobrevenut).
+    Calcula les EMAs dinàmicament sobre la finestra rebuda —
+    no depèn de columnes pre-calculades al Feature Store.
     """
 
     def __init__(self, config_path: str = "config/bots/trend.yaml"):
@@ -23,30 +23,34 @@ class TrendBot(BaseBot):
         self._in_position = False
 
     def observation_schema(self) -> ObservationSchema:
+        # Només necessita close i rsi_14 — les EMAs les calcula ell mateix
         return ObservationSchema(
-            features=self.config["features"],
+            features=["close", "rsi_14"],
             timeframes=[self.config["timeframe"]],
             lookback=self.config["lookback"],
         )
 
     def on_observation(self, observation: dict) -> Signal:
         timeframe = self.config["timeframe"]
-        features: pd.DataFrame = observation[timeframe]["features"]
+        features: pd.DataFrame = observation[timeframe]["features"].copy()
 
-        ema_fast_col = f"ema_{self.config['ema_fast']}"
-        ema_slow_col = f"ema_{self.config['ema_slow']}"
+        ema_fast_period = self.config["ema_fast"]
+        ema_slow_period = self.config["ema_slow"]
 
-        # Últimes dues files per detectar el creuament
+        # Calcula EMAs dinàmicament sobre la finestra
+        features["ema_fast"] = features["close"].ewm(span=ema_fast_period, adjust=False).mean()
+        features["ema_slow"] = features["close"].ewm(span=ema_slow_period, adjust=False).mean()
+
         prev = features.iloc[-2]
         curr = features.iloc[-1]
 
         ema_fast_crossed_up = (
-            prev[ema_fast_col] <= prev[ema_slow_col] and
-            curr[ema_fast_col] > curr[ema_slow_col]
+            prev["ema_fast"] <= prev["ema_slow"] and
+            curr["ema_fast"] > curr["ema_slow"]
         )
         ema_fast_crossed_down = (
-            prev[ema_fast_col] >= prev[ema_slow_col] and
-            curr[ema_fast_col] < curr[ema_slow_col]
+            prev["ema_fast"] >= prev["ema_slow"] and
+            curr["ema_fast"] < curr["ema_slow"]
         )
 
         rsi = curr["rsi_14"]
@@ -59,7 +63,7 @@ class TrendBot(BaseBot):
                 timestamp=datetime.now(timezone.utc),
                 action=Action.BUY,
                 size=size,
-                confidence=min(1.0, (rsi / 100)),
+                confidence=min(1.0, rsi / 100),
                 reason=f"EMA crossover alcista. RSI: {rsi:.1f}",
             )
 
@@ -69,8 +73,8 @@ class TrendBot(BaseBot):
                 bot_id=self.bot_id,
                 timestamp=datetime.now(timezone.utc),
                 action=Action.SELL,
-                size=1.0,  # ven tot
-                confidence=min(1.0, (1 - rsi / 100)),
+                size=1.0,
+                confidence=min(1.0, 1 - rsi / 100),
                 reason=f"EMA crossover baixista. RSI: {rsi:.1f}",
             )
 

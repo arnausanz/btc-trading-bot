@@ -1,6 +1,7 @@
 # bots/classical/grid_bot.py
 import yaml
 import logging
+import numpy as np
 import pandas as pd
 from datetime import datetime, timezone
 from core.interfaces.base_bot import BaseBot, ObservationSchema
@@ -11,10 +12,7 @@ logger = logging.getLogger(__name__)
 
 class GridBot(BaseBot):
     """
-    Grid Trading Bot basat en Bollinger Bands.
-    Compra quan el preu toca la banda inferior (sobrevenut)
-    i ven quan toca la banda superior (sobrecomprat).
-    Funciona millor en mercats laterals amb oscil·lacions regulars.
+    Grid Trading Bot que calcula Bollinger Bands dinàmicament.
     """
 
     def __init__(self, config_path: str = "config/bots/grid.yaml"):
@@ -25,24 +23,27 @@ class GridBot(BaseBot):
 
     def observation_schema(self) -> ObservationSchema:
         return ObservationSchema(
-            features=self.config["features"],
+            features=["close", "rsi_14"],
             timeframes=[self.config["timeframe"]],
             lookback=self.config["lookback"],
         )
 
     def on_observation(self, observation: dict) -> Signal:
         timeframe = self.config["timeframe"]
-        features: pd.DataFrame = observation[timeframe]["features"]
-        curr = features.iloc[-1]
+        features: pd.DataFrame = observation[timeframe]["features"].copy()
 
-        price = curr["close"]
-        bb_lower = curr["bb_lower_20"]
-        bb_upper = curr["bb_upper_20"]
-        rsi = curr["rsi_14"]
+        # Calcula Bollinger Bands dinàmicament
+        close = features["close"]
+        middle = close.rolling(window=20).mean()
+        std = close.rolling(window=20).std()
+        bb_upper = middle + 2 * std
+        bb_lower = middle - 2 * std
 
-        # Compra quan el preu toca o trenca la banda inferior
+        price = close.iloc[-1]
+        rsi = features["rsi_14"].iloc[-1]
+
         if (
-            price <= bb_lower
+            price <= bb_lower.iloc[-1]
             and not self._in_position
             and rsi < self.config["rsi_filter_high"]
         ):
@@ -53,12 +54,11 @@ class GridBot(BaseBot):
                 action=Action.BUY,
                 size=self.config["level_size"],
                 confidence=min(1.0, 1 - rsi / 100),
-                reason=f"Preu {price:.0f} toca BB lower {bb_lower:.0f}. RSI: {rsi:.1f}",
+                reason=f"Preu {price:.0f} toca BB lower. RSI: {rsi:.1f}",
             )
 
-        # Ven quan el preu toca o trenca la banda superior
         if (
-            price >= bb_upper
+            price >= bb_upper.iloc[-1]
             and self._in_position
             and rsi > self.config["rsi_filter_low"]
         ):
@@ -69,7 +69,7 @@ class GridBot(BaseBot):
                 action=Action.SELL,
                 size=1.0,
                 confidence=min(1.0, rsi / 100),
-                reason=f"Preu {price:.0f} toca BB upper {bb_upper:.0f}. RSI: {rsi:.1f}",
+                reason=f"Preu {price:.0f} toca BB upper. RSI: {rsi:.1f}",
             )
 
         return Signal(
@@ -78,7 +78,7 @@ class GridBot(BaseBot):
             action=Action.HOLD,
             size=0.0,
             confidence=1.0,
-            reason=f"Preu {price:.0f} dins les bandes [{bb_lower:.0f}, {bb_upper:.0f}]",
+            reason=f"Preu {price:.0f} dins les bandes",
         )
 
     def on_start(self) -> None:

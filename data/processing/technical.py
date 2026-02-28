@@ -95,21 +95,22 @@ def load_candles(symbol: str, timeframe: str, session: Session) -> pd.DataFrame:
     return pd.DataFrame(data).set_index("timestamp")
 
 
-def compute_features(symbol: str, timeframe: str) -> pd.DataFrame:
+def compute_features(symbol: str, timeframe: str, ema_periods: list[int] | None = None) -> pd.DataFrame:
     """
     Carrega candles i calcula tots els indicadors tècnics.
-    Retorna el DataFrame complet amb totes les features.
+    ema_periods permet especificar períodes addicionals d'EMA.
     """
+    default_ema_periods = [9, 20, 50, 200]
+    all_ema_periods = list(set(default_ema_periods + (ema_periods or [])))
+
     session = SessionLocal()
     try:
         df = load_candles(symbol=symbol, timeframe=timeframe, session=session)
         logger.info(f"Carregades {len(df)} candles de {symbol} {timeframe}")
 
         ti = TechnicalIndicators()
-        df = ti.ema(df, 9)
-        df = ti.ema(df, 20)
-        df = ti.ema(df, 50)
-        df = ti.ema(df, 200)
+        for period in all_ema_periods:
+            df = ti.ema(df, period)
         df = ti.rsi(df, 14)
         df = ti.macd(df)
         df = ti.bollinger_bands(df, 20)

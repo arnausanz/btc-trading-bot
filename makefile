@@ -50,3 +50,6 @@ compare:
 
 mlflow:
 	poetry run mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5001
+
+optimize:
+	poetry run python scripts/optimize_bots.py
