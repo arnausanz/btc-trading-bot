@@ -12,3 +12,4 @@ logs/
 mlflow.db
 mlruns/
 models/*.pkl
+models/*.zip
