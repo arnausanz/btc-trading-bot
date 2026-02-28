@@ -56,3 +56,6 @@ optimize:
 
 train:
 	poetry run python scripts/train_models.py
+
+train-rl:
+	poetry run python scripts/train_rl.py
