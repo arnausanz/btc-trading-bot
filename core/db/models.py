@@ -66,3 +66,33 @@ class TradeDB(Base):
     pnl_pct: Mapped[float] = mapped_column(Float, nullable=False)
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
     metadata_: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+
+class DemoTickDB(Base):
+    """Registre de cada tick del DemoRunner."""
+    __tablename__ = "demo_ticks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    bot_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    price: Mapped[float] = mapped_column(Float, nullable=False)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    portfolio_value: Mapped[float] = mapped_column(Float, nullable=False)
+    usdt_balance: Mapped[float] = mapped_column(Float, nullable=False)
+    btc_balance: Mapped[float] = mapped_column(Float, nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+
+
+class DemoTradeDB(Base):
+    """Registre de cada trade executat durant el Demo."""
+    __tablename__ = "demo_trades"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    bot_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    action: Mapped[str] = mapped_column(String(10), nullable=False)
+    price: Mapped[float] = mapped_column(Float, nullable=False)
+    size_btc: Mapped[float] = mapped_column(Float, nullable=False)
+    size_usdt: Mapped[float] = mapped_column(Float, nullable=False)
+    fees: Mapped[float] = mapped_column(Float, nullable=False)
+    portfolio_value: Mapped[float] = mapped_column(Float, nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)

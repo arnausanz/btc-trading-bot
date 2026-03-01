@@ -9,6 +9,7 @@ from exchanges.paper import PaperExchange
 from core.interfaces.base_bot import BaseBot
 from core.models import Signal, Action, Order
 from monitoring.telegram_notifier import TelegramNotifier
+from core.db.demo_repository import DemoRepository
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class DemoRunner:
         self.histories: dict[str, list[dict]] = {}
 
         self._load_bots()
+        self.repo = DemoRepository()
 
         if self.config["telegram"]["enabled"]:
             self.notifier = TelegramNotifier()
@@ -88,7 +90,7 @@ class DemoRunner:
         return float(ticker["last"])
 
     def _process_tick(self, current_price: float) -> None:
-        """Processa un tick per a tots els bots."""
+        """Processa un tick per a tots els bots i persisteix a la DB."""
         for bot in self.bots:
             bot_id = bot.bot_id
             exchange = self.exchanges[bot_id]
@@ -97,55 +99,72 @@ class DemoRunner:
             try:
                 schema = bot.observation_schema()
 
-                # Carrega dades si és el primer tick
                 if not builder._cache:
                     builder.load(schema=schema, symbol=self.symbol)
                     bot.on_start()
 
-                df = builder.get_dataframe(
-                    symbol=self.symbol,
-                    timeframe=self.timeframe
-                )
+                df = builder.get_dataframe(symbol=self.symbol, timeframe=self.timeframe)
                 index = len(df) - 1
 
                 exchange.set_current_price(current_price)
-                observation = builder.build(
-                    schema=schema,
-                    symbol=self.symbol,
-                    index=index,
-                )
+                observation = builder.build(schema=schema, symbol=self.symbol, index=index)
                 observation["portfolio"] = exchange.get_portfolio()
 
                 signal = bot.on_observation(observation)
                 order = exchange.send_order(signal)
 
                 portfolio_value = exchange.get_portfolio_value()
+                now = datetime.now(timezone.utc)
 
-                tick_data = {
-                    "timestamp": datetime.now(timezone.utc),
+                # Guarda el tick a la DB
+                self.repo.save_tick(
+                    bot_id=bot_id,
+                    timestamp=now,
+                    price=current_price,
+                    action=signal.action.value,
+                    portfolio_value=portfolio_value,
+                    usdt_balance=exchange.get_balance("USDT"),
+                    btc_balance=exchange.get_balance("BTC"),
+                    reason=signal.reason,
+                )
+
+                # Guarda el trade si hi ha operació
+                if signal.action.value != "hold" and order.status.value == "filled":
+                    self.repo.save_trade(
+                        bot_id=bot_id,
+                        timestamp=now,
+                        action=signal.action.value,
+                        price=current_price,
+                        size_btc=order.size,
+                        size_usdt=order.size * current_price,
+                        fees=order.fees,
+                        portfolio_value=portfolio_value,
+                        reason=signal.reason,
+                    )
+
+                    if self.notifier:
+                        self.notifier.notify_trade(
+                            bot_id=bot_id,
+                            action=signal.action.value,
+                            price=current_price,
+                            portfolio_value=portfolio_value,
+                            reason=signal.reason,
+                        )
+
+                    logger.info(
+                        f"[{bot_id}] {signal.action.value.upper()} @ {current_price:.2f} | "
+                        f"Portfolio: {portfolio_value:.2f} USDT"
+                    )
+
+                # Actualitza historial en memòria
+                self.histories[bot_id].append({
+                    "timestamp": now,
                     "price": current_price,
                     "signal": signal.action,
                     "order_status": order.status,
                     "portfolio_value": portfolio_value,
                     "reason": signal.reason,
-                }
-                self.histories[bot_id].append(tick_data)
-
-                if signal.action != Action.HOLD:
-                    logger.info(
-                        f"[{bot_id}] {signal.action.value.upper()} @ {current_price:.2f} | "
-                        f"Portfolio: {portfolio_value:.2f} USDT | "
-                        f"Motiu: {signal.reason}"
-                    )
-
-                if signal.action != Action.HOLD and self.notifier:
-                    self.notifier.notify_trade(
-                        bot_id=bot_id,
-                        action=signal.action.value,
-                        price=current_price,
-                        portfolio_value=portfolio_value,
-                        reason=signal.reason,
-                    )
+                })
 
             except Exception as e:
                 logger.error(f"Error processant tick per {bot_id}: {e}")

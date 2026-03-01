@@ -119,3 +119,36 @@ class OHLCVFetcher:
             raise
         finally:
             session.close()
+
+    def get_last_timestamp(self, symbol: str, timeframe: str) -> datetime | None:
+        """Retorna el timestamp de l'última candle a la DB."""
+        session = SessionLocal()
+        try:
+            from sqlalchemy import func
+            result = session.query(func.max(CandleDB.timestamp)).filter_by(
+                symbol=symbol,
+                timeframe=timeframe,
+            ).scalar()
+            return result
+        finally:
+            session.close()
+
+    def update(self, symbol: str, timeframe: str) -> int:
+        """
+        Descarrega només les candles noves des de l'última a la DB fins ara.
+        És idempotent — es pot executar múltiples vegades sense duplicats.
+        """
+        last = self.get_last_timestamp(symbol=symbol, timeframe=timeframe)
+
+        if last is None:
+            logger.warning(f"No hi ha dades per {symbol} {timeframe}, descarrega des de 2022")
+            since = datetime(2022, 1, 1, tzinfo=timezone.utc)
+        else:
+            since = last
+            logger.info(f"Actualitzant {symbol} {timeframe} des de {since.date()}")
+
+        return self.fetch_and_store(
+            symbol=symbol,
+            timeframe=timeframe,
+            since=since,
+        )

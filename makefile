@@ -65,3 +65,6 @@ demo:
 
 dashboard:
 	poetry run streamlit run monitoring/dashboard.py
+
+update-data:
+	poetry run python scripts/update_data.py
