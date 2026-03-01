@@ -2,7 +2,6 @@
 import logging
 from core.interfaces.base_bot import BaseBot
 from core.interfaces.base_exchange import BaseExchange
-from exchanges.paper import PaperExchange
 from data.observation.builder import ObservationBuilder
 
 logger = logging.getLogger(__name__)
@@ -25,9 +24,7 @@ class Runner:
 
         for i in range(schema.lookback, len(df)):
             current_price = float(df.iloc[i]["close"])
-
-            if isinstance(self.exchange, PaperExchange):
-                self.exchange.set_current_price(current_price)
+            self.exchange.set_current_price(current_price)
 
             observation = self.builder.build(schema=schema, symbol=symbol, index=i)
             observation["portfolio"] = self.exchange.get_portfolio()
@@ -40,14 +37,9 @@ class Runner:
                 "price": current_price,
                 "signal": signal.action,
                 "order_status": order.status,
-                "portfolio_value": (
-                    self.exchange.get_portfolio_value()
-                    if isinstance(self.exchange, PaperExchange)
-                    else None
-                ),
+                "portfolio_value": self.exchange.get_portfolio_value(),
             })
 
-            # Barra de progrés cada 5%
             tick = i - schema.lookback + 1
             if tick % max(1, total_ticks // 1000) == 0 or tick == total_ticks:
                 pct = tick / total_ticks * 100
@@ -55,6 +47,6 @@ class Runner:
                 bar = "█" * filled + "░" * (20 - filled)
                 print(f"\r  [{bar}] {pct:5.1f}% ({tick}/{total_ticks})", end="", flush=True)
 
-        print()  # nova línia al acabar
+        print()
         self.bot.on_stop()
         return history

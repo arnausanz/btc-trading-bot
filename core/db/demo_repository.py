@@ -9,11 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class DemoRepository:
-    """
-    Capa d'accés a dades per al Demo.
-    Centralitza totes les operacions de lectura i escriptura
-    de demo_ticks i demo_trades.
-    """
+    """Capa d'accés a dades per al Demo."""
 
     def save_tick(
         self,
@@ -28,7 +24,7 @@ class DemoRepository:
     ) -> None:
         session: Session = SessionLocal()
         try:
-            tick = DemoTickDB(
+            session.add(DemoTickDB(
                 bot_id=bot_id,
                 timestamp=timestamp,
                 price=price,
@@ -37,8 +33,7 @@ class DemoRepository:
                 usdt_balance=usdt_balance,
                 btc_balance=btc_balance,
                 reason=reason,
-            )
-            session.add(tick)
+            ))
             session.commit()
         except Exception as e:
             session.rollback()
@@ -60,7 +55,7 @@ class DemoRepository:
     ) -> None:
         session: Session = SessionLocal()
         try:
-            trade = DemoTradeDB(
+            session.add(DemoTradeDB(
                 bot_id=bot_id,
                 timestamp=timestamp,
                 action=action,
@@ -70,8 +65,7 @@ class DemoRepository:
                 fees=fees,
                 portfolio_value=portfolio_value,
                 reason=reason,
-            )
-            session.add(trade)
+            ))
             session.commit()
         except Exception as e:
             session.rollback()
@@ -79,8 +73,8 @@ class DemoRepository:
         finally:
             session.close()
 
-    def get_last_portfolio_value(self, bot_id: str) -> float | None:
-        """Recupera l'últim portfolio value d'un bot — per recuperar estat."""
+    def get_last_state(self, bot_id: str) -> dict | None:
+        """Recupera l'últim estat d'un bot. None si és primera execució."""
         session: Session = SessionLocal()
         try:
             result = (
@@ -89,7 +83,14 @@ class DemoRepository:
                 .order_by(DemoTickDB.timestamp.desc())
                 .first()
             )
-            return result.portfolio_value if result else None
+            if not result:
+                return None
+            return {
+                "portfolio_value": result.portfolio_value,
+                "usdt_balance": result.usdt_balance,
+                "btc_balance": result.btc_balance,
+                "timestamp": result.timestamp,
+            }
         finally:
             session.close()
 
@@ -132,29 +133,5 @@ class DemoRepository:
                 "price": r.price,
                 "action": r.action,
             } for r in rows]
-        finally:
-            session.close()
-
-    def get_last_state(self, bot_id: str) -> dict | None:
-        """
-        Recupera l'últim estat conegut d'un bot.
-        Retorna None si és la primera vegada que arrenca.
-        """
-        session: Session = SessionLocal()
-        try:
-            result = (
-                session.query(DemoTickDB)
-                .filter_by(bot_id=bot_id)
-                .order_by(DemoTickDB.timestamp.desc())
-                .first()
-            )
-            if not result:
-                return None
-            return {
-                "portfolio_value": result.portfolio_value,
-                "usdt_balance": result.usdt_balance,
-                "btc_balance": result.btc_balance,
-                "timestamp": result.timestamp,
-            }
         finally:
             session.close()

@@ -3,23 +3,20 @@ import logging
 import mlflow
 import numpy as np
 import pandas as pd
+import pickle
 from xgboost import XGBClassifier
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.preprocessing import StandardScaler
-import pickle
-import os
+from core.config import MLFLOW_TRACKING_URI
 
 logger = logging.getLogger(__name__)
-
-MLFLOW_TRACKING_URI = "sqlite:///mlflow.db"
 
 
 class XGBoostModel:
     """
     Model XGBoost per predir direcció del preu.
-    XGBoost sol superar Random Forest en dades tabulars financeres
-    gràcies al gradient boosting — cada arbre corregeix els errors de l'anterior.
+    Gradient boosting — cada arbre corregeix els errors de l'anterior.
     """
 
     def __init__(
@@ -27,7 +24,7 @@ class XGBoostModel:
         n_estimators: int = 200,
         max_depth: int = 6,
         learning_rate: float = 0.05,
-        scale_pos_weight: float = 2.0,  # equivalent a class_weight='balanced'
+        scale_pos_weight: float = 2.0,
     ):
         self.n_estimators = n_estimators
         self.max_depth = max_depth
@@ -44,12 +41,10 @@ class XGBoostModel:
             verbosity=0,
         )
         self.scaler = StandardScaler()
+        self.feature_names: list[str] = []
         self.is_trained = False
 
     def train(self, X: pd.DataFrame, y: pd.Series) -> dict:
-        """
-        Entrena amb TimeSeriesSplit i registra a MLflow.
-        """
         self.feature_names = list(X.columns)
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         mlflow.set_experiment("xgboost")
@@ -77,14 +72,10 @@ class XGBoostModel:
                 self.model.fit(X_train_scaled, y_train)
                 y_pred = self.model.predict(X_val_scaled)
 
-                acc = accuracy_score(y_val, y_pred)
-                prec = precision_score(y_val, y_pred, zero_division=0)
-                rec = recall_score(y_val, y_pred, zero_division=0)
-
-                accuracies.append(acc)
-                precisions.append(prec)
-                recalls.append(rec)
-                logger.info(f"  Fold {fold+1}: acc={acc:.3f}, prec={prec:.3f}, rec={rec:.3f}")
+                accuracies.append(accuracy_score(y_val, y_pred))
+                precisions.append(precision_score(y_val, y_pred, zero_division=0))
+                recalls.append(recall_score(y_val, y_pred, zero_division=0))
+                logger.info(f"  Fold {fold+1}: acc={accuracies[-1]:.3f}, prec={precisions[-1]:.3f}, rec={recalls[-1]:.3f}")
 
             metrics = {
                 "accuracy_mean": float(np.mean(accuracies)),
@@ -92,10 +83,8 @@ class XGBoostModel:
                 "precision_mean": float(np.mean(precisions)),
                 "recall_mean": float(np.mean(recalls)),
             }
-
             mlflow.log_metrics(metrics)
 
-            # Entrena el model final amb totes les dades
             X_scaled = self.scaler.fit_transform(X)
             self.model.fit(X_scaled, y)
             self.is_trained = True
@@ -108,16 +97,11 @@ class XGBoostModel:
             raise RuntimeError("El model no està entrenat. Crida train() primer.")
         X_scaled = self.scaler.transform(X)
         proba_positive = self.model.predict_proba(X_scaled)[0][1]
-        pred = 1 if proba_positive >= threshold else 0
-        return int(pred), float(proba_positive)
+        return int(proba_positive >= threshold), float(proba_positive)
 
     def save(self, path: str) -> None:
         with open(path, "wb") as f:
-            pickle.dump({
-                "model": self.model,
-                "scaler": self.scaler,
-                "feature_names": self.feature_names,
-            }, f)
+            pickle.dump({"model": self.model, "scaler": self.scaler, "feature_names": self.feature_names}, f)
 
     def load(self, path: str) -> None:
         with open(path, "rb") as f:

@@ -4,18 +4,14 @@ import sys
 
 sys.path.append(".")
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
 from bots.classical.hold_bot import HoldBot
 from bots.classical.dca_bot import DCABot
 from bots.classical.trend_bot import TrendBot
-from core.backtesting.comparator import BotComparator
 from bots.classical.grid_bot import GridBot
 from bots.ml.ml_bot import MLBot
-
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
+from core.backtesting.comparator import BotComparator
 
 if __name__ == "__main__":
     bots = [
@@ -24,13 +20,6 @@ if __name__ == "__main__":
         TrendBot(config_path="config/bots/trend.yaml"),
         GridBot(config_path="config/bots/grid.yaml"),
         MLBot(config_path="config/bots/ml_bot.yaml"),
-
     ]
-
-    comparator = BotComparator(
-        bots=bots,
-        symbol="BTC/USDT",
-        timeframe="1h",
-    )
-
-    results = comparator.run()
+    comparator = BotComparator(bots=bots, symbol="BTC/USDT", timeframe="1h")
+    comparator.run()

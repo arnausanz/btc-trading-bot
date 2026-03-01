@@ -1,7 +1,6 @@
 # bots/classical/grid_bot.py
 import yaml
 import logging
-import numpy as np
 import pandas as pd
 from datetime import datetime, timezone
 from core.interfaces.base_bot import BaseBot, ObservationSchema
@@ -32,7 +31,6 @@ class GridBot(BaseBot):
         timeframe = self.config["timeframe"]
         features: pd.DataFrame = observation[timeframe]["features"].copy()
 
-        # Calcula Bollinger Bands dinàmicament
         close = features["close"]
         middle = close.rolling(window=20).mean()
         std = close.rolling(window=20).std()
@@ -42,11 +40,7 @@ class GridBot(BaseBot):
         price = close.iloc[-1]
         rsi = features["rsi_14"].iloc[-1]
 
-        if (
-            price <= bb_lower.iloc[-1]
-            and not self._in_position
-            and rsi < self.config["rsi_filter_high"]
-        ):
+        if price <= bb_lower.iloc[-1] and not self._in_position and rsi < self.config["rsi_filter_high"]:
             self._in_position = True
             return Signal(
                 bot_id=self.bot_id,
@@ -57,11 +51,7 @@ class GridBot(BaseBot):
                 reason=f"Preu {price:.0f} toca BB lower. RSI: {rsi:.1f}",
             )
 
-        if (
-            price >= bb_upper.iloc[-1]
-            and self._in_position
-            and rsi > self.config["rsi_filter_low"]
-        ):
+        if price >= bb_upper.iloc[-1] and self._in_position and rsi > self.config["rsi_filter_low"]:
             self._in_position = False
             return Signal(
                 bot_id=self.bot_id,

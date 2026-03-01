@@ -22,13 +22,9 @@ class BotComparator:
 
     def run(self) -> list[dict]:
         results = []
-
         for bot in self.bots:
             print(f"\n▶ Executant backtest: {bot.bot_id}")
-            engine = BacktestEngine(
-                bot=bot,
-                exchange_config_path=self.exchange_config_path,
-            )
+            engine = BacktestEngine(bot=bot, exchange_config_path=self.exchange_config_path)
             metrics = engine.run(symbol=self.symbol, timeframe=self.timeframe)
             summary = metrics.summary()
             summary["bot_id"] = bot.bot_id
@@ -40,8 +36,7 @@ class BotComparator:
         return results
 
     def _count_trades(self, metrics: BacktestMetrics) -> dict:
-        df = metrics.df
-        signals = df["signal"].astype(str)
+        signals = metrics.df["signal"].astype(str)
         return {
             "buy":  signals.str.contains("buy").sum(),
             "sell": signals.str.contains("sell").sum(),
@@ -53,7 +48,6 @@ class BotComparator:
         print("  RANKING FINAL DE BOTS")
         print("═" * 80)
 
-        # Ranking per mètriques
         print(f"\n  {'Bot':<20} {'Return%':>9} {'Sharpe':>8} {'Drawdown%':>11} {'Calmar':>8} {'WinRate%':>10}")
         print("  " + "─" * 70)
         for r in results:
@@ -66,7 +60,6 @@ class BotComparator:
                 f"{r['win_rate_pct']:>10.2f}"
             )
 
-        # Resum de transaccions
         print(f"\n  {'Bot':<20} {'BUY':>8} {'SELL':>8} {'HOLD':>10} {'Capital Final':>15}")
         print("  " + "─" * 65)
         for r in results:
@@ -76,7 +69,7 @@ class BotComparator:
                 f"{tc['buy']:>8} "
                 f"{tc['sell']:>8} "
                 f"{tc['hold']:>10} "
-                f"{r['final_capital']:>14.2f}€"
+                f"{r['final_capital']:>13.2f} USDT"
             )
 
         print("\n" + "═" * 80)

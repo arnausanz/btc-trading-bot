@@ -5,23 +5,15 @@ from core.interfaces.base_bot import BaseBot
 from core.engine.runner import Runner
 from core.backtesting.metrics import BacktestMetrics
 from exchanges.paper import PaperExchange
+from core.config import MLFLOW_TRACKING_URI
 
 logger = logging.getLogger(__name__)
 
-MLFLOW_TRACKING_URI = "sqlite:///mlflow.db"
-
 
 class BacktestEngine:
-    """
-    Executa un backtest complet d'un bot i retorna les mètriques de rendiment.
-    Cada execució queda registrada automàticament a MLflow.
-    """
+    """Executa un backtest complet i registra automàticament a MLflow."""
 
-    def __init__(
-        self,
-        bot: BaseBot,
-        exchange_config_path: str = "config/exchanges/paper.yaml",
-    ):
+    def __init__(self, bot: BaseBot, exchange_config_path: str = "config/exchanges/paper.yaml"):
         self.bot = bot
         self.exchange_config_path = exchange_config_path
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
@@ -31,15 +23,12 @@ class BacktestEngine:
         initial_capital = exchange.get_balance("USDT")
 
         mlflow.set_experiment(self.bot.bot_id)
-
         with mlflow.start_run():
-            # Registra els paràmetres de configuració del bot
             mlflow.log_params({
                 "symbol": symbol,
                 "timeframe": timeframe,
                 "initial_capital": initial_capital,
-                **{k: v for k, v in self.bot.config.items()
-                   if isinstance(v, (str, int, float, bool))},
+                **{k: v for k, v in self.bot.config.items() if isinstance(v, (str, int, float, bool))},
             })
 
             runner = Runner(bot=self.bot, exchange=exchange)
@@ -48,7 +37,6 @@ class BacktestEngine:
             metrics = BacktestMetrics(history=history, initial_capital=initial_capital)
             summary = metrics.summary()
 
-            # Registra les mètriques a MLflow
             mlflow.log_metrics({
                 "total_return_pct": summary["total_return_pct"],
                 "sharpe_ratio": summary["sharpe_ratio"],
