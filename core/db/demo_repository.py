@@ -134,3 +134,27 @@ class DemoRepository:
             } for r in rows]
         finally:
             session.close()
+
+    def get_last_state(self, bot_id: str) -> dict | None:
+        """
+        Recupera l'últim estat conegut d'un bot.
+        Retorna None si és la primera vegada que arrenca.
+        """
+        session: Session = SessionLocal()
+        try:
+            result = (
+                session.query(DemoTickDB)
+                .filter_by(bot_id=bot_id)
+                .order_by(DemoTickDB.timestamp.desc())
+                .first()
+            )
+            if not result:
+                return None
+            return {
+                "portfolio_value": result.portfolio_value,
+                "usdt_balance": result.usdt_balance,
+                "btc_balance": result.btc_balance,
+                "timestamp": result.timestamp,
+            }
+        finally:
+            session.close()

@@ -10,6 +10,8 @@ from core.interfaces.base_bot import BaseBot
 from core.models import Signal, Action, Order
 from monitoring.telegram_notifier import TelegramNotifier
 from core.db.demo_repository import DemoRepository
+from datetime import timezone
+import zoneinfo
 
 
 logger = logging.getLogger(__name__)
@@ -35,8 +37,8 @@ class DemoRunner:
         self.builders: dict[str, ObservationBuilder] = {}
         self.histories: dict[str, list[dict]] = {}
 
-        self._load_bots()
         self.repo = DemoRepository()
+        self._load_bots()  # repo ja existeix quan es crida
 
         if self.config["telegram"]["enabled"]:
             self.notifier = TelegramNotifier()
@@ -44,7 +46,6 @@ class DemoRunner:
             self.notifier = None
 
     def _load_bots(self) -> None:
-        """Carrega els bots definits al config."""
         from bots.classical.trend_bot import TrendBot
         from bots.classical.dca_bot import DCABot
         from bots.classical.grid_bot import GridBot
@@ -75,12 +76,25 @@ class DemoRunner:
             )
             builder = ObservationBuilder()
 
+            # Recupera estat anterior si existeix
+            last_state = self.repo.get_last_state(bot_id=bot.bot_id)
+            if last_state:
+                exchange.restore_state(
+                    usdt_balance=last_state["usdt_balance"],
+                    btc_balance=last_state["btc_balance"],
+                )
+                logger.info(
+                    f"Bot restaurat: {bot.bot_id} | "
+                    f"Portfolio: {last_state['portfolio_value']:.2f} USDT | "
+                    f"Última actualització: {last_state['timestamp'].astimezone(zoneinfo.ZoneInfo('Europe/Madrid')).strftime('%Y-%m-%d %H:%M')}"
+                )
+            else:
+                logger.info(f"Bot nou: {bot.bot_id} | Capital inicial: 10.000 USDT")
+
             self.bots.append(bot)
             self.exchanges[bot.bot_id] = exchange
             self.builders[bot.bot_id] = builder
             self.histories[bot.bot_id] = []
-
-            logger.info(f"Bot carregat: {bot.bot_id}")
 
     def _fetch_latest_price(self) -> float:
         """Obté el preu actual de BTC via ccxt."""

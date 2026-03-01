@@ -141,3 +141,11 @@ class PaperExchange(BaseExchange):
     def get_portfolio_value(self) -> float:
         """Valor total del portfolio en USDT al preu actual."""
         return self._portfolio["USDT"] + self._portfolio["BTC"] * self._current_price
+
+    def restore_state(self, usdt_balance: float, btc_balance: float) -> None:
+        """Restaura el portfolio des d'un estat guardat a la DB."""
+        self._portfolio["USDT"] = usdt_balance
+        self._portfolio["BTC"] = btc_balance
+        logger.info(
+            f"Estat restaurat: {usdt_balance:.2f} USDT | {btc_balance:.6f} BTC"
+        )
