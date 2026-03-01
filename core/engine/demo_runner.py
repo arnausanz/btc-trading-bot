@@ -2,19 +2,17 @@
 import logging
 import time
 import yaml
+import zoneinfo
 from datetime import datetime, timezone
-from data.processing.technical import compute_features
 from data.observation.builder import ObservationBuilder
 from exchanges.paper import PaperExchange
 from core.interfaces.base_bot import BaseBot
-from core.models import Signal, Action, Order
-from monitoring.telegram_notifier import TelegramNotifier
+from core.models import Action
 from core.db.demo_repository import DemoRepository
-from datetime import timezone
-import zoneinfo
-
 
 logger = logging.getLogger(__name__)
+
+TZ = zoneinfo.ZoneInfo("Europe/Madrid")
 
 
 class DemoRunner:
@@ -36,14 +34,25 @@ class DemoRunner:
         self.exchanges: dict[str, PaperExchange] = {}
         self.builders: dict[str, ObservationBuilder] = {}
         self.histories: dict[str, list[dict]] = {}
+        self._max_portfolio: dict[str, float] = {}
+        self._last_daily_summary: datetime | None = None
 
+        # Inicialitza repo i notifier ABANS de _load_bots
         self.repo = DemoRepository()
-        self._load_bots()  # repo ja existeix quan es crida
 
         if self.config["telegram"]["enabled"]:
+            from monitoring.telegram_notifier import TelegramNotifier
             self.notifier = TelegramNotifier()
         else:
             self.notifier = None
+
+        self._load_bots()
+
+        # Configura listener DESPRÉS de _load_bots (quan ja existeixen get_status i _get_all_trades)
+        if self.notifier:
+            self.notifier.set_status_fn(self.get_status)
+            self.notifier.set_trades_fn(self._get_all_trades)
+            self.notifier.start_listener()
 
     def _load_bots(self) -> None:
         from bots.classical.trend_bot import TrendBot
@@ -71,12 +80,9 @@ class DemoRunner:
                 continue
 
             bot = bot_class(config_path=config_path)
-            exchange = PaperExchange(
-                config_path=self.config["exchange"]["config_path"]
-            )
+            exchange = PaperExchange(config_path=self.config["exchange"]["config_path"])
             builder = ObservationBuilder()
 
-            # Recupera estat anterior si existeix
             last_state = self.repo.get_last_state(bot_id=bot.bot_id)
             if last_state:
                 exchange.restore_state(
@@ -86,7 +92,7 @@ class DemoRunner:
                 logger.info(
                     f"Bot restaurat: {bot.bot_id} | "
                     f"Portfolio: {last_state['portfolio_value']:.2f} USDT | "
-                    f"Última actualització: {last_state['timestamp'].astimezone(zoneinfo.ZoneInfo('Europe/Madrid')).strftime('%Y-%m-%d %H:%M')}"
+                    f"Última actualització: {last_state['timestamp'].astimezone(TZ).strftime('%Y-%m-%d %H:%M')}"
                 )
             else:
                 logger.info(f"Bot nou: {bot.bot_id} | Capital inicial: 10.000 USDT")
@@ -97,14 +103,12 @@ class DemoRunner:
             self.histories[bot.bot_id] = []
 
     def _fetch_latest_price(self) -> float:
-        """Obté el preu actual de BTC via ccxt."""
         import ccxt
         exchange = ccxt.binance({"enableRateLimit": True})
         ticker = exchange.fetch_ticker(self.symbol)
         return float(ticker["last"])
 
     def _process_tick(self, current_price: float) -> None:
-        """Processa un tick per a tots els bots i persisteix a la DB."""
         for bot in self.bots:
             bot_id = bot.bot_id
             exchange = self.exchanges[bot_id]
@@ -130,7 +134,6 @@ class DemoRunner:
                 portfolio_value = exchange.get_portfolio_value()
                 now = datetime.now(timezone.utc)
 
-                # Guarda el tick a la DB
                 self.repo.save_tick(
                     bot_id=bot_id,
                     timestamp=now,
@@ -142,7 +145,6 @@ class DemoRunner:
                     reason=signal.reason,
                 )
 
-                # Guarda el trade si hi ha operació
                 if signal.action.value != "hold" and order.status.value == "filled":
                     self.repo.save_trade(
                         bot_id=bot_id,
@@ -170,7 +172,6 @@ class DemoRunner:
                         f"Portfolio: {portfolio_value:.2f} USDT"
                     )
 
-                # Actualitza historial en memòria
                 self.histories[bot_id].append({
                     "timestamp": now,
                     "price": current_price,
@@ -184,13 +185,11 @@ class DemoRunner:
                 logger.error(f"Error processant tick per {bot_id}: {e}")
 
     def get_status(self) -> dict:
-        """Retorna l'estat actual de tots els bots."""
         status = {}
         for bot in self.bots:
             bot_id = bot.bot_id
             exchange = self.exchanges[bot_id]
             history = self.histories[bot_id]
-
             status[bot_id] = {
                 "portfolio_value": exchange.get_portfolio_value(),
                 "btc_balance": exchange.get_balance("BTC"),
@@ -201,8 +200,17 @@ class DemoRunner:
             }
         return status
 
+    def _get_all_trades(self) -> list[dict]:
+        all_trades = []
+        for bot in self.bots:
+            trades = self.repo.get_trades(bot_id=bot.bot_id)
+            for t in trades:
+                t["bot_id"] = bot.bot_id
+            all_trades.extend(trades)
+        all_trades.sort(key=lambda x: x["timestamp"])
+        return all_trades
+
     def run(self) -> None:
-        """Loop principal del demo — corre indefinidament."""
         logger.info(f"Demo Runner iniciat: {[b.bot_id for b in self.bots]}")
         if self.notifier:
             self.notifier.notify_startup([b.bot_id for b in self.bots])
@@ -214,7 +222,6 @@ class DemoRunner:
                 logger.info(f"Preu actual BTC: {current_price:.2f} USDT")
                 self._process_tick(current_price=current_price)
 
-                # Mostra estat cada tick
                 status = self.get_status()
                 for bot_id, s in status.items():
                     logger.info(
@@ -223,11 +230,39 @@ class DemoRunner:
                         f"USDT: {s['usdt_balance']:.2f}"
                     )
 
-                # Envia estat cada hora (3600 / update_interval ticks)
+                # Estat per Telegram cada hora
                 ticks_per_hour = 3600 // self.update_interval
                 if len(list(self.histories.values())[0]) % ticks_per_hour == 0:
                     if self.notifier:
                         self.notifier.notify_status(self.get_status())
+
+                # Alerta drawdown > 10%
+                for bot in self.bots:
+                    bot_id = bot.bot_id
+                    pv = self.exchanges[bot_id].get_portfolio_value()
+                    max_pv = self._max_portfolio.get(bot_id, 10_000)
+                    self._max_portfolio[bot_id] = max(max_pv, pv)
+                    drawdown = (pv - self._max_portfolio[bot_id]) / self._max_portfolio[bot_id] * 100
+                    if drawdown < -10 and self.notifier:
+                        self.notifier.notify_drawdown_alert(
+                            bot_id=bot_id,
+                            drawdown_pct=drawdown,
+                            portfolio_value=pv,
+                        )
+
+                # Resum diari a les 08:00 UTC
+                now = datetime.now(timezone.utc)
+                if (
+                    self.notifier
+                    and now.hour == 8
+                    and now.minute == 0
+                    and (
+                        self._last_daily_summary is None
+                        or (now - self._last_daily_summary).total_seconds() > 3600
+                    )
+                ):
+                    self.notifier.notify_daily_summary(self.get_status())
+                    self._last_daily_summary = now
 
                 time.sleep(self.update_interval)
 
