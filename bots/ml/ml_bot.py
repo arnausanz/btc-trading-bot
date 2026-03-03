@@ -9,6 +9,7 @@ from bots.ml.random_forest import RandomForestModel
 from bots.ml.xgboost_model import XGBoostModel
 from bots.ml.lightgbm_model import LightGBMModel
 from bots.ml.catboost_model import CatBoostModel
+from bots.ml.gru_model import GRUModel
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ _MODEL_REGISTRY = {
     "xgboost": XGBoostModel,
     "lightgbm": LightGBMModel,
     "catboost": CatBoostModel,
+    "gru": GRUModel,
 }
 
 
@@ -60,10 +62,15 @@ class MLBot(BaseBot):
     def on_observation(self, observation: dict) -> Signal:
         timeframe = self.config["timeframe"]
         features: pd.DataFrame = observation[timeframe]["features"].copy()
-        X = features.iloc[[-1]][self._model.feature_names]
+        X = features[self._model.feature_names]
+
+        if hasattr(self._model, "seq_len"):
+            X_input = X.iloc[-self._model.seq_len:]
+        else:
+            X_input = X.iloc[[-1]]
 
         prediction, confidence = self._model.predict(
-            X,
+            X_input,
             threshold=self.config["prediction_threshold"],
         )
 

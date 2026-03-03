@@ -8,20 +8,13 @@ from catboost import CatBoostClassifier
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.preprocessing import StandardScaler
+from tqdm import tqdm
 from core.config import MLFLOW_TRACKING_URI
 
 logger = logging.getLogger(__name__)
 
 
 class CatBoostModel:
-    """
-    Model CatBoost per predir direcció del preu.
-    Avantatge principal: gestiona features categòriques nativament
-    (dia de la setmana, règim de mercat, franja de Fear & Greed...)
-    sense necessitat d'encoding manual.
-    Millor que XGBoost quan les dades tenen variables mixtes.
-    """
-
     def __init__(
         self,
         iterations: int = 300,
@@ -41,17 +34,12 @@ class CatBoostModel:
             learning_rate=learning_rate,
             scale_pos_weight=scale_pos_weight,
             random_seed=42,
-            verbose=0,  # silencia l'output de CatBoost
+            verbose=0,
             eval_metric="Accuracy",
         )
         self.scaler = StandardScaler()
 
     def train(self, X: pd.DataFrame, y: pd.Series) -> dict:
-        """
-        Entrena amb TimeSeriesSplit i registra a MLflow.
-        CatBoost no necessita scaling (és tree-based) però
-        el mantenim per consistència de la interfície.
-        """
         self.feature_names = list(X.columns)
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         mlflow.set_experiment("catboost")
@@ -69,24 +57,37 @@ class CatBoostModel:
             tscv = TimeSeriesSplit(n_splits=5)
             accuracies, precisions, recalls = [], [], []
 
-            for fold, (train_idx, val_idx) in enumerate(tscv.split(X)):
-                X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
-                y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+            with tqdm(
+                enumerate(tscv.split(X)),
+                total=5,
+                desc="  CatBoost folds",
+                unit="fold",
+                dynamic_ncols=True,
+                colour="yellow",
+            ) as pbar:
+                for fold, (train_idx, val_idx) in pbar:
+                    X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+                    y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
-                X_train_scaled = self.scaler.fit_transform(X_train)
-                X_val_scaled = self.scaler.transform(X_val)
+                    X_train_scaled = self.scaler.fit_transform(X_train)
+                    X_val_scaled = self.scaler.transform(X_val)
 
-                self.model.fit(X_train_scaled, y_train)
-                y_pred = self.model.predict(X_val_scaled)
+                    self.model.fit(X_train_scaled, y_train)
+                    y_pred = self.model.predict(X_val_scaled)
 
-                acc = accuracy_score(y_val, y_pred)
-                prec = precision_score(y_val, y_pred, zero_division=0)
-                rec = recall_score(y_val, y_pred, zero_division=0)
+                    acc = accuracy_score(y_val, y_pred)
+                    prec = precision_score(y_val, y_pred, zero_division=0)
+                    rec = recall_score(y_val, y_pred, zero_division=0)
 
-                accuracies.append(acc)
-                precisions.append(prec)
-                recalls.append(rec)
-                logger.info(f"  Fold {fold+1}: acc={acc:.3f}, prec={prec:.3f}, rec={rec:.3f}")
+                    accuracies.append(acc)
+                    precisions.append(prec)
+                    recalls.append(rec)
+                    pbar.set_postfix(
+                        acc=f"{acc:.3f}",
+                        prec=f"{prec:.3f}",
+                        rec=f"{rec:.3f}",
+                        best_acc=f"{max(accuracies):.3f}",
+                    )
 
             metrics = {
                 "accuracy_mean": float(np.mean(accuracies)),
@@ -100,7 +101,7 @@ class CatBoostModel:
             self.model.fit(X_scaled, y)
             self.is_trained = True
 
-            logger.info(f"Entrenament completat: accuracy={metrics['accuracy_mean']:.3f}")
+            tqdm.write(f"  ✓ CatBoost → acc={metrics['accuracy_mean']:.3f} ± {metrics['accuracy_std']:.3f}")
             return metrics
 
     def predict(self, X: pd.DataFrame, threshold: float = 0.35) -> tuple[int, float]:
@@ -112,11 +113,7 @@ class CatBoostModel:
 
     def save(self, path: str) -> None:
         with open(path, "wb") as f:
-            pickle.dump({
-                "model": self.model,
-                "scaler": self.scaler,
-                "feature_names": self.feature_names,
-            }, f)
+            pickle.dump({"model": self.model, "scaler": self.scaler, "feature_names": self.feature_names}, f)
 
     def load(self, path: str) -> None:
         with open(path, "rb") as f:

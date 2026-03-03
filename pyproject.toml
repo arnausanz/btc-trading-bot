@@ -30,6 +30,7 @@ apscheduler = "^3.11.2"
 python-dotenv = "^1.2.1"
 lightgbm = "^4.6.0"
 catboost = "^1.2.10"
+tqdm = "^4.67.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.2"

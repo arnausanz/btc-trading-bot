@@ -1,24 +1,20 @@
 # bots/ml/xgboost_model.py
 import logging
-import mlflow
+import pickle
 import numpy as np
 import pandas as pd
-import pickle
+import mlflow
 from xgboost import XGBClassifier
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.preprocessing import StandardScaler
+from tqdm import tqdm
 from core.config import MLFLOW_TRACKING_URI
 
 logger = logging.getLogger(__name__)
 
 
 class XGBoostModel:
-    """
-    Model XGBoost per predir direcció del preu.
-    Gradient boosting — cada arbre corregeix els errors de l'anterior.
-    """
-
     def __init__(
         self,
         n_estimators: int = 200,
@@ -30,6 +26,8 @@ class XGBoostModel:
         self.max_depth = max_depth
         self.learning_rate = learning_rate
         self.scale_pos_weight = scale_pos_weight
+        self.feature_names: list[str] = []
+        self.is_trained = False
         self.model = XGBClassifier(
             n_estimators=n_estimators,
             max_depth=max_depth,
@@ -41,8 +39,6 @@ class XGBoostModel:
             verbosity=0,
         )
         self.scaler = StandardScaler()
-        self.feature_names: list[str] = []
-        self.is_trained = False
 
     def train(self, X: pd.DataFrame, y: pd.Series) -> dict:
         self.feature_names = list(X.columns)
@@ -62,20 +58,37 @@ class XGBoostModel:
             tscv = TimeSeriesSplit(n_splits=5)
             accuracies, precisions, recalls = [], [], []
 
-            for fold, (train_idx, val_idx) in enumerate(tscv.split(X)):
-                X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
-                y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+            with tqdm(
+                enumerate(tscv.split(X)),
+                total=5,
+                desc="  XGBoost folds",
+                unit="fold",
+                dynamic_ncols=True,
+                colour="blue",
+            ) as pbar:
+                for fold, (train_idx, val_idx) in pbar:
+                    X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+                    y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
-                X_train_scaled = self.scaler.fit_transform(X_train)
-                X_val_scaled = self.scaler.transform(X_val)
+                    X_train_scaled = self.scaler.fit_transform(X_train)
+                    X_val_scaled = self.scaler.transform(X_val)
 
-                self.model.fit(X_train_scaled, y_train)
-                y_pred = self.model.predict(X_val_scaled)
+                    self.model.fit(X_train_scaled, y_train)
+                    y_pred = self.model.predict(X_val_scaled)
 
-                accuracies.append(accuracy_score(y_val, y_pred))
-                precisions.append(precision_score(y_val, y_pred, zero_division=0))
-                recalls.append(recall_score(y_val, y_pred, zero_division=0))
-                logger.info(f"  Fold {fold+1}: acc={accuracies[-1]:.3f}, prec={precisions[-1]:.3f}, rec={recalls[-1]:.3f}")
+                    acc = accuracy_score(y_val, y_pred)
+                    prec = precision_score(y_val, y_pred, zero_division=0)
+                    rec = recall_score(y_val, y_pred, zero_division=0)
+
+                    accuracies.append(acc)
+                    precisions.append(prec)
+                    recalls.append(rec)
+                    pbar.set_postfix(
+                        acc=f"{acc:.3f}",
+                        prec=f"{prec:.3f}",
+                        rec=f"{rec:.3f}",
+                        best_acc=f"{max(accuracies):.3f}",
+                    )
 
             metrics = {
                 "accuracy_mean": float(np.mean(accuracies)),
@@ -89,7 +102,7 @@ class XGBoostModel:
             self.model.fit(X_scaled, y)
             self.is_trained = True
 
-            logger.info(f"Entrenament completat: accuracy={metrics['accuracy_mean']:.3f}")
+            tqdm.write(f"  ✓ XGBoost → acc={metrics['accuracy_mean']:.3f} ± {metrics['accuracy_std']:.3f}")
             return metrics
 
     def predict(self, X: pd.DataFrame, threshold: float = 0.35) -> tuple[int, float]:

@@ -1,0 +1,23 @@
+# config/training/gru_experiment_1.yaml
+experiment_name: gru_bidireccional_v1
+model_type: gru
+
+data:
+  symbol: BTC/USDT
+  timeframes:
+    - 1h
+  forward_window: 24
+  threshold_pct: 0.005
+
+model:
+  seq_len: 50
+  hidden_size: 64
+  num_layers: 1
+  dropout: 0.3
+  epochs: 15
+  batch_size: 128
+  learning_rate: 0.001
+  patience: 4
+
+output:
+  model_path: models/gru_v1.pt   # .pt per diferenciar de .pkl dels tree-based
