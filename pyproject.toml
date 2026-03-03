@@ -28,6 +28,8 @@ streamlit = "^1.54.0"
 plotly = "^6.5.2"
 apscheduler = "^3.11.2"
 python-dotenv = "^1.2.1"
+lightgbm = "^4.6.0"
+catboost = "^1.2.10"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.2"

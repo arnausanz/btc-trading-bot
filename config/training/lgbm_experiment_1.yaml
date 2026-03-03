@@ -1,0 +1,20 @@
+# config/training/lgbm_experiment_1.yaml
+experiment_name: lightgbm_v1
+model_type: lightgbm
+
+data:
+  symbol: BTC/USDT
+  timeframes:
+    - 1h
+  forward_window: 24
+  threshold_pct: 0.005
+
+model:
+  n_estimators: 300
+  max_depth: 6
+  learning_rate: 0.03
+  num_leaves: 31
+  scale_pos_weight: 2.0
+
+output:
+  model_path: models/lightgbm_v1.pkl

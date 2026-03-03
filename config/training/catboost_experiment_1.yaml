@@ -1,0 +1,19 @@
+# config/training/catboost_experiment_1.yaml
+experiment_name: catboost_v1
+model_type: catboost
+
+data:
+  symbol: BTC/USDT
+  timeframes:
+    - 1h
+  forward_window: 24
+  threshold_pct: 0.005
+
+model:
+  iterations: 300
+  depth: 6
+  learning_rate: 0.03
+  scale_pos_weight: 2.0
+
+output:
+  model_path: models/catboost_v1.pkl
