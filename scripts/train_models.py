@@ -1,18 +1,13 @@
 # scripts/train_models.py
-# ── FIX macOS + PyTorch GRU deadlock ──────────────────────────────────────
-# Cal posar-ho ABANS de qualsevol import de torch o numpy per evitar que
-# OpenMP creï massa threads i es quedi penjat en CPU (especialment en macOS).
 import os
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("MKL_NUM_THREADS", "1")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-# ──────────────────────────────────────────────────────────────────────────
-
 import logging
 import sys
 import yaml
 import mlflow
-from tqdm import tqdm
+
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 sys.path.append(".")
 
@@ -24,9 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 if __name__ == "__main__":
-    # ── TOTS els imports de PyTorch/models han d'estar aquí dins ──────────
-    # En macOS, importar torch a nivell de mòdul causa que els threads
-    # interns de PyTorch es creïn abans del fork, penjant el procés.
     from data.processing.dataset import DatasetBuilder
     from bots.ml.random_forest import RandomForestModel
     from bots.ml.xgboost_model import XGBoostModel
@@ -80,35 +72,34 @@ if __name__ == "__main__":
 
     results = []
 
-    with tqdm(CONFIGS, desc="Experiments", unit="model") as pbar_exp:
-        for config_path in pbar_exp:
-            with open(config_path) as f:
-                config = yaml.safe_load(f)
+    for config_path in CONFIGS:
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
 
-            name = config["experiment_name"]
-            model_type = config["model_type"]
-            pbar_exp.set_postfix(model=name)
+        name = config["experiment_name"]
+        model_type = config["model_type"]
 
-            mlflow.end_run()
+        logger.info(f"=== {name} ===")
+        mlflow.end_run()
 
-            builder = DatasetBuilder.from_config(config)
-            X, y = builder.build()
+        builder = DatasetBuilder.from_config(config)
+        X, y = builder.build()
+        logger.info(f"  Dataset: {X.shape[0]} files x {X.shape[1]} features")
 
-            if model_type not in _MODEL_BUILDERS:
-                raise ValueError(f"Model desconegut: {model_type}")
+        if model_type not in _MODEL_BUILDERS:
+            raise ValueError(f"Model desconegut: {model_type}")
 
-            model = _MODEL_BUILDERS[model_type](config)
-            metrics = model.train(X, y)
-            model.save(config["output"]["model_path"])
+        model = _MODEL_BUILDERS[model_type](config)
+        metrics = model.train(X, y)
+        model.save(config["output"]["model_path"])
 
-            results.append({
-                "name": name,
-                "accuracy": metrics["accuracy_mean"],
-                "precision": metrics["precision_mean"],
-                "recall": metrics["recall_mean"],
-            })
+        results.append({
+            "name": name,
+            "accuracy": metrics["accuracy_mean"],
+            "precision": metrics["precision_mean"],
+            "recall": metrics["recall_mean"],
+        })
 
-    print()
     logger.info("=== COMPARATIVA FINAL ===")
     logger.info(f"{'Model':<30} {'Accuracy':>10} {'Precision':>10} {'Recall':>10}")
     logger.info("-" * 65)

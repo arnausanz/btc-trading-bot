@@ -1,0 +1,23 @@
+# config/training/gru_experiment_2.yaml
+experiment_name: gru_bidireccional_v2
+model_type: gru
+
+data:
+  symbol: BTC/USDT
+  timeframes:
+    - 1h
+  forward_window: 24
+  threshold_pct: 0.005
+
+model:
+  seq_len: 72        # 3 dies de context en comptes de 2
+  hidden_size: 128   # el doble de neurones
+  num_layers: 1      # mantenim 1 per evitar el bug macOS
+  dropout: 0.3
+  epochs: 30         # més epochs, early stopping tallarà quan calgui
+  batch_size: 64     # batch més petit = més actualitzacions per epoch
+  learning_rate: 0.001
+  patience: 7        # més paciència per trobar el mínim
+
+output:
+  model_path: models/gru_v2.pt

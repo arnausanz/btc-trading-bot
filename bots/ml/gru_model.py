@@ -3,12 +3,12 @@ import os
 import logging
 import numpy as np
 import pandas as pd
+import mlflow
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score
-from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,6 @@ class BidirectionalGRU(nn.Module):
         dropout: float = 0.3,
     ):
         super().__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
         self.gru = nn.GRU(
             input_size=n_features,
             hidden_size=hidden_size,
@@ -84,11 +82,14 @@ class GRUModel:
         self.feature_names: list[str] = []
         self.is_trained = False
         self.scaler = StandardScaler()
-        # Limitar threads d'OpenMP/MKL per evitar deadlock en macOS amb GRU en CPU
-        torch.set_num_threads(1)
-        self.device = torch.device("cpu")
+        if torch.backends.mps.is_available():
+            self.device = torch.device("mps")
+        else:
+            self.device = torch.device("cpu")
         self.net: BidirectionalGRU | None = None
-        logger.info(f"GRUModel usarà device: {self.device}")
+
+        torch.set_num_threads(1)  # evita deadlock BLAS/OpenMP en macOS
+        logger.info(f"GRUModel device: {self.device}")
 
     def _build_net(self, n_features: int) -> BidirectionalGRU:
         return BidirectionalGRU(
@@ -100,28 +101,19 @@ class GRUModel:
 
     def _make_loader(self, X: np.ndarray, y: np.ndarray, shuffle: bool) -> DataLoader:
         ds = TimeSeriesDataset(X, y, self.seq_len)
-        return DataLoader(
-            ds,
-            batch_size=self.batch_size,
-            shuffle=shuffle,
-            num_workers=0,
-            pin_memory=False,
-        )
+        return DataLoader(ds, batch_size=self.batch_size, shuffle=shuffle,
+                          num_workers=0, pin_memory=False)
 
     def train(self, X: pd.DataFrame, y: pd.Series) -> dict:
-        # ── FIX 1: MLflow FORA del context manager ──────────────────────────
-        # No usem mlflow.start_run() com a context — registrem manualment
-        # per evitar el lock de SQLite quan un run anterior va morir malament
         from core.config import MLFLOW_TRACKING_URI
-        import mlflow
+        self.feature_names = list(X.columns)
+        n_features = len(self.feature_names)
+
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         mlflow.set_experiment("gru_bidireccional")
         run = mlflow.start_run()
 
         try:
-            self.feature_names = list(X.columns)
-            n_features = len(self.feature_names)
-
             mlflow.log_params({
                 "seq_len": self.seq_len,
                 "hidden_size": self.hidden_size,
@@ -132,43 +124,39 @@ class GRUModel:
                 "learning_rate": self.learning_rate,
                 "n_features": n_features,
                 "n_samples": len(X),
-                "device": str(self.device),
             })
 
             X_arr = X.values
             y_arr = y.values
             n = len(X_arr)
             fold_size = n // 6
-
             accuracies, precisions, recalls = [], [], []
 
-            # ── FIX 2: passa fold_num correctament ──────────────────────────
-            with tqdm(range(5), desc="  GRU folds", unit="fold", dynamic_ncols=True, colour="magenta") as pbar:
-                for fold in pbar:
-                    split = fold_size * (fold + 1)
-                    val_end = min(split + fold_size, n)
+            for fold in range(5):
+                split = fold_size * (fold + 1)
+                val_end = min(split + fold_size, n)
 
-                    X_train_raw = X_arr[:split]
-                    y_train_raw = y_arr[:split]
-                    X_val_raw = X_arr[split:val_end]
-                    y_val_raw = y_arr[split:val_end]
+                X_train_raw = X_arr[:split]
+                y_train_raw = y_arr[:split]
+                X_val_raw = X_arr[split:val_end]
+                y_val_raw = y_arr[split:val_end]
 
-                    if len(X_val_raw) <= self.seq_len:
-                        continue
+                if len(X_val_raw) <= self.seq_len:
+                    continue
 
-                    X_train_sc = self.scaler.fit_transform(X_train_raw)
-                    X_val_sc = self.scaler.transform(X_val_raw)
+                X_train_sc = self.scaler.fit_transform(X_train_raw)
+                X_val_sc = self.scaler.transform(X_val_raw)
 
-                    net = self._build_net(n_features)
-                    acc, prec, rec = self._train_fold(
-                        net, X_train_sc, y_train_raw,
-                        X_val_sc, y_val_raw,
-                        fold_num=fold + 1,  # ← FIX: passava 0 sempre
-                    )
-                    accuracies.append(acc)
-                    precisions.append(prec)
-                    recalls.append(rec)
-                    pbar.set_postfix(acc=f"{acc:.3f}", prec=f"{prec:.3f}", rec=f"{rec:.3f}")
+                net = self._build_net(n_features)
+                acc, prec, rec = self._train_fold(
+                    net, X_train_sc, y_train_raw,
+                    X_val_sc, y_val_raw,
+                    fold_num=fold + 1,
+                )
+                accuracies.append(acc)
+                precisions.append(prec)
+                recalls.append(rec)
+                logger.info(f"  [{fold+1}/5] acc={acc:.3f} prec={prec:.3f} rec={rec:.3f}")
 
             metrics = {
                 "accuracy_mean": float(np.mean(accuracies)),
@@ -178,7 +166,7 @@ class GRUModel:
             }
             mlflow.log_metrics(metrics)
 
-            tqdm.write("  Entrenant model final sobre totes les dades...")
+            logger.info("  Entrenant model final...")
             X_scaled = self.scaler.fit_transform(X_arr)
             self.net = self._build_net(n_features)
             self._train_fold(
@@ -188,11 +176,10 @@ class GRUModel:
             )
             self.is_trained = True
 
-            tqdm.write(f"  ✓ GRU → acc={metrics['accuracy_mean']:.3f} ± {metrics['accuracy_std']:.3f}")
+            logger.info(f"  ✓ acc={metrics['accuracy_mean']:.3f} ± {metrics['accuracy_std']:.3f}")
             return metrics
 
         finally:
-            # ── FIX 1: tanca sempre el run, fins i tot si hi ha error ───────
             mlflow.end_run()
 
     def _train_fold(
@@ -217,65 +204,60 @@ class GRUModel:
         patience_counter = 0
         best_state = None
         total_batches = len(train_loader) * self.epochs
-        desc = "  Model final" if fold_num == 0 else f"  Fold {fold_num}"
+        log_every = max(1, total_batches // 10)  # log cada 10%
+        label = "final" if fold_num == 0 else f"fold {fold_num}"
 
-        with tqdm(
-            total=total_batches,
-            desc=desc,
-            unit="batch",
-            dynamic_ncols=True,
-            leave=False,
-        ) as pbar:
-            for epoch in range(self.epochs):
-                net.train()
-                epoch_loss = 0.0
+        batch_count = 0
+        for epoch in range(self.epochs):
+            net.train()
+            epoch_loss = 0.0
 
-                for X_batch, y_batch in train_loader:
-                    X_batch = X_batch.to(self.device)
-                    y_batch = y_batch.to(self.device)
-                    optimizer.zero_grad()
-                    preds = net(X_batch)
-                    loss = criterion(preds, y_batch)
-                    loss.backward()
-                    nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
-                    optimizer.step()
-                    epoch_loss += loss.item()
-                    pbar.update(1)
+            for X_batch, y_batch in train_loader:
+                X_batch = X_batch.to(self.device)
+                y_batch = y_batch.to(self.device)
+                optimizer.zero_grad()
+                preds = net(X_batch)
+                loss = criterion(preds, y_batch)
+                loss.backward()
+                nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
+                optimizer.step()
+                epoch_loss += loss.item()
+                batch_count += 1
 
-                # Validació al final de cada epoch
-                net.eval()
-                val_losses = []
-                with torch.no_grad():
-                    for X_batch, y_batch in val_loader:
-                        preds = net(X_batch.to(self.device))
-                        val_losses.append(criterion(preds, y_batch.to(self.device)).item())
+                if batch_count % log_every == 0:
+                    pct = batch_count / total_batches * 100
+                    logger.info(
+                        f"    {label} {pct:5.1f}% "
+                        f"ep={epoch+1}/{self.epochs} "
+                        f"loss={epoch_loss/len(train_loader):.4f} "
+                        f"lr={optimizer.param_groups[0]['lr']:.1e}"
+                    )
 
-                val_loss = float(np.mean(val_losses))
-                scheduler.step(val_loss)
+            # Validació
+            net.eval()
+            val_losses = []
+            with torch.no_grad():
+                for X_batch, y_batch in val_loader:
+                    preds = net(X_batch.to(self.device))
+                    val_losses.append(criterion(preds, y_batch.to(self.device)).item())
 
-                pbar.set_postfix(
-                    ep=f"{epoch+1}/{self.epochs}",
-                    tr=f"{epoch_loss/len(train_loader):.4f}",
-                    val=f"{val_loss:.4f}",
-                    lr=f"{optimizer.param_groups[0]['lr']:.1e}",
-                )
+            val_loss = float(np.mean(val_losses))
+            scheduler.step(val_loss)
 
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    patience_counter = 0
-                    best_state = {k: v.clone() for k, v in net.state_dict().items()}
-                else:
-                    patience_counter += 1
-                    if patience_counter >= self.patience:
-                        pbar.update(total_batches - pbar.n)
-                        break
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                patience_counter = 0
+                best_state = {k: v.clone() for k, v in net.state_dict().items()}
+            else:
+                patience_counter += 1
+                if patience_counter >= self.patience:
+                    logger.info(f"    {label} early stop ep={epoch+1}")
+                    break
 
         if best_state:
             net.load_state_dict(best_state)
 
-        acc, prec, rec = self._evaluate(net, val_loader)
-        tqdm.write(f"  ✓ {desc.strip()} → acc={acc:.3f}, prec={prec:.3f}, val_loss={best_val_loss:.4f}")
-        return acc, prec, rec
+        return self._evaluate(net, val_loader)
 
     def _evaluate(
         self, net: BidirectionalGRU, loader: DataLoader, threshold: float = 0.35
@@ -287,7 +269,6 @@ class GRUModel:
                 probs = net(X_batch.to(self.device)).cpu().numpy()
                 all_preds.extend((probs >= threshold).astype(int))
                 all_labels.extend(y_batch.numpy().astype(int))
-
         if not all_preds:
             return 0.0, 0.0, 0.0
         return (
@@ -299,23 +280,15 @@ class GRUModel:
     def predict(self, X: pd.DataFrame, threshold: float = 0.35) -> tuple[int, float]:
         if not self.is_trained or self.net is None:
             raise RuntimeError("El model no està entrenat. Crida train() primer.")
-
         X_scaled = self.scaler.transform(X.values)
-
         if len(X_scaled) < self.seq_len:
-            raise ValueError(
-                f"predict() necessita almenys {self.seq_len} files, "
-                f"rebut: {len(X_scaled)}"
-            )
-
+            raise ValueError(f"predict() necessita {self.seq_len} files, rebut {len(X_scaled)}")
         seq = torch.tensor(
             X_scaled[-self.seq_len:], dtype=torch.float32
         ).unsqueeze(0).to(self.device)
-
         self.net.eval()
         with torch.no_grad():
             proba = self.net(seq).item()
-
         return int(proba >= threshold), float(proba)
 
     def save(self, path: str) -> None:
@@ -331,7 +304,6 @@ class GRUModel:
             "feature_names": self.feature_names,
             "seq_len": self.seq_len,
         }, path)
-        logger.info(f"GRUModel guardat a {path}")
 
     def load(self, path: str) -> None:
         data = torch.load(path, map_location=self.device, weights_only=False)
@@ -343,4 +315,3 @@ class GRUModel:
         self.net.load_state_dict(data["net_state"])
         self.net.eval()
         self.is_trained = True
-        logger.info(f"GRUModel carregat des de {path}")
