@@ -10,6 +10,8 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
+from core.interfaces.base_ml_model import BaseMLModel
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,7 +61,7 @@ class TimeSeriesDataset(Dataset):
         return self.X[idx:idx + self.seq_len], self.y[idx + self.seq_len]
 
 
-class GRUModel:
+class GRUModel(BaseMLModel):
     def __init__(
         self,
         seq_len: int = 50,
@@ -90,6 +92,23 @@ class GRUModel:
 
         torch.set_num_threads(1)  # evita deadlock BLAS/OpenMP en macOS
         logger.info(f"GRUModel device: {self.device}")
+
+    @property
+    def lookback(self) -> int:
+        return self.seq_len
+
+    @classmethod
+    def from_config(cls, config: dict) -> "GRUModel":
+        return cls(
+            seq_len=config["model"]["seq_len"],
+            hidden_size=config["model"]["hidden_size"],
+            num_layers=config["model"]["num_layers"],
+            dropout=config["model"]["dropout"],
+            epochs=config["model"]["epochs"],
+            batch_size=config["model"]["batch_size"],
+            learning_rate=config["model"]["learning_rate"],
+            patience=config["model"].get("patience", 4),
+        )
 
     def _build_net(self, n_features: int) -> BidirectionalGRU:
         return BidirectionalGRU(

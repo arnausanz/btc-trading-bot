@@ -9,11 +9,12 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.preprocessing import StandardScaler
 from core.config import MLFLOW_TRACKING_URI
+from core.interfaces.base_ml_model import BaseMLModel
 
 logger = logging.getLogger(__name__)
 
 
-class CatBoostModel:
+class CatBoostModel(BaseMLModel):
     def __init__(
         self,
         iterations: int = 300,
@@ -37,6 +38,15 @@ class CatBoostModel:
             eval_metric="Accuracy",
         )
         self.scaler = StandardScaler()
+
+    @classmethod
+    def from_config(cls, config: dict) -> "CatBoostModel":
+        return cls(
+            iterations=config["model"]["iterations"],
+            depth=config["model"]["depth"],
+            learning_rate=config["model"]["learning_rate"],
+            scale_pos_weight=config["model"]["scale_pos_weight"],
+        )
 
     def train(self, X: pd.DataFrame, y: pd.Series) -> dict:
         self.feature_names = list(X.columns)
@@ -98,7 +108,11 @@ class CatBoostModel:
 
     def save(self, path: str) -> None:
         with open(path, "wb") as f:
-            pickle.dump({"model": self.model, "scaler": self.scaler, "feature_names": self.feature_names}, f)
+            pickle.dump({
+                "model": self.model,
+                "scaler": self.scaler,
+                "feature_names": self.feature_names,
+            }, f)
 
     def load(self, path: str) -> None:
         with open(path, "rb") as f:

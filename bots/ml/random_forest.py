@@ -9,11 +9,12 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.preprocessing import StandardScaler
 from core.config import MLFLOW_TRACKING_URI
+from core.interfaces.base_ml_model import BaseMLModel
 
 logger = logging.getLogger(__name__)
 
 
-class RandomForestModel:
+class RandomForestModel(BaseMLModel):
     def __init__(self, n_estimators: int = 100, max_depth: int = 10):
         self.n_estimators = n_estimators
         self.max_depth = max_depth
@@ -27,6 +28,13 @@ class RandomForestModel:
             class_weight="balanced",
         )
         self.scaler = StandardScaler()
+
+    @classmethod
+    def from_config(cls, config: dict) -> "RandomForestModel":
+        return cls(
+            n_estimators=config["model"]["n_estimators"],
+            max_depth=config["model"]["max_depth"],
+        )
 
     def train(self, X: pd.DataFrame, y: pd.Series) -> dict:
         self.feature_names = list(X.columns)
@@ -86,7 +94,11 @@ class RandomForestModel:
 
     def save(self, path: str) -> None:
         with open(path, "wb") as f:
-            pickle.dump({"model": self.model, "scaler": self.scaler, "feature_names": self.feature_names}, f)
+            pickle.dump({
+                "model": self.model,
+                "scaler": self.scaler,
+                "feature_names": self.feature_names,
+            }, f)
 
     def load(self, path: str) -> None:
         with open(path, "rb") as f:

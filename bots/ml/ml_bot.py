@@ -4,6 +4,7 @@ import logging
 import pandas as pd
 from datetime import datetime, timezone
 from core.interfaces.base_bot import BaseBot, ObservationSchema
+from core.interfaces.base_ml_model import BaseMLModel
 from core.models import Signal, Action
 from bots.ml.random_forest import RandomForestModel
 from bots.ml.xgboost_model import XGBoostModel
@@ -13,7 +14,7 @@ from bots.ml.gru_model import GRUModel
 
 logger = logging.getLogger(__name__)
 
-_MODEL_REGISTRY = {
+_MODEL_REGISTRY: dict[str, type[BaseMLModel]] = {
     "random_forest": RandomForestModel,
     "xgboost": XGBoostModel,
     "lightgbm": LightGBMModel,
@@ -24,10 +25,8 @@ _MODEL_REGISTRY = {
 
 class MLBot(BaseBot):
     """
-    Bot que usa un model ML entrenat per prendre decisions.
-    Agnòstic al tipus de model: suporta RF, XGBoost, LightGBM, CatBoost
-    (i futurs models DL com GRU, TFT) via _MODEL_REGISTRY.
-    Afegir un model nou = afegir una entrada al registry.
+    Bot agnòstic al model ML/DL.
+    Afegir un model nou = afegir una entrada a _MODEL_REGISTRY.
     """
 
     def __init__(self, config_path: str = "config/bots/ml_bot.yaml"):
@@ -37,7 +36,7 @@ class MLBot(BaseBot):
         self._model = self._load_model()
         self._in_position = False
 
-    def _load_model(self):
+    def _load_model(self) -> BaseMLModel:
         model_type = self.config["model_type"]
         model_path = self.config["model_path"]
 
@@ -56,18 +55,15 @@ class MLBot(BaseBot):
         return ObservationSchema(
             features=self._model.feature_names,
             timeframes=[self.config["timeframe"]],
-            lookback=self.config["lookback"],
+            lookback=max(self.config["lookback"], self._model.lookback),
         )
 
     def on_observation(self, observation: dict) -> Signal:
         timeframe = self.config["timeframe"]
         features: pd.DataFrame = observation[timeframe]["features"].copy()
-        X = features[self._model.feature_names]
 
-        if hasattr(self._model, "seq_len"):
-            X_input = X.iloc[-self._model.seq_len:]
-        else:
-            X_input = X.iloc[[-1]]
+        # Net i genèric — funciona per a qualsevol model present i futur
+        X_input = features[self._model.feature_names].iloc[-self._model.lookback:]
 
         prediction, confidence = self._model.predict(
             X_input,
@@ -105,7 +101,7 @@ class MLBot(BaseBot):
             action=Action.HOLD,
             size=0.0,
             confidence=confidence,
-            reason=f"Confiança insuficient o sense senyal: {confidence:.2f}",
+            reason=f"Confiança insuficient: {confidence:.2f}",
         )
 
     def on_start(self) -> None:

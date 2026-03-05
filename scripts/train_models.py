@@ -20,46 +20,20 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     from data.processing.dataset import DatasetBuilder
+    from core.interfaces.base_ml_model import BaseMLModel
     from bots.ml.random_forest import RandomForestModel
     from bots.ml.xgboost_model import XGBoostModel
     from bots.ml.lightgbm_model import LightGBMModel
     from bots.ml.catboost_model import CatBoostModel
     from bots.ml.gru_model import GRUModel
 
-    _MODEL_BUILDERS = {
-        "random_forest": lambda cfg: RandomForestModel(
-            n_estimators=cfg["model"]["n_estimators"],
-            max_depth=cfg["model"]["max_depth"],
-        ),
-        "xgboost": lambda cfg: XGBoostModel(
-            n_estimators=cfg["model"]["n_estimators"],
-            max_depth=cfg["model"]["max_depth"],
-            learning_rate=cfg["model"]["learning_rate"],
-            scale_pos_weight=cfg["model"]["scale_pos_weight"],
-        ),
-        "lightgbm": lambda cfg: LightGBMModel(
-            n_estimators=cfg["model"]["n_estimators"],
-            max_depth=cfg["model"]["max_depth"],
-            learning_rate=cfg["model"]["learning_rate"],
-            num_leaves=cfg["model"].get("num_leaves", 31),
-            scale_pos_weight=cfg["model"]["scale_pos_weight"],
-        ),
-        "catboost": lambda cfg: CatBoostModel(
-            iterations=cfg["model"]["iterations"],
-            depth=cfg["model"]["depth"],
-            learning_rate=cfg["model"]["learning_rate"],
-            scale_pos_weight=cfg["model"]["scale_pos_weight"],
-        ),
-        "gru": lambda cfg: GRUModel(
-            seq_len=cfg["model"]["seq_len"],
-            hidden_size=cfg["model"]["hidden_size"],
-            num_layers=cfg["model"]["num_layers"],
-            dropout=cfg["model"]["dropout"],
-            epochs=cfg["model"]["epochs"],
-            batch_size=cfg["model"]["batch_size"],
-            learning_rate=cfg["model"]["learning_rate"],
-            patience=cfg["model"].get("patience", 4),
-        ),
+    # Afegir un model nou = una línia aquí
+    _MODEL_REGISTRY: dict[str, type[BaseMLModel]] = {
+        "random_forest": RandomForestModel,
+        "xgboost": XGBoostModel,
+        "lightgbm": LightGBMModel,
+        "catboost": CatBoostModel,
+        "gru": GRUModel,
     }
 
     CONFIGS = [
@@ -78,18 +52,19 @@ if __name__ == "__main__":
 
         name = config["experiment_name"]
         model_type = config["model_type"]
-
         logger.info(f"=== {name} ===")
+
         mlflow.end_run()
 
         builder = DatasetBuilder.from_config(config)
         X, y = builder.build()
         logger.info(f"  Dataset: {X.shape[0]} files x {X.shape[1]} features")
 
-        if model_type not in _MODEL_BUILDERS:
+        if model_type not in _MODEL_REGISTRY:
             raise ValueError(f"Model desconegut: {model_type}")
 
-        model = _MODEL_BUILDERS[model_type](config)
+        # from_config elimina la duplicació de paràmetres
+        model = _MODEL_REGISTRY[model_type].from_config(config)
         metrics = model.train(X, y)
         model.save(config["output"]["model_path"])
 
