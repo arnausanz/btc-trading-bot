@@ -11,6 +11,7 @@ from bots.ml.xgboost_model import XGBoostModel
 from bots.ml.lightgbm_model import LightGBMModel
 from bots.ml.catboost_model import CatBoostModel
 from bots.ml.gru_model import GRUModel
+from bots.ml.patchtst_model import PatchTSTModel
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ _MODEL_REGISTRY: dict[str, type[BaseMLModel]] = {
     "lightgbm": LightGBMModel,
     "catboost": CatBoostModel,
     "gru": GRUModel,
+    "patchtst": PatchTSTModel,
 }
 
 

@@ -1,0 +1,26 @@
+# config/training/patchtst_experiment_1.yaml
+experiment_name: patchtst_v1
+model_type: patchtst
+
+data:
+  symbol: BTC/USDT
+  timeframes:
+    - 1h
+  forward_window: 24
+  threshold_pct: 0.005
+
+model:
+  seq_len: 96        # 4 dies de context — Transformers aprofiten finestres llargues
+  patch_len: 16      # cada patch = 16 candles (16h)
+  stride: 8          # solapament del 50% entre patches
+  d_model: 64        # dimensió interna — petit per primera prova
+  n_heads: 4         # caps d'atenció (d_model ha de ser divisible per n_heads)
+  n_layers: 2        # capes del Transformer
+  dropout: 0.1       # Transformers necessiten menys dropout que RNNs
+  epochs: 20
+  batch_size: 64
+  learning_rate: 0.001
+  patience: 5
+
+output:
+  model_path: models/patchtst_v1.pt

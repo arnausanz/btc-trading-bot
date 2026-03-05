@@ -26,6 +26,7 @@ if __name__ == "__main__":
     from bots.ml.lightgbm_model import LightGBMModel
     from bots.ml.catboost_model import CatBoostModel
     from bots.ml.gru_model import GRUModel
+    from bots.ml.patchtst_model import PatchTSTModel
 
     # Afegir un model nou = una línia aquí
     _MODEL_REGISTRY: dict[str, type[BaseMLModel]] = {
@@ -34,6 +35,7 @@ if __name__ == "__main__":
         "lightgbm": LightGBMModel,
         "catboost": CatBoostModel,
         "gru": GRUModel,
+        "patchtst": PatchTSTModel,
     }
 
     CONFIGS = [
@@ -42,6 +44,7 @@ if __name__ == "__main__":
         "config/training/lgbm_experiment_1.yaml",
         "config/training/catboost_experiment_1.yaml",
         "config/training/gru_experiment_1.yaml",
+        "config/training/patchtst_experiment_1.yaml",
     ]
 
     results = []
