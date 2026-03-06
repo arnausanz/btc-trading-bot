@@ -1,0 +1,16 @@
+# config/optimization/random_forest.yaml
+base_config: config/training/rf_experiment_1.yaml
+model_type: random_forest
+n_trials: 30
+metric: accuracy_mean   # accuracy_mean | precision_mean | recall_mean
+direction: maximize
+
+search_space:
+  n_estimators:
+    type: int
+    low: 50
+    high: 500
+  max_depth:
+    type: int
+    low: 3
+    high: 20

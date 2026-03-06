@@ -1,0 +1,30 @@
+# config/optimization/patchtst.yaml
+base_config: config/training/patchtst_experiment_1.yaml
+model_type: patchtst
+n_trials: 15
+metric: accuracy_mean
+direction: maximize
+
+search_space:
+  seq_len:
+    type: categorical
+    choices: [72, 96, 168]
+  d_model:
+    type: categorical
+    choices: [64, 128]
+  n_layers:
+    type: int
+    low: 1
+    high: 3
+  dropout:
+    type: float
+    low: 0.05
+    high: 0.3
+  learning_rate:
+    type: float
+    low: 0.0001
+    high: 0.005
+    log: true
+  batch_size:
+    type: categorical
+    choices: [32, 64, 128]

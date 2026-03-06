@@ -1,0 +1,31 @@
+# config/optimization/sac.yaml
+base_config: config/training/sac_experiment_1.yaml
+model_type: sac
+n_trials: 15
+metric: val_return_pct
+direction: maximize
+probe_timesteps: 20000   # timesteps per trial (menys que producció)
+
+search_space:
+  learning_rate:
+    type: float
+    low: 0.0001
+    high: 0.001
+    log: true
+  batch_size:
+    type: categorical
+    choices: [128, 256, 512]
+  gamma:
+    type: float
+    low: 0.95
+    high: 0.999
+  tau:
+    type: float
+    low: 0.001
+    high: 0.02
+  reward_type:
+    type: categorical
+    choices: [simple, sharpe, sortino]
+  lookback:
+    type: categorical
+    choices: [30, 50, 96]

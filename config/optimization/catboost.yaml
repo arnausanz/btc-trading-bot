@@ -1,0 +1,25 @@
+# config/optimization/catboost.yaml
+base_config: config/training/catboost_experiment_1.yaml
+model_type: catboost
+n_trials: 30
+metric: accuracy_mean
+direction: maximize
+
+search_space:
+  iterations:
+    type: int
+    low: 100
+    high: 500
+  depth:
+    type: int
+    low: 3
+    high: 10
+  learning_rate:
+    type: float
+    low: 0.01
+    high: 0.3
+    log: true
+  scale_pos_weight:
+    type: float
+    low: 1.0
+    high: 5.0
