@@ -34,7 +34,7 @@ class BacktestEngine:
             runner = Runner(bot=self.bot, exchange=exchange)
             history = runner.run(symbol=symbol, timeframe=timeframe)
 
-            metrics = BacktestMetrics(history=history, initial_capital=initial_capital)
+            metrics = BacktestMetrics(history=history, initial_capital=initial_capital, timeframe=timeframe)
             summary = metrics.summary()
 
             mlflow.log_metrics({
