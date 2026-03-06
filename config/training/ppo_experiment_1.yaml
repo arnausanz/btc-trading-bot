@@ -1,0 +1,27 @@
+# config/training/ppo_experiment_1.yaml
+experiment_name: ppo_btc_v1
+model_type: ppo
+
+data:
+  symbol: BTC/USDT
+  timeframe: 1h
+  train_pct: 0.8
+
+environment:
+  lookback: 50
+  initial_capital: 10000.0
+  fee_rate: 0.001
+  reward_scaling: 100.0
+  reward_type: sharpe
+
+model:
+  total_timesteps: 50000
+  learning_rate: 0.0003
+  batch_size: 64
+  n_steps: 2048
+  n_epochs: 10
+  gamma: 0.99
+  policy: MlpPolicy
+
+output:
+  model_path: models/ppo_btc_v1

@@ -19,6 +19,8 @@ def simple_reward(
     return (curr_value - prev_value) / prev_value * scaling
 
 
+# bots/rl/rewards/builtins.py — canvia sharpe_reward i sortino_reward
+
 @register("sharpe")
 def sharpe_reward(
     prev_value: float,
@@ -28,15 +30,12 @@ def sharpe_reward(
     history: list[float],
     scaling: float = 100.0,
 ) -> float:
-    """
-    Reward basat en Sharpe incremental.
-    Premia retorn consistent i penalitza volatilitat.
-    Necessita almenys 20 steps d'historial per ser significatiu.
-    """
+    if prev_value <= 0:
+        return 0.0
     ret = (curr_value - prev_value) / prev_value
     if len(history) < 20:
         return ret * scaling
-    returns = np.diff(history[-20:]) / history[-20:-1]
+    returns = np.diff(history[-20:]) / np.maximum(history[-20:-1], 1e-8)
     std = returns.std()
     if std == 0:
         return 0.0
@@ -52,14 +51,12 @@ def sortino_reward(
     history: list[float],
     scaling: float = 100.0,
 ) -> float:
-    """
-    Reward basat en Sortino — com Sharpe però només penalitza
-    la volatilitat negativa. Més adequat per trading asimètric.
-    """
+    if prev_value <= 0:
+        return 0.0
     ret = (curr_value - prev_value) / prev_value
     if len(history) < 20:
         return ret * scaling
-    returns = np.diff(history[-20:]) / history[-20:-1]
+    returns = np.diff(history[-20:]) / np.maximum(history[-20:-1], 1e-8)
     downside = returns[returns < 0]
     if len(downside) == 0 or downside.std() == 0:
         return ret * scaling

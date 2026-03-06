@@ -1,0 +1,31 @@
+# config/training/sac_experiment_1.yaml
+experiment_name: sac_btc_v1
+model_type: sac
+
+data:
+  symbol: BTC/USDT
+  timeframe: 1h
+  train_pct: 0.8
+
+environment:
+  lookback: 50
+  initial_capital: 10000.0
+  fee_rate: 0.001
+  reward_scaling: 100.0
+  reward_type: simple     # simple | sharpe | sortino | penalize_inaction
+
+model:
+  total_timesteps: 50000  # petit per primera prova — pujar a 500000 en producció
+  learning_rate: 0.0003
+  batch_size: 256
+  buffer_size: 100000
+  learning_starts: 1000
+  gamma: 0.99
+  tau: 0.005
+  train_freq: 1
+  gradient_steps: 1
+  policy: MlpPolicy
+  net_arch: [256, 256]
+
+output:
+  model_path: models/sac_btc_v1
