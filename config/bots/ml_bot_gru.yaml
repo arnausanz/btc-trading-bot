@@ -1,5 +1,5 @@
-# config/bots/ml_bot_xgb.yaml
-bot_id: ml_xgb_v1
+# config/bots/ml_bot_gru.yaml
+bot_id: ml_gru_v1
 symbol: BTC/USDT
 timeframe: 1h
 lookback: 200
@@ -14,8 +14,8 @@ features:
   - bb_lower_20
   - bb_middle_20
 
-model_path: models/xgboost_v1.pkl
-model_type: xgboost
+model_path: models/gru_v1.pt
+model_type: gru
 
 # Només actua si la confiança del model supera aquest llindar
 min_confidence: 0.4

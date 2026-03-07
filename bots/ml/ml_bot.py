@@ -75,6 +75,7 @@ class MLBot(BaseBot):
         min_confidence = self.config["min_confidence"]
         size = self.config["trade_size"]
 
+        # BUY: model prediu pujada i confiança suficient i no estem en posició
         if prediction == 1 and confidence >= min_confidence and not self._in_position:
             self._in_position = True
             return Signal(
@@ -86,15 +87,19 @@ class MLBot(BaseBot):
                 reason=f"ML prediu pujada. Confiança: {confidence:.2f}",
             )
 
-        if prediction == 0 and confidence >= min_confidence and self._in_position:
+        # SELL: model deixa de predir pujada (prediction==0 vol dir proba < threshold)
+        # NOTA: no apliquem min_confidence al SELL — seria impossible (proba<threshold < min_confidence)
+        # La confiança bearish és 1 - proba (com més baix el proba, més segur el senyal de venda)
+        if prediction == 0 and self._in_position:
+            bearish_conf = 1.0 - confidence
             self._in_position = False
             return Signal(
                 bot_id=self.bot_id,
                 timestamp=datetime.now(timezone.utc),
                 action=Action.SELL,
                 size=1.0,
-                confidence=confidence,
-                reason=f"ML prediu baixada. Confiança: {confidence:.2f}",
+                confidence=bearish_conf,
+                reason=f"ML no prediu pujada. Confiança baixista: {bearish_conf:.2f}",
             )
 
         return Signal(
@@ -103,7 +108,7 @@ class MLBot(BaseBot):
             action=Action.HOLD,
             size=0.0,
             confidence=confidence,
-            reason=f"Confiança insuficient: {confidence:.2f}",
+            reason=f"ML: {'en posició, esperant senyal de venda' if self._in_position else f'confiança insuficient ({confidence:.2f})'}",
         )
 
     def on_start(self) -> None:
