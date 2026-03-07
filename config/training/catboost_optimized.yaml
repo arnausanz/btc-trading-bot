@@ -1,0 +1,15 @@
+data:
+  forward_window: 24
+  symbol: BTC/USDT
+  threshold_pct: 0.005
+  timeframes:
+  - 1h
+experiment_name: catboost_optimized
+model:
+  depth: 6
+  iterations: 481
+  learning_rate: 0.07176741262605833
+  scale_pos_weight: 1.0718475024592784
+model_type: catboost
+output:
+  model_path: models/catboost_v1_optimized.pkl

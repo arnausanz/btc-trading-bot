@@ -1,0 +1,15 @@
+bot_id: grid_v1
+features:
+- close
+- bb_upper_20
+- bb_lower_20
+- bb_middle_20
+- rsi_14
+grid_spread: 0.02
+level_size: 0.29911546072764
+lookback: 50
+num_levels: 5
+rsi_filter_high: 68
+rsi_filter_low: 39
+symbol: BTC/USDT
+timeframe: 1h
