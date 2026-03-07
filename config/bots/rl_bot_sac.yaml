@@ -1,0 +1,19 @@
+# config/bots/rl_bot_sac.yaml
+bot_id: rl_sac_v1
+symbol: BTC/USDT
+timeframe: 1h
+lookback: 50
+model_type: sac
+model_path: models/sac_btc_v1
+trade_size: 0.5
+
+features:
+  - close
+  - rsi_14
+  - macd
+  - macd_signal
+  - macd_hist
+  - atr_14
+  - bb_upper_20
+  - bb_lower_20
+  - bb_middle_20
