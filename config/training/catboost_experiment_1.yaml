@@ -10,9 +10,9 @@ data:
   threshold_pct: 0.005
 
 model:
-  iterations: 300
-  depth: 6
-  learning_rate: 0.03
+  iterations: 700    # +400: CatBoost convergeix bé, l'ordered boosting protegeix de l'overfitting
+  depth: 6           # mantenim: arbres simètrics a profunditat 6 és el sweet spot per a dades tabulars
+  learning_rate: 0.03 # mantenim: CatBoost és robust a lr entre 0.01-0.1
   scale_pos_weight: 2.0
 
 output:

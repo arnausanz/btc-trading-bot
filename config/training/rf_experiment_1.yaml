@@ -10,8 +10,8 @@ data:
   threshold_pct: 0.005     # mínim 0.5% de moviment per considerar senyal
 
 model:
-  n_estimators: 100
-  max_depth: 10
+  n_estimators: 500   # +400: estabilitat estadística, reduces variance sense cost greu
+  max_depth: 8        # lleugerament menys profund que l'original 10 per reduir overfitting en dades sorolloses
 
 output:
   model_path: models/random_forest_v1.pkl

@@ -10,10 +10,10 @@ data:
   threshold_pct: 0.005
 
 model:
-  n_estimators: 300
-  max_depth: 6
-  learning_rate: 0.03
-  num_leaves: 31
+  n_estimators: 600   # +300: LightGBM és ràpid, podem permetre'ns-ho
+  max_depth: 7        # +1: permet num_leaves=50 sense violar 2^max_depth
+  learning_rate: 0.02 # -0.01: lleugerament més conservador
+  num_leaves: 50      # +19: més expressivitat que default 31, conservador respecte al màxim 2^7=128
   scale_pos_weight: 2.0
 
 output:

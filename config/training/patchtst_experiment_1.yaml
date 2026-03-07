@@ -10,17 +10,17 @@ data:
   threshold_pct: 0.005
 
 model:
-  seq_len: 96        # 4 dies de context — Transformers aprofiten finestres llargues
-  patch_len: 16      # cada patch = 16 candles (16h)
-  stride: 8          # solapament del 50% entre patches
-  d_model: 64        # dimensió interna — petit per primera prova
-  n_heads: 4         # caps d'atenció (d_model ha de ser divisible per n_heads)
-  n_layers: 2        # capes del Transformer
-  dropout: 0.1       # Transformers necessiten menys dropout que RNNs
-  epochs: 20
-  batch_size: 64
-  learning_rate: 0.001
-  patience: 5
+  seq_len: 168       # 7 dies (1 setmana) — captura patrons setmanals de BTC; (168-24)//12+1 = 13 patches
+  patch_len: 24      # 1 dia per patch — unitat semàntica natural per a BTC horari
+  stride: 12         # 50% solapament — equilibri entre context ric i redundància
+  d_model: 128       # x2 de 64: representació interna enriquida, alineat amb PatchTST original (Nie 2023)
+  n_heads: 8         # x2: 128/8 = 16 dims per cap, recomanat en la literatura
+  n_layers: 3        # +1: encoder més profund per capturar dependències complexes
+  dropout: 0.1       # mantenim: Transformers amb AdamW no necessiten molt dropout
+  epochs: 50         # +30: early stopping gestiona el tall real
+  batch_size: 32     # -32: batches petits milloren generalització en Transformers (gradient noise)
+  learning_rate: 0.0001  # x0.1: AdamW + Transformers requereixen lr molt baix vs RNNs
+  patience: 10       # x2: Transformers triguen més a convergir
 
 output:
   model_path: models/patchtst_v1.pt

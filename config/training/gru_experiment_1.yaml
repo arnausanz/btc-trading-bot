@@ -10,14 +10,14 @@ data:
   threshold_pct: 0.005
 
 model:
-  seq_len: 50
-  hidden_size: 64
-  num_layers: 1
-  dropout: 0.3
-  epochs: 15
-  batch_size: 128
-  learning_rate: 0.001
-  patience: 4
+  seq_len: 72        # +22: 3 dies de context (vs 2) — captura cicles diaris + tendències de mig termini
+  hidden_size: 128   # x2: BiGRU amb 128 hidden = 256 features totals (forward+backward), alineat amb literatura 2024
+  num_layers: 1      # mantenim: PyTorch MPS + BLAS deadlock amb >1 capa en macOS
+  dropout: 0.25      # -0.05: FC dropout (el GRU layer dropdown és 0 per num_layers=1), lleugerament relaxat
+  epochs: 50         # +35: early stopping tallarà quan calgui; més temps per convergir
+  batch_size: 64     # -64: batches petits = gradients més sorollosos = millor regularització implícita
+  learning_rate: 0.0005  # -0.0005: lr menor + més epochs = convergència més suau
+  patience: 10       # +6: BTC és sorollós, cal paciència per no parar massa aviat
 
 output:
   model_path: models/gru_v1.pt   # .pt per diferenciar de .pkl dels tree-based
