@@ -27,8 +27,8 @@ _MODEL_REGISTRY: dict[str, type[BaseMLModel]] = {
 
 class MLBot(BaseBot):
     """
-    Bot agnòstic al model ML/DL.
-    Afegir un model nou = afegir una entrada a _MODEL_REGISTRY.
+    ML/DL model-agnostic bot.
+    Adding a new model = adding an entry to _MODEL_REGISTRY.
     """
 
     def __init__(self, config_path: str = "config/bots/ml_bot.yaml"):
@@ -44,13 +44,13 @@ class MLBot(BaseBot):
 
         if model_type not in _MODEL_REGISTRY:
             raise ValueError(
-                f"Model desconegut: '{model_type}'. "
-                f"Disponibles: {list(_MODEL_REGISTRY.keys())}"
+                f"Unknown model: '{model_type}'. "
+                f"Available: {list(_MODEL_REGISTRY.keys())}"
             )
 
         model = _MODEL_REGISTRY[model_type]()
         model.load(model_path)
-        logger.info(f"Model carregat: {model_type} des de {model_path}")
+        logger.info(f"Model loaded: {model_type} from {model_path}")
         return model
 
     def observation_schema(self) -> ObservationSchema:
@@ -64,7 +64,7 @@ class MLBot(BaseBot):
         timeframe = self.config["timeframe"]
         features: pd.DataFrame = observation[timeframe]["features"].copy()
 
-        # Net i genèric — funciona per a qualsevol model present i futur
+        # Clean and generic — works for any current and future model
         X_input = features[self._model.feature_names].iloc[-self._model.lookback:]
 
         prediction, confidence = self._model.predict(
@@ -75,7 +75,7 @@ class MLBot(BaseBot):
         min_confidence = self.config["min_confidence"]
         size = self.config["trade_size"]
 
-        # BUY: model prediu pujada i confiança suficient i no estem en posició
+        # BUY: model predicts upward and sufficient confidence and not in position
         if prediction == 1 and confidence >= min_confidence and not self._in_position:
             self._in_position = True
             return Signal(
@@ -84,12 +84,12 @@ class MLBot(BaseBot):
                 action=Action.BUY,
                 size=size,
                 confidence=confidence,
-                reason=f"ML prediu pujada. Confiança: {confidence:.2f}",
+                reason=f"ML predicts upward. Confidence: {confidence:.2f}",
             )
 
-        # SELL: model deixa de predir pujada (prediction==0 vol dir proba < threshold)
-        # NOTA: no apliquem min_confidence al SELL — seria impossible (proba<threshold < min_confidence)
-        # La confiança bearish és 1 - proba (com més baix el proba, més segur el senyal de venda)
+        # SELL: model stops predicting upward (prediction==0 means prob < threshold)
+        # NOTE: we don't apply min_confidence to SELL — would be impossible (prob<threshold < min_confidence)
+        # Bearish confidence is 1 - prob (lower prob = more certain sell signal)
         if prediction == 0 and self._in_position:
             bearish_conf = 1.0 - confidence
             self._in_position = False
@@ -99,7 +99,7 @@ class MLBot(BaseBot):
                 action=Action.SELL,
                 size=1.0,
                 confidence=bearish_conf,
-                reason=f"ML no prediu pujada. Confiança baixista: {bearish_conf:.2f}",
+                reason=f"ML does not predict upward. Bearish confidence: {bearish_conf:.2f}",
             )
 
         return Signal(
@@ -108,9 +108,9 @@ class MLBot(BaseBot):
             action=Action.HOLD,
             size=0.0,
             confidence=confidence,
-            reason=f"ML: {'en posició, esperant senyal de venda' if self._in_position else f'confiança insuficient ({confidence:.2f})'}",
+            reason=f"ML: {'in position, waiting for sell signal' if self._in_position else f'insufficient confidence ({confidence:.2f})'}",
         )
 
     def on_start(self) -> None:
         self._in_position = False
-        logger.info(f"MLBot iniciat amb model: {self.config['model_type']}")
+        logger.info(f"MLBot initialized with model: {self.config['model_type']}")

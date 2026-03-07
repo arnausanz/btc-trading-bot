@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def _to_utc_timestamp(date_str: str) -> pd.Timestamp:
-    """Converteix un string ISO (p.ex. '2025-01-01') a Timestamp UTC."""
+    """Converts an ISO string (e.g. '2025-01-01') to UTC Timestamp."""
     ts = pd.Timestamp(date_str)
     if ts.tzinfo is None:
         ts = ts.tz_localize("UTC")
@@ -33,17 +33,17 @@ class Runner:
         desc: str | None = None,
     ) -> list[dict]:
         """
-        Executa el bot tick a tick sobre les dades del symbol/timeframe.
+        Executes the bot tick by tick over symbol/timeframe data.
 
-        start_date / end_date (strings ISO opcionals) permeten limitar l'interval
-        d'iteració per al walk-forward backtesting.
-        desc: etiqueta per a la barra de progrés (p.ex. 'train' o 'test').
+        start_date / end_date (optional ISO strings) allow limiting the iteration
+        interval for walk-forward backtesting.
+        desc: label for the progress bar (e.g. 'train' or 'test').
         """
         schema = self.bot.observation_schema()
         self.builder.load(schema=schema, symbol=symbol)
         df = self.builder.get_dataframe(symbol=symbol, timeframe=timeframe)
 
-        # ─── Determina els índexs d'iteració ──────────────────────────────────
+        # ─── Determine iteration indices ───────────────────────────────────────
         iter_start = schema.lookback
         iter_end = len(df)
 
@@ -54,7 +54,7 @@ class Runner:
                 first_pos = int(positions[0])
                 iter_start = max(schema.lookback, first_pos)
             else:
-                logger.warning(f"start_date={start_date} és posterior a totes les dades. Retornem buit.")
+                logger.warning(f"start_date={start_date} is after all data. Returning empty.")
                 return []
 
         if end_date is not None:
@@ -64,14 +64,14 @@ class Runner:
                 last_pos = int(positions[-1])
                 iter_end = min(len(df), last_pos + 1)
             else:
-                logger.warning(f"end_date={end_date} és anterior a totes les dades. Retornem buit.")
+                logger.warning(f"end_date={end_date} is before all data. Returning empty.")
                 return []
 
         if iter_start >= iter_end:
-            logger.warning(f"Interval buit: iter_start={iter_start} >= iter_end={iter_end}. Retornem buit.")
+            logger.warning(f"Empty interval: iter_start={iter_start} >= iter_end={iter_end}. Returning empty.")
             return []
 
-        # ─── Bucle principal amb barra de progrés ─────────────────────────────
+        # ─── Main loop with progress bar ───────────────────────────────────────
         bar_desc = f"  Backtest [{desc}]" if desc else "  Backtest"
         self.bot.on_start()
         history = []

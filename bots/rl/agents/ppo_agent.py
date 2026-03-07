@@ -23,7 +23,7 @@ class ProgressCallback(BaseCallback):
         return True
 
     def _on_training_end(self) -> None:
-        print()  # salt de línia al final
+        print()  # newline at the end
 
 
 class PPOAgent(BaseRLAgent):
@@ -74,7 +74,7 @@ class PPOAgent(BaseRLAgent):
             gamma=self.gamma,
             verbose=0,
         )
-        logger.info(f"  Entrenant PPO — {total_timesteps} timesteps...")
+        logger.info(f"  Training PPO — {total_timesteps} timesteps...")
         self.model.learn(
             total_timesteps=total_timesteps,
             callback=ProgressCallback(total_timesteps),
@@ -84,20 +84,20 @@ class PPOAgent(BaseRLAgent):
 
     def act(self, observation: np.ndarray, deterministic: bool = True) -> np.ndarray:
         if self.model is None:
-            raise RuntimeError("Agent no entrenat. Crida train() primer.")
+            raise RuntimeError("Agent not trained. Call train() first.")
         action, _ = self.model.predict(observation, deterministic=deterministic)
         return action
 
     def save(self, path: str) -> None:
         if self.model is None:
-            raise RuntimeError("No hi ha model per guardar.")
+            raise RuntimeError("No model to save.")
         self.model.save(path)
-        logger.info(f"PPOAgent guardat a {path}")
+        logger.info(f"PPOAgent saved to {path}")
 
     def load(self, path: str) -> None:
         self.model = PPO.load(path)
         self.is_trained = True
-        logger.info(f"PPOAgent carregat des de {path}")
+        logger.info(f"PPOAgent loaded from {path}")
 
     def _validate(self, env) -> dict:
         obs, _ = env.reset()
@@ -115,7 +115,7 @@ class PPOAgent(BaseRLAgent):
         drawdown = float(((values - peak) / peak * 100).min())
 
         logger.info(
-            f"  Validació PPO → return={total_return:.2f}% "
+            f"  PPO Validation → return={total_return:.2f}% "
             f"drawdown={drawdown:.2f}% trades={env.trades}"
         )
         return {

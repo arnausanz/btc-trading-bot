@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class PaperExchange(BaseExchange):
-    """Simulador d'exchange per a paper trading i backtesting."""
+    """Paper trading exchange simulator for backtesting."""
 
     def __init__(self, config_path: str = "config/exchanges/paper.yaml"):
         with open(config_path) as f:
@@ -23,7 +23,7 @@ class PaperExchange(BaseExchange):
         }
         self._current_price: float = 0.0
         self._orders: list[Order] = []
-        logger.info(f"PaperExchange inicialitzat amb {config['initial_capital']} USDT")
+        logger.info(f"PaperExchange initialized with {config['initial_capital']} USDT")
 
     def set_current_price(self, price: float) -> None:
         self._current_price = price
@@ -33,7 +33,7 @@ class PaperExchange(BaseExchange):
 
     def send_order(self, signal: Signal) -> Order:
         if self._current_price <= 0:
-            raise ValueError("El preu actual no està configurat. Crida set_current_price primer.")
+            raise ValueError("Current price not set. Call set_current_price first.")
 
         now = datetime.now(timezone.utc)
 

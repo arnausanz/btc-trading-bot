@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 
 class RLOptimizer:
     """
-    Optimitza hiperparàmetres d'agents RL amb Optuna.
-    Cada trial = entrenament curt (probe_timesteps) + validació.
-    Mètrica objectiu: val_return_pct | val_max_drawdown_pct.
+    Optimizes hyperparameters of RL agents with Optuna.
+    Each trial = short training (probe_timesteps) + validation.
+    Objective metric: val_return_pct | val_max_drawdown_pct.
 
-    Usa probe_timesteps << total_timesteps per fer molts trials ràpid.
-    El millor config es re-entrena després amb total_timesteps complets.
+    Uses probe_timesteps << total_timesteps to perform many trials quickly.
+    The best config is re-trained afterward with full total_timesteps.
     """
 
     def __init__(self, optimization_config_path: str):
@@ -51,7 +51,7 @@ class RLOptimizer:
     def _build_config(self, params: dict) -> dict:
         config = copy.deepcopy(self.base_train_cfg)
         for name, value in params.items():
-            # Paràmetres d'entorn van a config["environment"]
+            # Environment parameters go to config["environment"]
             if name in ("lookback", "reward_type", "reward_scaling"):
                 config["environment"][name] = value
             else:
@@ -95,7 +95,7 @@ class RLOptimizer:
             metrics = agent.train(
                 train_env=train_env,
                 val_env=val_env,
-                total_timesteps=self.probe_timesteps,  # ← curt per optimitzar ràpid
+                total_timesteps=self.probe_timesteps,  # ← short for quick optimization
             )
 
             score = metrics.get(self.metric, -999.0)
@@ -109,17 +109,17 @@ class RLOptimizer:
         except optuna.TrialPruned:
             raise
         except Exception as e:
-            logger.warning(f"  Trial {trial.number} fallat: {e}")
+            logger.warning(f"  Trial {trial.number} failed: {e}")
             return -999.0
         finally:
             mlflow.end_run()
 
     def run(self) -> optuna.Study:
         logger.info(
-            f"=== Optimitzant {self.model_type} | "
+            f"=== Optimizing {self.model_type} | "
             f"{self.n_trials} trials | "
             f"probe={self.probe_timesteps} steps | "
-            f"objectiu: {self.metric} ==="
+            f"objective: {self.metric} ==="
         )
         study = optuna.create_study(
             direction=self.direction,
@@ -127,8 +127,8 @@ class RLOptimizer:
         )
         study.optimize(self._objective, n_trials=self.n_trials)
 
-        logger.info(f"  Millor {self.metric}: {study.best_value:.4f}")
-        logger.info(f"  Millors paràmetres: {study.best_params}")
+        logger.info(f"  Best {self.metric}: {study.best_value:.4f}")
+        logger.info(f"  Best parameters: {study.best_params}")
         return study
 
     def best_config(self, study: optuna.Study) -> dict:
@@ -139,4 +139,4 @@ class RLOptimizer:
         best["experiment_name"] = f"{self.model_type}_optimized"
         with open(output_path, "w") as f:
             yaml.dump(best, f, default_flow_style=False, allow_unicode=True)
-        logger.info(f"  Config optimitzada guardada a {output_path}")
+        logger.info(f"  Optimized config saved to {output_path}")

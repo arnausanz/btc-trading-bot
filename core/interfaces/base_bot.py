@@ -8,19 +8,19 @@ from core.models import Signal
 @dataclass
 class ObservationSchema:
     """
-    Declara quines dades necessita un bot per funcionar.
-    El Runner usarà aquest schema per construir l'observació automàticament.
+    Declares the data a bot needs to function.
+    The Runner uses this schema to build the observation automatically.
     """
-    features: list[str]                    # columnes del DataFrame: 'close', 'rsi_14'...
-    timeframes: list[str]                  # timeframes necessaris: '1h', '4h'...
-    lookback: int                          # quantes candles enrere necessita veure
-    extras: dict[str, Any] = field(default_factory=dict)  # fonts externes: sentiment, onchain...
+    features: list[str]                    # DataFrame columns required: 'close', 'rsi_14', ...
+    timeframes: list[str]                  # timeframes required: '1h', '4h', ...
+    lookback: int                          # number of historical candles the bot needs
+    extras: dict[str, Any] = field(default_factory=dict)  # external data sources: sentiment, onchain, ...
 
 
 class BaseBot(ABC):
     """
-    Interfície que tot bot ha d'implementar.
-    El Runner no sap quin tipus de bot és — només crida observation_schema i on_observation.
+    Interface that every bot must implement.
+    The Runner is bot-agnostic — it only calls observation_schema and on_observation.
     """
 
     def __init__(self, bot_id: str, config: dict):
@@ -30,23 +30,23 @@ class BaseBot(ABC):
     @abstractmethod
     def observation_schema(self) -> ObservationSchema:
         """
-        Declara quines dades necessita aquest bot.
-        S'executa una vegada en inicialitzar el bot.
+        Declares what data this bot needs.
+        Called once during bot initialization.
         """
         ...
 
     @abstractmethod
     def on_observation(self, observation: dict) -> Signal:
         """
-        Rep l'observació i retorna una decisió.
-        Aquest és el cervell del bot.
+        Receives the observation and returns a trading decision.
+        This is the bot's core decision-making logic.
         """
         ...
 
     def on_start(self) -> None:
-        """Hook opcional: s'executa quan el bot arrenca."""
+        """Optional hook: called when the bot starts."""
         pass
 
     def on_stop(self) -> None:
-        """Hook opcional: s'executa quan el bot s'atura."""
+        """Optional hook: called when the bot stops."""
         pass

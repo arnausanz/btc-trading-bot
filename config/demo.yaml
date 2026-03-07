@@ -1,14 +1,44 @@
 # config/demo.yaml
+# Bots actius en el Demo Runner.
+# Posa enabled: false per desactivar un bot sense eliminar-lo.
+# El DemoRunner detecta automàticament el tipus (classical/ML/RL) pel camp model_type del YAML.
+
 demo:
   symbol: BTC/USDT
   timeframe: 1h
-  update_interval_seconds: 60  # comprova nou preu cada minut
+  update_interval_seconds: 60   # monitoratge cada minut
+  # on_observation() es crida 1 cop/hora quan es tanca la candle (candle sync)
 
 bots:
+  # Classics
+  - config_path: config/bots/hold.yaml
+    enabled: true
   - config_path: config/bots/trend.yaml
     enabled: true
   - config_path: config/bots/dca.yaml
     enabled: true
+  - config_path: config/bots/grid.yaml
+    enabled: false
+
+  # ML supervisat
+  - config_path: config/bots/ml_bot.yaml
+    enabled: true
+  - config_path: config/bots/ml_bot_xgb.yaml
+    enabled: true
+  - config_path: config/bots/ml_bot_lgbm.yaml
+    enabled: true
+  - config_path: config/bots/ml_bot_catboost.yaml
+    enabled: true
+  - config_path: config/bots/ml_bot_gru.yaml
+    enabled: true
+  - config_path: config/bots/ml_bot_patchtst.yaml
+    enabled: true
+
+  # RL - activar despres d'executar train_rl.py
+  - config_path: config/bots/rl_bot_ppo.yaml
+    enabled: false
+  - config_path: config/bots/rl_bot_sac.yaml
+    enabled: false
 
 exchange:
   config_path: config/exchanges/paper.yaml

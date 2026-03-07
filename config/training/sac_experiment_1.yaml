@@ -15,7 +15,7 @@ environment:
   reward_type: simple     # simple | sharpe | sortino | penalize_inaction
 
 model:
-  total_timesteps: 50000  # petit per primera prova — pujar a 500000 en producció
+  total_timesteps: 500000  # 50k → 500k: mínim recomanat per a RL financer
   learning_rate: 0.0003
   batch_size: 256
   buffer_size: 100000

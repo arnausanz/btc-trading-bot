@@ -11,11 +11,11 @@ logger = logging.getLogger(__name__)
 
 class BotComparator:
     """
-    Compara múltiples bots en backtest (train + test separats).
+    Compares multiple bots in backtest (separate train + test).
 
-    WALK-FORWARD: cada bot es backtesta en DOS períodes:
-    - Train (in-sample):     fins a train_until
-    - Test (out-of-sample):  des de test_from
+    WALK-FORWARD: each bot is backtested in TWO periods:
+    - Train (in-sample):     until train_until
+    - Test (out-of-sample):  from test_from
     """
 
     def __init__(
@@ -39,14 +39,14 @@ class BotComparator:
 
         with tqdm(
             self.bots,
-            desc="Comparant bots",
+            desc="Comparing bots",
             unit="bot",
             dynamic_ncols=True,
         ) as bot_bar:
             for bot in bot_bar:
                 bot_bar.set_description(f"Backtesting {bot.bot_id}")
 
-                # ─── TRAIN ────────────────────────────────────────────────────
+                # ─── TRAINING ─────────────────────────────────────────────────
                 engine_train = BacktestEngine(
                     bot=bot, exchange_config_path=self.exchange_config_path
                 )
@@ -58,7 +58,7 @@ class BotComparator:
                 )
                 train_summary = train_metrics.summary()
 
-                # ─── TEST ─────────────────────────────────────────────────────
+                # ─── TESTING ──────────────────────────────────────────────────
                 engine_test = BacktestEngine(
                     bot=bot, exchange_config_path=self.exchange_config_path
                 )
@@ -98,7 +98,7 @@ class BotComparator:
     def _print_summary(self, results: list[dict]) -> None:
         W = 90
         print("\n" + "═" * W)
-        print(f"  RANKING DE BOTS  (train fins {self.train_until} | test des de {self.test_from})")
+        print(f"  BOT RANKING  (training until {self.train_until} | testing from {self.test_from})")
         print("═" * W)
 
         hdr = f"  {'Bot':<20} {'Prd':>5} {'Return%':>9} {'Sharpe':>8} {'MaxDD%':>8} {'Calmar':>8} {'WinRate%':>10}"

@@ -1,70 +1,191 @@
 # tests/unit/test_interfaces.py
-from datetime import datetime, timezone
+"""
+Unit tests for abstract interface contracts.
+Verify that all bot implementations satisfy the BaseBot interface.
+"""
+import pytest
+from abc import ABC, abstractmethod
 from core.interfaces.base_bot import BaseBot, ObservationSchema
-from core.interfaces.base_exchange import BaseExchange
-from core.models import Signal, Action, Order, OrderSide, OrderStatus, Candle
+from core.models import Signal, Action
+from datetime import datetime, timezone
 
 
-class DummyBot(BaseBot):
-    """Bot mínim per testejar la interfície."""
+class MinimalBot(BaseBot):
+    """Minimal implementation of BaseBot for testing."""
 
     def observation_schema(self) -> ObservationSchema:
+        """Declare data dependencies."""
         return ObservationSchema(
-            features=["close", "rsi_14"],
+            features=["close"],
             timeframes=["1h"],
-            lookback=50,
+            lookback=10,
         )
 
     def on_observation(self, observation: dict) -> Signal:
+        """Generate a signal."""
         return Signal(
             bot_id=self.bot_id,
             timestamp=datetime.now(timezone.utc),
             action=Action.HOLD,
             size=0.0,
             confidence=1.0,
-            reason="test signal",
+            reason="Minimal bot test",
         )
 
 
-class DummyExchange(BaseExchange):
-    """Exchange mínim per testejar la interfície."""
+class TestBaseBot:
+    """Test that BaseBot interface is properly defined."""
 
-    def get_candles(self, symbol, timeframe, limit=500) -> list[Candle]:
-        return []
+    def test_basebot_is_abstract(self):
+        """BaseBot should not be directly instantiable."""
+        with pytest.raises(TypeError):
+            BaseBot(bot_id="test", config={})
 
-    def send_order(self, signal: Signal) -> Order:
-        return Order(
-            id="ord_test",
-            signal_id="sig_test",
-            exchange="dummy",
-            symbol="BTC/USDT",
-            side=OrderSide.BUY,
-            status=OrderStatus.FILLED,
-            price_target=50000.0,
-            price_filled=50000.0,
-            size=0.1,
-            created_at=datetime.now(timezone.utc),
+    def test_basebot_subclass_requires_observation_schema(self):
+        """Subclass must implement observation_schema()."""
+        class IncompleteBot(BaseBot):
+            def on_observation(self, observation: dict) -> Signal:
+                return Signal(
+                    bot_id="test",
+                    timestamp=datetime.now(timezone.utc),
+                    action=Action.HOLD,
+                    size=0.0,
+                    confidence=1.0,
+                    reason="test",
+                )
+
+        with pytest.raises(TypeError):
+            IncompleteBot(bot_id="test", config={})
+
+    def test_basebot_subclass_requires_on_observation(self):
+        """Subclass must implement on_observation()."""
+        class IncompleteBot(BaseBot):
+            def observation_schema(self) -> ObservationSchema:
+                return ObservationSchema(
+                    features=["close"],
+                    timeframes=["1h"],
+                    lookback=10,
+                )
+
+        with pytest.raises(TypeError):
+            IncompleteBot(bot_id="test", config={})
+
+
+class TestBotInterface:
+    """Test the bot interface with a minimal implementation."""
+
+    def test_bot_stores_bot_id(self):
+        """Bot should store the bot_id passed to constructor."""
+        bot = MinimalBot(bot_id="test_bot", config={})
+        assert bot.bot_id == "test_bot"
+
+    def test_bot_stores_config(self):
+        """Bot should store the config dict."""
+        config = {"param1": "value1"}
+        bot = MinimalBot(bot_id="test_bot", config=config)
+        assert bot.config == config
+
+    def test_observation_schema_returns_valid_schema(self):
+        """observation_schema() should return an ObservationSchema."""
+        bot = MinimalBot(bot_id="test_bot", config={})
+        schema = bot.observation_schema()
+        assert isinstance(schema, ObservationSchema)
+        assert schema.features is not None
+        assert schema.timeframes is not None
+        assert schema.lookback is not None
+
+    def test_observation_schema_declares_features(self):
+        """ObservationSchema should declare required features."""
+        bot = MinimalBot(bot_id="test_bot", config={})
+        schema = bot.observation_schema()
+        assert "close" in schema.features
+
+    def test_observation_schema_declares_timeframes(self):
+        """ObservationSchema should declare required timeframes."""
+        bot = MinimalBot(bot_id="test_bot", config={})
+        schema = bot.observation_schema()
+        assert "1h" in schema.timeframes
+
+    def test_observation_schema_declares_lookback(self):
+        """ObservationSchema should declare lookback period."""
+        bot = MinimalBot(bot_id="test_bot", config={})
+        schema = bot.observation_schema()
+        assert schema.lookback > 0
+
+    def test_on_observation_returns_signal(self):
+        """on_observation() should return a Signal."""
+        bot = MinimalBot(bot_id="test_bot", config={})
+        observation = {"1h": {"features": None}}
+        signal = bot.on_observation(observation)
+        assert isinstance(signal, Signal)
+
+    def test_signal_has_valid_action(self):
+        """Signal returned by on_observation() should have valid action."""
+        bot = MinimalBot(bot_id="test_bot", config={})
+        observation = {"1h": {"features": None}}
+        signal = bot.on_observation(observation)
+        assert signal.action in [Action.BUY, Action.SELL, Action.HOLD]
+
+    def test_signal_has_valid_confidence(self):
+        """Signal confidence should be between 0 and 1."""
+        bot = MinimalBot(bot_id="test_bot", config={})
+        observation = {"1h": {"features": None}}
+        signal = bot.on_observation(observation)
+        assert 0.0 <= signal.confidence <= 1.0
+
+    def test_optional_on_start_hook(self):
+        """on_start() is optional and should be callable."""
+        bot = MinimalBot(bot_id="test_bot", config={})
+        # Should not raise
+        bot.on_start()
+
+    def test_optional_on_stop_hook(self):
+        """on_stop() is optional and should be callable."""
+        bot = MinimalBot(bot_id="test_bot", config={})
+        # Should not raise
+        bot.on_stop()
+
+
+class TestObservationSchema:
+    """Test the ObservationSchema dataclass."""
+
+    def test_schema_has_features(self):
+        schema = ObservationSchema(
+            features=["close", "rsi"],
+            timeframes=["1h"],
+            lookback=20,
         )
+        assert schema.features == ["close", "rsi"]
 
-    def get_portfolio(self) -> dict:
-        return {"BTC": 0.0, "USDT": 10000.0}
+    def test_schema_has_timeframes(self):
+        schema = ObservationSchema(
+            features=["close"],
+            timeframes=["1h", "4h"],
+            lookback=20,
+        )
+        assert schema.timeframes == ["1h", "4h"]
 
-    def get_balance(self, currency: str) -> float:
-        return {"BTC": 0.0, "USDT": 10000.0}.get(currency, 0.0)
+    def test_schema_has_lookback(self):
+        schema = ObservationSchema(
+            features=["close"],
+            timeframes=["1h"],
+            lookback=50,
+        )
+        assert schema.lookback == 50
 
+    def test_schema_has_optional_extras(self):
+        schema = ObservationSchema(
+            features=["close"],
+            timeframes=["1h"],
+            lookback=20,
+            extras={"sentiment": "external_api"},
+        )
+        assert schema.extras == {"sentiment": "external_api"}
 
-def test_bot_returns_signal():
-    bot = DummyBot(bot_id="dummy_v1", config={})
-    schema = bot.observation_schema()
-    assert "close" in schema.features
-    assert schema.lookback == 50
-
-    signal = bot.on_observation({})
-    assert signal.action == Action.HOLD
-
-
-def test_exchange_returns_portfolio():
-    exchange = DummyExchange()
-    portfolio = exchange.get_portfolio()
-    assert "USDT" in portfolio
-    assert portfolio["USDT"] == 10000.0
+    def test_schema_extras_default_to_empty(self):
+        schema = ObservationSchema(
+            features=["close"],
+            timeframes=["1h"],
+            lookback=20,
+        )
+        assert schema.extras == {}

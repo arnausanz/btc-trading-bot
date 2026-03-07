@@ -11,9 +11,9 @@ logger = logging.getLogger(__name__)
 
 class TrendBot(BaseBot):
     """
-    Trend Following Bot basat en EMA crossover + filtre RSI.
-    Calcula les EMAs dinàmicament sobre la finestra rebuda —
-    no depèn de columnes pre-calculades al Feature Store.
+    Trend Following Bot based on EMA crossover + RSI filter.
+    Calculates EMAs dynamically on the received window —
+    does not depend on pre-calculated columns in the Feature Store.
     """
 
     def __init__(self, config_path: str = "config/bots/trend.yaml"):
@@ -23,7 +23,7 @@ class TrendBot(BaseBot):
         self._in_position = False
 
     def observation_schema(self) -> ObservationSchema:
-        # Només necessita close i rsi_14 — les EMAs les calcula ell mateix
+        # Only needs close and rsi_14 — calculates EMAs itself
         return ObservationSchema(
             features=["close", "rsi_14"],
             timeframes=[self.config["timeframe"]],
@@ -37,7 +37,7 @@ class TrendBot(BaseBot):
         ema_fast_period = self.config["ema_fast"]
         ema_slow_period = self.config["ema_slow"]
 
-        # Calcula EMAs dinàmicament sobre la finestra
+        # Calculate EMAs dynamically on the window
         features["ema_fast"] = features["close"].ewm(span=ema_fast_period, adjust=False).mean()
         features["ema_slow"] = features["close"].ewm(span=ema_slow_period, adjust=False).mean()
 
@@ -64,7 +64,7 @@ class TrendBot(BaseBot):
                 action=Action.BUY,
                 size=size,
                 confidence=min(1.0, rsi / 100),
-                reason=f"EMA crossover alcista. RSI: {rsi:.1f}",
+                reason=f"EMA crossover bullish. RSI: {rsi:.1f}",
             )
 
         if ema_fast_crossed_down and self._in_position and rsi > self.config["rsi_oversold"]:
@@ -75,7 +75,7 @@ class TrendBot(BaseBot):
                 action=Action.SELL,
                 size=1.0,
                 confidence=min(1.0, 1 - rsi / 100),
-                reason=f"EMA crossover baixista. RSI: {rsi:.1f}",
+                reason=f"EMA crossover bearish. RSI: {rsi:.1f}",
             )
 
         return Signal(
@@ -84,9 +84,9 @@ class TrendBot(BaseBot):
             action=Action.HOLD,
             size=0.0,
             confidence=1.0,
-            reason="Sense senyal",
+            reason="No signal",
         )
 
     def on_start(self) -> None:
         self._in_position = False
-        logger.info("TrendBot iniciat")
+        logger.info("TrendBot initialized")

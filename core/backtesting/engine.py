@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class BacktestEngine:
-    """Executa un backtest complet i registra automàticament a MLflow."""
+    """Executes a complete backtest and automatically logs to MLflow."""
 
     def __init__(self, bot: BaseBot, exchange_config_path: str = "config/exchanges/paper.yaml"):
         self.bot = bot

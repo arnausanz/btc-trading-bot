@@ -9,9 +9,9 @@ logger = logging.getLogger(__name__)
 
 class ObservationBuilder:
     """
-    Construeix l'observació que cada bot necessita a partir del seu ObservationSchema.
-    El Runner no sap com es construeix l'observació — delega al Builder.
-    Això permet afegir nous tipus de dades (sentiment, onchain) sense tocar el Runner.
+    Builds the observation that each bot needs from its ObservationSchema.
+    The Runner doesn't know how observation is built — delegates to Builder.
+    This allows adding new data types (sentiment, onchain) without touching Runner.
     """
 
     def __init__(self):
@@ -19,15 +19,15 @@ class ObservationBuilder:
 
     def load(self, schema: ObservationSchema, symbol: str) -> None:
         """
-        Precarrega totes les dades necessàries per al schema donat.
-        Detecta automàticament quins períodes d'EMA necessita el bot.
+        Preloads all data necessary for the given schema.
+        Automatically detects which EMA periods the bot needs.
         """
         for timeframe in schema.timeframes:
             key = f"{symbol}_{timeframe}"
             if key not in self._cache:
-                logger.info(f"Carregant features per {symbol} {timeframe}...")
+                logger.info(f"Loading features for {symbol} {timeframe}...")
 
-                # Detecta períodes d'EMA a partir dels noms de features
+                # Detects EMA periods from feature names
                 ema_periods = [
                     int(f.split("_")[1])
                     for f in schema.features
@@ -39,7 +39,7 @@ class ObservationBuilder:
                     timeframe=timeframe,
                     ema_periods=ema_periods,
                 )
-                logger.info(f"  {len(self._cache[key])} files carregades")
+                logger.info(f"  {len(self._cache[key])} rows loaded")
 
     def build(
         self,
@@ -48,8 +48,8 @@ class ObservationBuilder:
         index: int,
     ) -> dict:
         """
-        Construeix l'observació per a un instant de temps concret.
-        index és la posició actual al DataFrame principal (timeframe[0]).
+        Builds the observation for a specific point in time.
+        index is the current position in the main DataFrame (timeframe[0]).
         """
         observation = {}
 
@@ -59,13 +59,13 @@ class ObservationBuilder:
 
             if index < schema.lookback:
                 raise ValueError(
-                    f"Index {index} massa petit per a lookback {schema.lookback}"
+                    f"Index {index} too small for lookback {schema.lookback}"
                 )
 
             window = df.iloc[index - schema.lookback:index]
             missing = [f for f in schema.features if f not in window.columns]
             if missing:
-                raise ValueError(f"Features no trobades: {missing}")
+                raise ValueError(f"Features not found: {missing}")
 
             observation[timeframe] = {
                 "features": window[schema.features].copy(),
@@ -76,8 +76,8 @@ class ObservationBuilder:
         return observation
 
     def get_dataframe(self, symbol: str, timeframe: str) -> pd.DataFrame:
-        """Retorna el DataFrame complet d'un symbol i timeframe."""
+        """Returns the complete DataFrame for a symbol and timeframe."""
         key = f"{symbol}_{timeframe}"
         if key not in self._cache:
-            raise KeyError(f"Dades no carregades per {symbol} {timeframe}. Crida load() primer.")
+            raise KeyError(f"Data not loaded for {symbol} {timeframe}. Call load() first.")
         return self._cache[key]

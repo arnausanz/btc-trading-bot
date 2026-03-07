@@ -7,14 +7,14 @@ from core.models import Signal, Action
 
 class HoldBot(BaseBot):
     """
-    Buy & Hold: compra BTC al primer tick i no toca res mai més.
-    És el benchmark mínim — qualsevol estratègia activa ha de superar-lo.
+    Buy & Hold: buys BTC at the first tick and never touches it again.
+    Is the minimum benchmark — any active strategy must outperform it.
 
-    Lògica:
-      - Primer tick: BUY amb tot el capital (size=1.0)
-      - Resta de ticks: HOLD perpetuu
+    Logic:
+      - First tick: BUY with all capital (size=1.0)
+      - Remaining ticks: HOLD indefinitely
 
-    Si es restaura des de DB i ja té BTC (btc_balance > 0), no torna a comprar.
+    If restored from DB and already has BTC (btc_balance > 0), does not buy again.
     """
 
     def __init__(self, config_path: str = "config/bots/hold.yaml"):
@@ -34,10 +34,10 @@ class HoldBot(BaseBot):
         )
 
     def on_observation(self, observation: dict) -> Signal:
-        # Comprova si ja tenim BTC (restauració de sessió anterior)
+        # Check if we already have BTC (session restoration)
         portfolio = observation.get("portfolio", {})
         if not self._bought and portfolio.get("btc_balance", 0) > 1e-6:
-            self._bought = True  # ja tenim BTC des d'una sessió anterior
+            self._bought = True  # already have BTC from previous session
 
         if not self._bought:
             self._bought = True
@@ -45,9 +45,9 @@ class HoldBot(BaseBot):
                 bot_id=self.bot_id,
                 timestamp=datetime.now(timezone.utc),
                 action=Action.BUY,
-                size=1.0,          # compra amb tot el capital
+                size=1.0,          # buy with all capital
                 confidence=1.0,
-                reason="Buy & Hold: compra inicial",
+                reason="Buy & Hold: initial buy",
             )
 
         return Signal(
@@ -56,5 +56,5 @@ class HoldBot(BaseBot):
             action=Action.HOLD,
             size=0.0,
             confidence=1.0,
-            reason="Buy & Hold: mantenint posició",
+            reason="Buy & Hold: holding position",
         )

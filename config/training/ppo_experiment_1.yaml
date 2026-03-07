@@ -15,7 +15,7 @@ environment:
   reward_type: sharpe
 
 model:
-  total_timesteps: 50000
+  total_timesteps: 500000  # 50k → 500k: mínim recomanat per a RL financer (SAC és més eficient)
   learning_rate: 0.0003
   batch_size: 64
   n_steps: 2048

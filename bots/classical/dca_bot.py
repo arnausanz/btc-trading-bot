@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 class DCABot(BaseBot):
     """
     Dollar Cost Averaging Bot.
-    Compra una fracció fixa del capital cada N ticks, ignorant el preu.
-    Estratègia òptima per a mercats amb tendència alcista a llarg termini.
+    Buys a fixed fraction of capital every N ticks, ignoring price.
+    Optimal strategy for markets with bullish long-term trend.
     """
 
     def __init__(self, config_path: str = "config/bots/dca.yaml"):
@@ -35,11 +35,11 @@ class DCABot(BaseBot):
         if self._tick_count % every_n == 0:
             action = Action.BUY
             size = self.config["buy_size"]
-            reason = f"DCA tick {self._tick_count}: compra programada cada {every_n} ticks"
+            reason = f"DCA tick {self._tick_count}: scheduled buy every {every_n} ticks"
         else:
             action = Action.HOLD
             size = 0.0
-            reason = f"DCA tick {self._tick_count}: esperant"
+            reason = f"DCA tick {self._tick_count}: waiting"
 
         return Signal(
             bot_id=self.bot_id,
@@ -52,4 +52,4 @@ class DCABot(BaseBot):
 
     def on_start(self) -> None:
         self._tick_count = 0
-        logger.info(f"DCABot iniciat: compra cada {self.config['buy_every_n_ticks']} ticks")
+        logger.info(f"DCABot initialized: buying every {self.config['buy_every_n_ticks']} ticks")

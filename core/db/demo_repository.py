@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class DemoRepository:
-    """Capa d'accés a dades per al Demo."""
+    """Data access layer for the Demo."""
 
     def save_tick(
         self,
@@ -37,7 +37,7 @@ class DemoRepository:
             session.commit()
         except Exception as e:
             session.rollback()
-            logger.error(f"Error guardant tick: {e}")
+            logger.error(f"Error saving tick: {e}")
         finally:
             session.close()
 
@@ -69,12 +69,12 @@ class DemoRepository:
             session.commit()
         except Exception as e:
             session.rollback()
-            logger.error(f"Error guardant trade: {e}")
+            logger.error(f"Error saving trade: {e}")
         finally:
             session.close()
 
     def get_last_state(self, bot_id: str) -> dict | None:
-        """Recupera l'últim estat d'un bot. None si és primera execució."""
+        """Retrieves the last state of a bot. None if first run."""
         session: Session = SessionLocal()
         try:
             result = (
@@ -95,7 +95,7 @@ class DemoRepository:
             session.close()
 
     def get_trades(self, bot_id: str) -> list[dict]:
-        """Retorna tots els trades d'un bot ordenats per timestamp."""
+        """Returns all trades of a bot ordered by timestamp."""
         session: Session = SessionLocal()
         try:
             rows = (
@@ -118,7 +118,7 @@ class DemoRepository:
             session.close()
 
     def get_portfolio_history(self, bot_id: str) -> list[dict]:
-        """Retorna l'historial de portfolio value d'un bot."""
+        """Returns the portfolio value history of a bot."""
         session: Session = SessionLocal()
         try:
             rows = (

@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 class TechnicalIndicators:
     """
-    Calcula indicadors tècnics sobre un DataFrame de candles.
-    Tots els indicadors retornen el DataFrame amb columnes noves afegides.
+    Computes technical indicators on a DataFrame of candles.
+    All indicators return the DataFrame with new columns added.
     """
 
     @staticmethod
@@ -42,7 +42,7 @@ class TechnicalIndicators:
         signal: int = 9,
         column: str = "close"
     ) -> pd.DataFrame:
-        """MACD, Signal line i Histogram."""
+        """MACD, Signal line and Histogram."""
         ema_fast = df[column].ewm(span=fast, adjust=False).mean()
         ema_slow = df[column].ewm(span=slow, adjust=False).mean()
         df["macd"] = ema_fast - ema_slow
@@ -66,7 +66,7 @@ class TechnicalIndicators:
 
     @staticmethod
     def atr(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
-        """Average True Range — mesura la volatilitat."""
+        """Average True Range — measures volatility."""
         high_low = df["high"] - df["low"]
         high_close = (df["high"] - df["close"].shift()).abs()
         low_close = (df["low"] - df["close"].shift()).abs()
@@ -76,7 +76,7 @@ class TechnicalIndicators:
 
 
 def load_candles(symbol: str, timeframe: str, session: Session) -> pd.DataFrame:
-    """Carrega candles de la DB i les retorna com a DataFrame ordenat per timestamp."""
+    """Loads candles from DB and returns them as DataFrame sorted by timestamp."""
     rows = (
         session.query(CandleDB)
         .filter_by(symbol=symbol, timeframe=timeframe)
@@ -97,8 +97,8 @@ def load_candles(symbol: str, timeframe: str, session: Session) -> pd.DataFrame:
 
 def compute_features(symbol: str, timeframe: str, ema_periods: list[int] | None = None) -> pd.DataFrame:
     """
-    Carrega candles i calcula tots els indicadors tècnics.
-    ema_periods permet especificar períodes addicionals d'EMA.
+    Loads candles and computes all technical indicators.
+    ema_periods allows specifying additional EMA periods.
     """
     default_ema_periods = [9, 20, 50, 200]
     all_ema_periods = list(set(default_ema_periods + (ema_periods or [])))
@@ -106,7 +106,7 @@ def compute_features(symbol: str, timeframe: str, ema_periods: list[int] | None 
     session = SessionLocal()
     try:
         df = load_candles(symbol=symbol, timeframe=timeframe, session=session)
-        logger.info(f"Carregades {len(df)} candles de {symbol} {timeframe}")
+        logger.info(f"Loaded {len(df)} candles from {symbol} {timeframe}")
 
         ti = TechnicalIndicators()
         for period in all_ema_periods:
@@ -117,7 +117,7 @@ def compute_features(symbol: str, timeframe: str, ema_periods: list[int] | None 
         df = ti.atr(df, 14)
 
         df = df.dropna()
-        logger.info(f"Features calculades: {len(df)} files, {len(df.columns)} columnes")
+        logger.info(f"Features computed: {len(df)} rows, {len(df.columns)} columns")
         return df
     finally:
         session.close()

@@ -17,10 +17,10 @@ TZ = ZoneInfo("Europe/Madrid")
 
 class TelegramNotifier:
     """
-    Envia notificacions i escolta comandos entrants.
-    Comandos suportats:
-      /status — estat actual de tots els bots
-      /trades — últims trades executats
+    Sends notifications and listens for incoming commands.
+    Supported commands:
+      /status — current status of all bots
+      /trades — last executed trades
     """
 
     def __init__(self):
@@ -28,20 +28,20 @@ class TelegramNotifier:
         self.chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
         if not self.token or not self.chat_id:
-            raise ValueError("TELEGRAM_TOKEN i TELEGRAM_CHAT_ID han d'estar al .env")
+            raise ValueError("TELEGRAM_TOKEN and TELEGRAM_CHAT_ID must be in .env")
 
         self.base_url = f"https://api.telegram.org/bot{self.token}"
         self._last_update_id = 0
-        self._get_status_fn = None  # injectat pel DemoRunner
-        self._get_trades_fn = None  # injectat pel DemoRunner
+        self._get_status_fn = None  # injected by DemoRunner
+        self._get_trades_fn = None  # injected by DemoRunner
         self._listener_thread = None
 
     def set_status_fn(self, fn) -> None:
-        """Injecta la funció que retorna l'estat dels bots."""
+        """Injects the function that returns the status of bots."""
         self._get_status_fn = fn
 
     def set_trades_fn(self, fn) -> None:
-        """Injecta la funció que retorna els últims trades."""
+        """Injects the function that returns the latest trades."""
         self._get_trades_fn = fn
 
     def send(self, message: str) -> bool:
@@ -57,7 +57,7 @@ class TelegramNotifier:
             )
             return response.status_code == 200
         except Exception as e:
-            logger.error(f"Error enviant missatge Telegram: {e}")
+            logger.error(f"Error sending Telegram message: {e}")
             return False
 
     def notify_trade(
@@ -69,7 +69,7 @@ class TelegramNotifier:
         reason: str,
     ) -> None:
         emoji = "🟢" if action == "buy" else "🔴"
-        action_text = "COMPRA" if action == "buy" else "VENDA"
+        action_text = "BUY" if action == "buy" else "SELL"
         now = datetime.now(TZ).strftime("%H:%M")
         self.send(
             f"{emoji} <b>{bot_id}</b> — {action_text} [{now}]\n"
@@ -79,12 +79,12 @@ class TelegramNotifier:
         )
 
     def notify_status(self, status: dict) -> None:
-        lines = [f"📈 <b>Estat dels bots</b> [{datetime.now(TZ).strftime('%H:%M')}]\n"]
+        lines = [f"📈 <b>Bot Status</b> [{datetime.now(TZ).strftime('%H:%M')}]\n"]
         for bot_id, s in status.items():
             pnl = s["portfolio_value"] - 10_000
             pnl_pct = pnl / 10_000 * 100
             emoji = "🟢" if pnl >= 0 else "🔴"
-            in_position = "📦 En posició" if s["btc_balance"] > 0 else "💵 En USDT"
+            in_position = "📦 In Position" if s["btc_balance"] > 0 else "💵 In USDT"
             lines.append(
                 f"{emoji} <b>{bot_id}</b>\n"
                 f"   Portfolio: <b>{s['portfolio_value']:,.2f} USDT</b> ({pnl_pct:+.2f}%)\n"
@@ -94,7 +94,7 @@ class TelegramNotifier:
 
     def notify_daily_summary(self, status: dict) -> None:
         now = datetime.now(TZ).strftime("%Y-%m-%d")
-        lines = [f"🌅 <b>Resum diari — {now}</b>\n"]
+        lines = [f"🌅 <b>Daily Summary — {now}</b>\n"]
         for bot_id, s in status.items():
             pnl = s["portfolio_value"] - 10_000
             pnl_pct = pnl / 10_000 * 100
@@ -116,28 +116,28 @@ class TelegramNotifier:
     def notify_startup(self, bot_ids: list[str]) -> None:
         bots = "\n".join([f"  • {b}" for b in bot_ids])
         self.send(
-            f"🚀 <b>Demo Runner iniciat</b>\n"
-            f"Bots actius:\n{bots}"
+            f"🚀 <b>Demo Runner Started</b>\n"
+            f"Active bots:\n{bots}"
         )
 
     def _handle_command(self, text: str) -> None:
-        """Processa un comando entrant."""
+        """Processes an incoming command."""
         text = text.strip().lower()
 
         if text == "/status":
             if self._get_status_fn:
                 self.notify_status(self._get_status_fn())
             else:
-                self.send("⚠️ Status no disponible.")
+                self.send("⚠️ Status not available.")
 
         elif text == "/trades":
             if self._get_trades_fn:
                 trades = self._get_trades_fn()
                 if not trades:
-                    self.send("Cap trade executat encara.")
+                    self.send("No trades executed yet.")
                 else:
-                    lines = ["📋 <b>Últims trades</b>\n"]
-                    for t in trades[-10:]:  # últims 10
+                    lines = ["📋 <b>Latest Trades</b>\n"]
+                    for t in trades[-10:]:  # last 10
                         ts = t["timestamp"].astimezone(TZ).strftime("%m-%d %H:%M")
                         emoji = "🟢" if t["action"] == "buy" else "🔴"
                         lines.append(
@@ -146,22 +146,22 @@ class TelegramNotifier:
                         )
                     self.send("\n".join(lines))
             else:
-                self.send("⚠️ Trades no disponibles.")
+                self.send("⚠️ Trades not available.")
 
         elif text == "/help":
             self.send(
-                "📖 <b>Comandos disponibles</b>\n"
-                "/status — estat actual dels bots\n"
-                "/trades — últims 10 trades\n"
-                "/help — aquesta ajuda"
+                "📖 <b>Available Commands</b>\n"
+                "/status — current status of bots\n"
+                "/trades — last 10 trades\n"
+                "/help — this help message"
             )
 
         else:
-            self.send(f"Comando desconegut: {text}\nUsa /help per veure els comandos.")
+            self.send(f"Unknown command: {text}\nUse /help to see available commands.")
 
     def _poll_updates(self) -> None:
-        """Escolta updates de Telegram en un thread separat amb retry automàtic."""
-        logger.info("Telegram listener iniciat")
+        """Listens for Telegram updates in a separate thread with automatic retry."""
+        logger.info("Telegram listener started")
         while True:
             try:
                 response = requests.get(
@@ -178,17 +178,17 @@ class TelegramNotifier:
                     message = update.get("message", {})
                     text = message.get("text", "")
                     if text.startswith("/"):
-                        logger.info(f"Comando rebut: {text}")
+                        logger.info(f"Command received: {text}")
                         self._handle_command(text)
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-                # Reconexió silenciosa — és normal amb long polling
+                # Silent reconnection — normal with long polling
                 time.sleep(5)
             except Exception as e:
-                logger.error(f"Error al listener Telegram: {e}")
+                logger.error(f"Error in Telegram listener: {e}")
                 time.sleep(5)
 
     def start_listener(self) -> None:
-        """Arrenca el listener en un thread background."""
+        """Starts the listener in a background thread."""
         self._listener_thread = threading.Thread(
             target=self._poll_updates,
             daemon=True,

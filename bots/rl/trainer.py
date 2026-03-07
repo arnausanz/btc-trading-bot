@@ -11,13 +11,13 @@ from core.config import MLFLOW_TRACKING_URI
 
 logger = logging.getLogger(__name__)
 
-# Afegir un agent nou = una línia aquí
+# Adding a new agent = one line here
 _AGENT_REGISTRY: dict[str, type[BaseRLAgent]] = {
     "sac": SACAgent,
     "ppo": PPOAgent,
 }
 
-# Mapa agent → entorn
+# Agent → environment map
 _ENV_REGISTRY: dict[str, type] = {
     "sac": BtcTradingEnvContinuous,
     "ppo": BtcTradingEnvDiscrete,
@@ -26,9 +26,9 @@ _ENV_REGISTRY: dict[str, type] = {
 
 class RLTrainer:
     """
-    Entrena qualsevol agent RL registrat a _AGENT_REGISTRY.
-    Mateix patró que train_models.py per als models supervised.
-    Config completa en un sol YAML: environment + agent + data + output.
+    Trains any RL agent registered in _AGENT_REGISTRY.
+    Same pattern as train_models.py for supervised models.
+    Complete config in a single YAML: environment + agent + data + output.
     """
 
     def __init__(self, config_path: str):
@@ -44,8 +44,8 @@ class RLTrainer:
             agent_type = self.config["model_type"]
             if agent_type not in _AGENT_REGISTRY:
                 raise ValueError(
-                    f"Agent desconegut: '{agent_type}'. "
-                    f"Disponibles: {list(_AGENT_REGISTRY.keys())}"
+                    f"Unknown agent: '{agent_type}'. "
+                    f"Available: {list(_AGENT_REGISTRY.keys())}"
                 )
 
             mlflow.log_params({
@@ -56,7 +56,7 @@ class RLTrainer:
                 "timeframe": self.config["data"]["timeframe"],
             })
 
-            # Dades
+            # Data
             df = compute_features(
                 symbol=self.config["data"]["symbol"],
                 timeframe=self.config["data"]["timeframe"],
@@ -64,15 +64,15 @@ class RLTrainer:
             split = int(len(df) * self.config["data"]["train_pct"])
             df_train = df.iloc[:split]
             df_val = df.iloc[split:]
-            logger.info(f"Train: {len(df_train)} files | Val: {len(df_val)} files")
+            logger.info(f"Train: {len(df_train)} rows | Val: {len(df_val)} rows")
 
-            # Entorns
-            env_cfg = self.config["environment"]  # ← aquesta línia faltava
+            # Environments
+            env_cfg = self.config["environment"]  # ← this line was missing
             env_class = _ENV_REGISTRY[agent_type]
             train_env = env_class(df=df_train, **env_cfg)
             val_env = env_class(df=df_val, **env_cfg)
 
-            # Agent via from_config — mateix patró que els models supervised
+            # Agent via from_config — same pattern as supervised models
             agent = _AGENT_REGISTRY[agent_type].from_config(self.config)
             metrics = agent.train(
                 train_env=train_env,

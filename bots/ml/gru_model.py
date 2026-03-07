@@ -91,7 +91,7 @@ class GRUModel(BaseMLModel):
             self.device = torch.device("cpu")
         self.net: BidirectionalGRU | None = None
 
-        torch.set_num_threads(1)  # evita deadlock BLAS/OpenMP en macOS
+        torch.set_num_threads(1)  # avoid BLAS/OpenMP deadlock on macOS
         logger.info(f"GRUModel device: {self.device}")
 
     @property
@@ -190,7 +190,7 @@ class GRUModel(BaseMLModel):
             }
             mlflow.log_metrics(metrics)
 
-            tqdm.write("  Entrenant GRU model final...")
+            tqdm.write("  Training final GRU model...")
             X_scaled = self.scaler.fit_transform(X_arr)
             self.net = self._build_net(n_features)
             self._train_fold(
@@ -246,7 +246,7 @@ class GRUModel(BaseMLModel):
                     optimizer.step()
                     epoch_loss += loss.item()
 
-                # Validació
+                # Validation
                 net.eval()
                 val_losses = []
                 with torch.no_grad():
@@ -297,10 +297,10 @@ class GRUModel(BaseMLModel):
 
     def predict(self, X: pd.DataFrame, threshold: float = 0.35) -> tuple[int, float]:
         if not self.is_trained or self.net is None:
-            raise RuntimeError("El model no està entrenat. Crida train() primer.")
+            raise RuntimeError("Model not trained. Call train() first.")
         X_scaled = self.scaler.transform(X.values)
         if len(X_scaled) < self.seq_len:
-            raise ValueError(f"predict() necessita {self.seq_len} files, rebut {len(X_scaled)}")
+            raise ValueError(f"predict() needs {self.seq_len} rows, got {len(X_scaled)}")
         seq = torch.tensor(
             X_scaled[-self.seq_len:], dtype=torch.float32
         ).unsqueeze(0).to(self.device)

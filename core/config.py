@@ -5,7 +5,7 @@ import yaml
 MLFLOW_TRACKING_URI = "sqlite:///mlflow.db"
 
 # ─── Walk-forward split dates ──────────────────────────────────────────────────
-# Llegim des de config/settings.yaml; si no existeix el fitxer usem defaults.
+# Read from config/settings.yaml; if file doesn't exist, use defaults.
 _SETTINGS_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "config", "settings.yaml"
 )

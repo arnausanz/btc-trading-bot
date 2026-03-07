@@ -23,7 +23,7 @@ class ProgressCallback(BaseCallback):
         return True
 
     def _on_training_end(self) -> None:
-        print()  # salt de línia al final
+        print()  # newline at the end
 
 
 class SACAgent(BaseRLAgent):
@@ -31,11 +31,11 @@ class SACAgent(BaseRLAgent):
     Agent SAC (Soft Actor-Critic).
     Agent principal per a trading amb accions contínues.
 
-    Per què SAC per trading:
-    - Maximitza retorn + entropia → exploració robusta en mercats sorollosos
-    - Off-policy: aprofita experiències passades (replay buffer)
-    - Accions contínues [-1, 1]: position sizing natural (short ↔ long)
-    - Més estable que DDPG en entorns financers no estacionaris
+    Why SAC for trading:
+    - Maximizes return + entropy → robust exploration in noisy markets
+    - Off-policy: leverages past experiences (replay buffer)
+    - Continuous actions [-1, 1]: natural position sizing (short ↔ long)
+    - More stable than DDPG in non-stationary financial environments
     """
 
     def __init__(
@@ -97,7 +97,7 @@ class SACAgent(BaseRLAgent):
             policy_kwargs=policy_kwargs,
             verbose=0,
         )
-        logger.info(f"  Entrenant SAC — {total_timesteps} timesteps...")
+        logger.info(f"  Training SAC — {total_timesteps} timesteps...")
         self.model.learn(
             total_timesteps=total_timesteps,
             callback=ProgressCallback(total_timesteps),
@@ -107,20 +107,20 @@ class SACAgent(BaseRLAgent):
 
     def act(self, observation: np.ndarray, deterministic: bool = True) -> np.ndarray:
         if self.model is None:
-            raise RuntimeError("Agent no entrenat. Crida train() primer.")
+            raise RuntimeError("Agent not trained. Call train() first.")
         action, _ = self.model.predict(observation, deterministic=deterministic)
         return action
 
     def save(self, path: str) -> None:
         if self.model is None:
-            raise RuntimeError("No hi ha model per guardar.")
+            raise RuntimeError("No model to save.")
         self.model.save(path)
-        logger.info(f"SACAgent guardat a {path}")
+        logger.info(f"SACAgent saved to {path}")
 
     def load(self, path: str) -> None:
         self.model = SAC.load(path)
         self.is_trained = True
-        logger.info(f"SACAgent carregat des de {path}")
+        logger.info(f"SACAgent loaded from {path}")
 
     def _validate(self, env) -> dict:
         obs, _ = env.reset()
@@ -138,7 +138,7 @@ class SACAgent(BaseRLAgent):
         drawdown = float(((values - peak) / peak * 100).min())
 
         logger.info(
-            f"  Validació SAC → return={total_return:.2f}% "
+            f"  SAC Validation → return={total_return:.2f}% "
             f"drawdown={drawdown:.2f}% trades={env.trades}"
         )
         return {

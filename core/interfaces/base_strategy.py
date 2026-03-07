@@ -6,15 +6,15 @@ from core.models import Signal
 
 class BaseStrategy(ABC):
     """
-    Interfície per a estratègies de trading clàssiques.
-    Una Strategy encapsula la lògica de decisió basada en indicadors tècnics.
-    És el component intern d'un Bot clàssic — el Bot crida la Strategy.
+    Interface for classical trading strategies.
+    A Strategy encapsulates decision logic based on technical indicators.
+    It is the inner component of a classical Bot — the Bot calls the Strategy.
     """
 
     @abstractmethod
     def generate_signal(self, df: pd.DataFrame, bot_id: str) -> Signal:
         """
-        Rep un DataFrame amb features calculades i retorna un Signal.
-        df té com a mínim les columnes OHLCV + els indicadors tècnics.
+        Receives a DataFrame with computed features and returns a Signal.
+        df must have at least the OHLCV columns + technical indicators.
         """
         ...

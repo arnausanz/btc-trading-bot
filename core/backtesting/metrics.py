@@ -2,8 +2,8 @@
 import numpy as np
 import pandas as pd
 
-# Factors d'anualització per timeframe (períodes per any)
-# Crypto opera 24/7/365 — no s'usen dies de mercat
+# Annualization factors per timeframe (periods per year)
+# Crypto operates 24/7/365 — no market days used
 _PERIODS_PER_YEAR: dict[str, int] = {
     "1m":  365 * 24 * 60,   # 525.600
     "5m":  365 * 24 * 12,   # 105.120
@@ -23,11 +23,11 @@ _PERIODS_PER_YEAR: dict[str, int] = {
 
 class BacktestMetrics:
     """
-    Calcula mètriques de rendiment a partir de l'historial d'un backtest.
-    Totes les mètriques són comparables entre bots si s'executen
-    sobre el mateix període, capital inicial i timeframe.
+    Computes performance metrics from a backtest history.
+    All metrics are comparable across bots if they run
+    on the same period, initial capital, and timeframe.
 
-    El timeframe és obligatori per anualitzar correctament el Sharpe i el Calmar.
+    The timeframe is required to correctly annualize Sharpe and Calmar ratios.
     """
 
     def __init__(self, history: list[dict], initial_capital: float, timeframe: str = "1h"):
@@ -37,19 +37,19 @@ class BacktestMetrics:
         self._periods_per_year = _PERIODS_PER_YEAR.get(timeframe, 365 * 24)
 
     def total_return(self) -> float:
-        """Retorn total en percentatge."""
+        """Total return in percentage."""
         final = self.df["portfolio_value"].iloc[-1]
         return (final - self.initial_capital) / self.initial_capital * 100
 
     def sharpe_ratio(self, risk_free_rate: float = 0.0) -> float:
         """
-        Sharpe Ratio anualitzat correctament per al timeframe donat.
-        Usa sqrt(periods_per_year) per anualitzar els retorns periòdics.
+        Sharpe Ratio correctly annualized for the given timeframe.
+        Uses sqrt(periods_per_year) to annualize periodic returns.
 
-        Per a dades horàries (1h): sqrt(8.760)
-        Per a dades diàries  (1d): sqrt(365)
+        For hourly data (1h): sqrt(8.760)
+        For daily data  (1d): sqrt(365)
 
-        >1 és acceptable, >2 és bo, >3 és excel·lent.
+        >1 is acceptable, >2 is good, >3 is excellent.
         """
         returns = self.df["portfolio_value"].pct_change().dropna()
         if returns.std() == 0:
@@ -60,8 +60,8 @@ class BacktestMetrics:
 
     def max_drawdown(self) -> float:
         """
-        Màxima caiguda des d'un màxim fins a un mínim posterior.
-        En percentatge. Com més petit (negatiu) pitjor.
+        Maximum drawdown from a peak to a subsequent trough.
+        In percentage. The smaller (more negative) the worse.
         """
         values = self.df["portfolio_value"]
         peak = values.cummax()
@@ -70,9 +70,9 @@ class BacktestMetrics:
 
     def _duration_days(self) -> float:
         """
-        Durada real del backtest en dies.
-        Usa timestamps del historial si estan disponibles.
-        Fallback: estima dies a partir del nombre de ticks i el timeframe.
+        Actual duration of the backtest in days.
+        Uses timestamps from history if available.
+        Fallback: estimates days from number of ticks and timeframe.
         """
         if "timestamp" in self.df.columns and len(self.df) >= 2:
             try:
@@ -83,14 +83,14 @@ class BacktestMetrics:
                     return days
             except Exception:
                 pass
-        # Fallback: ticks / (períodes per dia)
+        # Fallback: ticks / (periods per day)
         periods_per_day = self._periods_per_year / 365
         return len(self.df) / periods_per_day
 
     def calmar_ratio(self) -> float:
         """
-        Retorn anualitzat dividit pel max drawdown.
-        Penalitza estratègies amb drawdowns grans.
+        Annualized return divided by max drawdown.
+        Penalizes strategies with large drawdowns.
         """
         dd = abs(self.max_drawdown())
         if dd == 0:
@@ -103,9 +103,9 @@ class BacktestMetrics:
 
     def win_rate(self) -> float:
         """
-        Win Rate real: percentatge de round-trips tancats (buy→sell) amb profit.
-        No compta posicions obertes sense tancar.
-        Retorna 0.0 si no hi ha senyals o no hi ha cap trade tancat.
+        Actual Win Rate: percentage of closed round-trips (buy→sell) with profit.
+        Does not count open positions without closure.
+        Returns 0.0 if no signals or no closed trades exist.
         """
         if "signal" not in self.df.columns:
             return 0.0
@@ -131,7 +131,7 @@ class BacktestMetrics:
         return float(trades_won / trades_total * 100)
 
     def summary(self) -> dict:
-        """Retorna totes les mètriques en un sol diccionari."""
+        """Returns all metrics in a single dictionary."""
         return {
             "total_return_pct": round(self.total_return(), 2),
             "sharpe_ratio": round(self.sharpe_ratio(), 3),

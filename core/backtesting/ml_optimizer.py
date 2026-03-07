@@ -13,11 +13,11 @@ logger = logging.getLogger(__name__)
 
 class MLOptimizer:
     """
-    Optimitza hiperparàmetres de models ML (supervised) amb Optuna.
-    Cada trial = un entrenament complet amb Walk-Forward Cross-Validation.
-    Mètrica objectiu: accuracy_mean | precision_mean | recall_mean (configurable).
+    Optimizes hyperparameters of ML models (supervised) with Optuna.
+    Each trial = a complete training with Walk-Forward Cross-Validation.
+    Objective metric: accuracy_mean | precision_mean | recall_mean (configurable).
 
-    Afegir un model nou al registry = automàticament optimitzable.
+    Adding a new model to registry = automatically optimizable.
     """
 
     def __init__(self, optimization_config_path: str):
@@ -34,7 +34,7 @@ class MLOptimizer:
         self.search_space = self.opt_cfg["search_space"]
 
     def _sample_params(self, trial: optuna.Trial) -> dict:
-        """Samplea hiperparàmetres de l'espai de cerca definit al YAML."""
+        """Samples hyperparameters from the search space defined in YAML."""
         params = {}
         for name, spec in self.search_space.items():
             if spec["type"] == "int":
@@ -49,7 +49,7 @@ class MLOptimizer:
         return params
 
     def _build_config(self, params: dict) -> dict:
-        """Aplica els paràmetres del trial a la config base."""
+        """Applies trial parameters to the base config."""
         config = copy.deepcopy(self.base_train_cfg)
         for name, value in params.items():
             config["model"][name] = value
@@ -94,16 +94,16 @@ class MLOptimizer:
         except optuna.TrialPruned:
             raise
         except Exception as e:
-            logger.warning(f"  Trial {trial.number} fallat: {e}")
+            logger.warning(f"  Trial {trial.number} failed: {e}")
             return -999.0
         finally:
             mlflow.end_run()
 
     def run(self) -> optuna.Study:
         logger.info(
-            f"=== Optimitzant {self.model_type} | "
+            f"=== Optimizing {self.model_type} | "
             f"{self.n_trials} trials | "
-            f"objectiu: {self.metric} ==="
+            f"objective: {self.metric} ==="
         )
         study = optuna.create_study(
             direction=self.direction,
@@ -112,16 +112,16 @@ class MLOptimizer:
         )
         study.optimize(self._objective, n_trials=self.n_trials)
 
-        logger.info(f"  Millor {self.metric}: {study.best_value:.4f}")
-        logger.info(f"  Millors paràmetres: {study.best_params}")
+        logger.info(f"  Best {self.metric}: {study.best_value:.4f}")
+        logger.info(f"  Best parameters: {study.best_params}")
         return study
 
     def best_config(self, study: optuna.Study) -> dict:
-        """Retorna la config completa amb els millors paràmetres."""
+        """Returns the complete config with the best parameters."""
         return self._build_config(study.best_params)
 
     def save_best_config(self, study: optuna.Study, output_path: str) -> None:
-        """Guarda la millor config com a YAML llest per entrenar."""
+        """Saves the best config as YAML ready for training."""
         best = self.best_config(study)
         best["experiment_name"] = f"{self.model_type}_optimized"
         best["output"]["model_path"] = best["output"]["model_path"].replace(
@@ -129,4 +129,4 @@ class MLOptimizer:
         ).replace(".pt", "_optimized.pt")
         with open(output_path, "w") as f:
             yaml.dump(best, f, default_flow_style=False, allow_unicode=True)
-        logger.info(f"  Config optimitzada guardada a {output_path}")
+        logger.info(f"  Optimized config saved to {output_path}")

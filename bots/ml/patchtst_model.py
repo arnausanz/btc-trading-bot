@@ -18,20 +18,20 @@ logger = logging.getLogger(__name__)
 
 class PatchEmbedding(nn.Module):
     """
-    Divideix la seqüència temporal en patches i els projecta a d_model dimensions.
-    Cada patch és un grup de patch_len candles consecutives.
-    Equivalent als "tokens" d'un Transformer de text.
+    Divides the temporal sequence into patches and projects them to d_model dimensions.
+    Each patch is a group of patch_len consecutive candles.
+    Equivalent to "tokens" in a text Transformer.
 
-    Exemple: seq_len=96, patch_len=16, stride=8
+    Example: seq_len=96, patch_len=16, stride=8
     → (96 - 16) / 8 + 1 = 11 patches
-    Cada patch representa 16 candles amb solapament de 8.
+    Each patch represents 16 candles with 8 overlap.
     """
 
     def __init__(self, n_features: int, patch_len: int, stride: int, d_model: int):
         super().__init__()
         self.patch_len = patch_len
         self.stride = stride
-        # Projecció lineal de cada patch (patch_len * n_features) → d_model
+        # Linear projection of each patch (patch_len * n_features) → d_model
         self.projection = nn.Linear(patch_len * n_features, d_model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -45,19 +45,19 @@ class PatchEmbedding(nn.Module):
 
 class PatchTSTNet(nn.Module):
     """
-    PatchTST per a classificació binària.
-    Arquitectura:
+    PatchTST for binary classification.
+    Architecture:
         Input (seq_len, n_features)
         → PatchEmbedding → (n_patches, d_model)
         → Positional Encoding
         → Transformer Encoder (n_heads, n_layers)
-        → Mean pooling sobre patches
+        → Mean pooling over patches
         → FC → Sigmoid
 
-    Per què supera GRU/LSTM:
-    - Veu tots els patches simultàniament (self-attention), no seqüencialment
-    - Captura dependències llunyanes sense vanishing gradient
-    - Patches preserven estructura local (16 candles) + global (entre patches)
+    Why it outperforms GRU/LSTM:
+    - Sees all patches simultaneously (self-attention), not sequentially
+    - Captures long-range dependencies without vanishing gradient
+    - Patches preserve local structure (16 candles) + global (between patches)
     """
 
     def __init__(
@@ -75,11 +75,11 @@ class PatchTSTNet(nn.Module):
         super().__init__()
         self.patch_embedding = PatchEmbedding(n_features, patch_len, stride, d_model)
 
-        # Nombre de patches resultants
+        # Number of resulting patches
         n_patches = (seq_len - patch_len) // stride + 1
         self.n_patches = n_patches
 
-        # Positional encoding learnable (més flexible que el sinusoïdal)
+        # Positional encoding learnable (more flexible than sinusoidal)
         self.pos_embedding = nn.Parameter(torch.zeros(1, n_patches, d_model, device=device))
 
         # Transformer Encoder
@@ -89,12 +89,12 @@ class PatchTSTNet(nn.Module):
             dim_feedforward=d_model * 4,
             dropout=dropout,
             batch_first=True,
-            norm_first=True,  # Pre-LN: més estable que Post-LN
+            norm_first=True,  # Pre-LN: more stable than Post-LN
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=n_layers, enable_nested_tensor=False)
         self.dropout = nn.Dropout(dropout)
 
-        # Cap de classificació
+        # Classification head
         self.classifier = nn.Sequential(
             nn.Linear(d_model, d_model // 2),
             nn.ReLU(),
@@ -107,7 +107,7 @@ class PatchTSTNet(nn.Module):
         # x: (batch, seq_len, n_features)
         x = x.to(self.pos_embedding.device)     # ensure input is on the same device as the model
         out = self.patch_embedding(x)           # (batch, n_patches, d_model)
-        out = out + self.pos_embedding           # afegeix posició
+        out = out + self.pos_embedding           # add position
         out = self.transformer(out)              # (batch, n_patches, d_model)
         out = out.mean(dim=1)                    # mean pooling → (batch, d_model)
         out = self.dropout(out)
@@ -134,8 +134,8 @@ class TimeSeriesDataset(Dataset):
 
 class PatchTSTModel(BaseMLModel):
     """
-    Wrapper de PatchTST amb la mateixa interfície que GRUModel.
-    Afegir al registry = una línia. La resta és automàtic.
+    PatchTST wrapper with the same interface as GRUModel.
+    Add to registry = one line. The rest is automatic.
     """
 
     def __init__(
@@ -168,7 +168,7 @@ class PatchTSTModel(BaseMLModel):
         self.scaler = StandardScaler()
         self.net: PatchTSTNet | None = None
 
-        torch.set_num_threads(1)  # evita deadlock BLAS/OpenMP en macOS
+        torch.set_num_threads(1)  # avoid BLAS/OpenMP deadlock on macOS
 
         if torch.backends.mps.is_available():
             self.device = torch.device("mps")
@@ -226,10 +226,10 @@ class PatchTSTModel(BaseMLModel):
         self.feature_names = list(X.columns)
         n_features = len(self.feature_names)
 
-        # Valida que els patches encaixen amb seq_len
+        # Validates that patches fit with seq_len
         n_patches = (self.seq_len - self.patch_len) // self.stride + 1
         assert n_patches > 0, (
-            f"Configuració invàlida: seq_len={self.seq_len}, "
+            f"Invalid configuration: seq_len={self.seq_len}, "
             f"patch_len={self.patch_len}, stride={self.stride} → {n_patches} patches"
         )
         logger.info(
@@ -303,7 +303,7 @@ class PatchTSTModel(BaseMLModel):
             }
             mlflow.log_metrics(metrics)
 
-            tqdm.write("  Entrenant PatchTST model final...")
+            tqdm.write("  Training final PatchTST model...")
             X_scaled = self.scaler.fit_transform(X_arr)
             self.net = self._build_net(n_features)
             self._train_fold(
@@ -335,11 +335,11 @@ class PatchTSTModel(BaseMLModel):
         optimizer = torch.optim.AdamW(
             net.parameters(),
             lr=self.learning_rate,
-            weight_decay=1e-4,  # AdamW millor que Adam per a Transformers
+            weight_decay=1e-4,  # AdamW better than Adam for Transformers
         )
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            T_max=self.epochs,  # Cosine millor que ReduceLROnPlateau per a Transformers
+            T_max=self.epochs,  # Cosine better than ReduceLROnPlateau for Transformers
         )
 
         best_val_loss = float("inf")
@@ -366,7 +366,7 @@ class PatchTSTModel(BaseMLModel):
 
                 scheduler.step()
 
-                # Validació
+                # Validation
                 net.eval()
                 val_losses = []
                 with torch.no_grad():
@@ -416,11 +416,11 @@ class PatchTSTModel(BaseMLModel):
 
     def predict(self, X: pd.DataFrame, threshold: float = 0.35) -> tuple[int, float]:
         if not self.is_trained or self.net is None:
-            raise RuntimeError("El model no està entrenat. Crida train() primer.")
+            raise RuntimeError("Model not trained. Call train() first.")
         X_scaled = self.scaler.transform(X.values)
         if len(X_scaled) < self.seq_len:
             raise ValueError(
-                f"predict() necessita {self.seq_len} files, rebut {len(X_scaled)}"
+                f"predict() needs {self.seq_len} rows, got {len(X_scaled)}"
             )
         seq = torch.tensor(
             X_scaled[-self.seq_len:], dtype=torch.float32
@@ -447,7 +447,7 @@ class PatchTSTModel(BaseMLModel):
             "feature_names": self.feature_names,
             "seq_len": self.seq_len,
         }, path)
-        logger.info(f"PatchTSTModel guardat a {path}")
+        logger.info(f"PatchTSTModel saved to {path}")
 
     def load(self, path: str) -> None:
         data = torch.load(path, map_location=self.device, weights_only=False)
@@ -459,4 +459,4 @@ class PatchTSTModel(BaseMLModel):
         self.net.load_state_dict(data["net_state"])
         self.net.eval()
         self.is_trained = True
-        logger.info(f"PatchTSTModel carregat des de {path}")
+        logger.info(f"PatchTSTModel loaded from {path}")

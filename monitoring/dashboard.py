@@ -57,7 +57,7 @@ def render_candlestick(df: pd.DataFrame) -> go.Figure:
         increasing_line_color="#26a69a", decreasing_line_color="#ef5350",
     )])
     fig.update_layout(
-        title="BTC/USDT", xaxis_title="Data", yaxis_title="Preu (USDT)",
+        title="BTC/USDT", xaxis_title="Date", yaxis_title="Price (USDT)",
         template="plotly_dark", height=500, xaxis_rangeslider_visible=False,
     )
     return fig
@@ -66,44 +66,44 @@ def render_candlestick(df: pd.DataFrame) -> go.Figure:
 def render_volume(df: pd.DataFrame) -> go.Figure:
     colors = ["#26a69a" if c >= o else "#ef5350" for c, o in zip(df["close"], df["open"])]
     fig = go.Figure(data=[go.Bar(x=df["timestamp"], y=df["volume"], marker_color=colors)])
-    fig.update_layout(title="Volum", template="plotly_dark", height=200, showlegend=False)
+    fig.update_layout(title="Volume", template="plotly_dark", height=200, showlegend=False)
     return fig
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
-st.sidebar.title("⚙️ Configuració")
+st.sidebar.title("⚙️ Settings")
 timeframe = st.sidebar.selectbox("Timeframe", ["1h", "4h", "1d"], index=0)
-limit = st.sidebar.slider("Nombre de candles", 50, 500, 200)
+limit = st.sidebar.slider("Number of candles", 50, 500, 200)
 auto_refresh = st.sidebar.checkbox("Auto-refresh (30s)", value=False)
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.title("📈 BTC Trading Bot Dashboard")
-st.caption(f"Actualitzat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.caption(f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # ── DB Stats ──────────────────────────────────────────────────────────────────
-st.subheader("📊 Base de dades")
+st.subheader("📊 Database")
 stats = load_db_stats()
 cols = st.columns(len(stats))
 for col, (tf, s) in zip(cols, stats.items()):
-    col.metric(label=f"Candles {tf}", value=f"{s['total']:,}", delta=f"fins {s['ultima'].strftime('%Y-%m-%d')}")
+    col.metric(label=f"Candles {tf}", value=f"{s['total']:,}", delta=f"until {s['ultima'].strftime('%Y-%m-%d')}")
 
-# ── Gràfic de preus ───────────────────────────────────────────────────────────
-st.subheader("🕯️ Gràfic de preus")
+# ── Price chart ───────────────────────────────────────────────────────────────
+st.subheader("🕯️ Price chart")
 df = load_candles(timeframe=timeframe, limit=limit)
 
 if df.empty:
-    st.warning("No hi ha dades disponibles.")
+    st.warning("No data available.")
 else:
     st.plotly_chart(render_candlestick(df), use_container_width=True)
     st.plotly_chart(render_volume(df), use_container_width=True)
 
-    st.subheader("📐 Indicadors tècnics (última candle)")
+    st.subheader("📐 Technical indicators (last candle)")
     last = df.iloc[-1]
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Preu actual", f"{last['close']:,.2f} USDT")
+    c1.metric("Current price", f"{last['close']:,.2f} USDT")
     c2.metric("High", f"{last['high']:,.2f} USDT")
     c3.metric("Low", f"{last['low']:,.2f} USDT")
-    c4.metric("Volum", f"{last['volume']:,.2f}")
+    c4.metric("Volume", f"{last['volume']:,.2f}")
 
 # ── Auto-refresh ──────────────────────────────────────────────────────────────
 if auto_refresh:

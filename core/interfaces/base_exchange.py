@@ -5,34 +5,34 @@ from core.models import Order, Signal
 
 class BaseExchange(ABC):
     """
-    Interfície que tot exchange ha d'implementar.
-    Els bots no saben si estan en paper o en real — sempre parlen amb aquesta interfície.
+    Interface that every exchange must implement.
+    Bots are agnostic to paper vs live — they always communicate through this interface.
     """
 
     @abstractmethod
     def get_candles(self, symbol: str, timeframe: str, limit: int = 500) -> list:
-        """Retorna les últimes N candles del mercat."""
+        """Returns the last N market candles."""
         ...
 
     @abstractmethod
     def send_order(self, signal: Signal) -> Order:
-        """Rep un Signal i executa l'ordre al mercat."""
+        """Receives a Signal and executes the order on the market."""
         ...
 
     @abstractmethod
     def get_portfolio(self) -> dict:
-        """Retorna l'estat actual del portfolio. Ex: {'BTC': 0.5, 'USDT': 10000.0}"""
+        """Returns the current portfolio state. E.g.: {'BTC': 0.5, 'USDT': 10000.0}"""
         ...
 
     @abstractmethod
     def get_balance(self, currency: str) -> float:
-        """Retorna el balanç disponible d'una divisa concreta."""
+        """Returns the available balance for a specific currency."""
         ...
 
     def get_portfolio_value(self) -> float:
-        """Valor total del portfolio en USDT. Subclasses haurien de sobreescriure'l."""
+        """Total portfolio value in USDT. Subclasses should override this."""
         raise NotImplementedError
 
     def set_current_price(self, price: float) -> None:
-        """Actualitza el preu actual. Necessari per a paper trading."""
+        """Updates the current price. Required for paper trading."""
         raise NotImplementedError

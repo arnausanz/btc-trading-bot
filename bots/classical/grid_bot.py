@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class GridBot(BaseBot):
     """
-    Grid Trading Bot que calcula Bollinger Bands dinàmicament.
+    Grid Trading Bot that calculates Bollinger Bands dynamically.
     """
 
     def __init__(self, config_path: str = "config/bots/grid.yaml"):
@@ -48,7 +48,7 @@ class GridBot(BaseBot):
                 action=Action.BUY,
                 size=self.config["level_size"],
                 confidence=min(1.0, 1 - rsi / 100),
-                reason=f"Preu {price:.0f} toca BB lower. RSI: {rsi:.1f}",
+                reason=f"Price {price:.0f} touches BB lower. RSI: {rsi:.1f}",
             )
 
         if price >= bb_upper.iloc[-1] and self._in_position and rsi > self.config["rsi_filter_low"]:
@@ -59,7 +59,7 @@ class GridBot(BaseBot):
                 action=Action.SELL,
                 size=1.0,
                 confidence=min(1.0, rsi / 100),
-                reason=f"Preu {price:.0f} toca BB upper. RSI: {rsi:.1f}",
+                reason=f"Price {price:.0f} touches BB upper. RSI: {rsi:.1f}",
             )
 
         return Signal(
@@ -68,9 +68,9 @@ class GridBot(BaseBot):
             action=Action.HOLD,
             size=0.0,
             confidence=1.0,
-            reason=f"Preu {price:.0f} dins les bandes",
+            reason=f"Price {price:.0f} within bands",
         )
 
     def on_start(self) -> None:
         self._in_position = False
-        logger.info("GridBot iniciat")
+        logger.info("GridBot initialized")

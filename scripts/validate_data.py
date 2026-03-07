@@ -23,8 +23,8 @@ EXPECTED_GAPS = {
 
 
 def check_counts(session):
-    """Quantes candles tenim per timeframe."""
-    logger.info("=== RECOMPTE PER TIMEFRAME ===")
+    """Candle count per timeframe."""
+    logger.info("=== CANDLE COUNT BY TIMEFRAME ===")
     result = session.execute(text("""
         SELECT timeframe, COUNT(*) as total
         FROM candles
@@ -36,8 +36,8 @@ def check_counts(session):
 
 
 def check_range(session):
-    """Rang temporal de cada timeframe."""
-    logger.info("=== RANG TEMPORAL ===")
+    """Time range for each timeframe."""
+    logger.info("=== TIME RANGE BY TIMEFRAME ===")
     result = session.execute(text("""
         SELECT timeframe, MIN(timestamp) as primera, MAX(timestamp) as ultima
         FROM candles
@@ -49,8 +49,8 @@ def check_range(session):
 
 
 def check_gaps(session):
-    """Detecta gaps (forats) a les dades de cada timeframe."""
-    logger.info("=== GAPS DETECTATS ===")
+    """Detects gaps in candle data for each timeframe."""
+    logger.info("=== GAPS DETECTED ===")
     for timeframe, interval in EXPECTED_GAPS.items():
         result = session.execute(text(f"""
             SELECT COUNT(*) as gaps
@@ -64,12 +64,13 @@ def check_gaps(session):
         """), {"timeframe": timeframe})
         gaps = result.scalar()
         if gaps == 0:
-            logger.info(f"  {timeframe}: OK, sense gaps")
+            logger.info(f"  {timeframe}: OK, no gaps")
         else:
-            logger.warning(f"  {timeframe}: {gaps} gaps detectats!")
+            logger.warning(f"  {timeframe}: {gaps} gaps detected!")
+
 def check_gap_detail(session):
-    """Mostra exactament on són els gaps."""
-    logger.info("=== DETALL GAPS 1h ===")
+    """Shows exactly where the 1h gaps are."""
+    logger.info("=== GAP DETAIL (1h) ===")
     result = session.execute(text("""
         SELECT anterior, timestamp, timestamp - anterior as diferencia
         FROM (
@@ -84,8 +85,8 @@ def check_gap_detail(session):
         logger.info(f"  Gap: {row.anterior} → {row.timestamp} ({row.diferencia})")
 
 def check_duplicates(session):
-    """Detecta candles duplicades."""
-    logger.info("=== DUPLICATS ===")
+    """Detects duplicate candles."""
+    logger.info("=== DUPLICATES ===")
     result = session.execute(text("""
         SELECT timeframe, COUNT(*) as duplicats
         FROM (
@@ -99,10 +100,10 @@ def check_duplicates(session):
     """))
     rows = result.fetchall()
     if not rows:
-        logger.info("  OK, sense duplicats")
+        logger.info("  OK, no duplicates")
     else:
         for row in rows:
-            logger.warning(f"  {row.timeframe}: {row.duplicats} duplicats!")
+            logger.warning(f"  {row.timeframe}: {row.duplicats} duplicates!")
 
 
 if __name__ == "__main__":
@@ -113,6 +114,6 @@ if __name__ == "__main__":
         check_gaps(session)
         check_gap_detail(session)
         check_duplicates(session)
-        logger.info("=== VALIDACIÓ COMPLETADA ===")
+        logger.info("=== VALIDATION COMPLETE ===")
     finally:
         session.close()

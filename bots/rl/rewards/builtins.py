@@ -13,8 +13,8 @@ def simple_reward(
     scaling: float = 100.0,
 ) -> float:
     """
-    Reward bàsic: canvi percentual del portfolio.
-    Simple i directe — l'agent maximitza el retorn total.
+    Basic reward: percentage change of the portfolio.
+    Simple and direct — the agent maximizes total return.
     """
     return (curr_value - prev_value) / prev_value * scaling
 
@@ -73,10 +73,10 @@ def penalize_inaction_reward(
     scaling: float = 100.0,
 ) -> float:
     """
-    Com simple però penalitza estar massa temps sense posició.
-    Evita que l'agent aprengui a fer HOLD sempre.
+    Like simple but penalizes extended periods without a position.
+    Prevents the agent from learning to always HOLD.
     """
     ret = (curr_value - prev_value) / prev_value * scaling
     if action == 0 and not in_position:
-        ret -= 0.001  # petita penalització per inacció prolongada
+        ret -= 0.001  # small penalty for prolonged inaction
     return ret

@@ -9,11 +9,11 @@ logger = logging.getLogger(__name__)
 
 class DatasetBuilder:
     """
-    Construeix datasets supervisats per entrenar models ML.
-    Suporta múltiples timeframes via merge_asof.
+    Builds supervised datasets for training ML models.
+    Supports multiple timeframes via merge_asof.
 
-    WALK-FORWARD: el paràmetre train_until limita les dades d'entrenament
-    per evitar que el model vegi dades del període de test (lookahead bias).
+    WALK-FORWARD: the train_until parameter limits training data
+    to prevent the model from seeing test period data (lookahead bias).
     """
 
     def __init__(
@@ -37,7 +37,7 @@ class DatasetBuilder:
             timeframes=config["data"]["timeframes"],
             forward_window=config["data"]["forward_window"],
             threshold_pct=config["data"]["threshold_pct"],
-            # Permet sobreescriure train_until per config; sinó usa el global
+            # Allows overriding train_until via config; otherwise uses global
             train_until=config["data"].get("train_until", TRAIN_UNTIL),
         )
 
@@ -45,15 +45,15 @@ class DatasetBuilder:
         primary_tf = self.timeframes[0]
         primary_df = compute_features(symbol=self.symbol, timeframe=primary_tf)
 
-        # ─── Filtra al període de train ABANS de calcular labels ──────────────
-        # Es fa DESPRÉS de compute_features perquè els indicadors (EMA, RSI, etc.)
-        # necessiten totes les dades anteriors per al càlcul correcte (warm-up).
+        # ─── Filter to training period BEFORE calculating labels ─────────────
+        # Done AFTER compute_features because indicators (EMA, RSI, etc.)
+        # need all prior data for correct calculation (warm-up).
         if self.train_until:
             cutoff = pd.Timestamp(self.train_until)
             if cutoff.tzinfo is None:
                 cutoff = cutoff.tz_localize("UTC")
             primary_df = primary_df[primary_df.index <= cutoff]
-            logger.info(f"  Filtrant per train_until={self.train_until}: {len(primary_df)} files de train")
+            logger.info(f"  Filtering by train_until={self.train_until}: {len(primary_df)} training rows")
 
         future_return = primary_df["close"].shift(-self.forward_window) / primary_df["close"] - 1
         y = (future_return > self.threshold_pct).astype(int)
@@ -61,7 +61,7 @@ class DatasetBuilder:
 
         for tf in self.timeframes[1:]:
             tf_df = compute_features(symbol=self.symbol, timeframe=tf)
-            # Filtra el timeframe secundari al mateix període
+            # Filter secondary timeframe to same period
             if self.train_until:
                 cutoff = pd.Timestamp(self.train_until)
                 if cutoff.tzinfo is None:
@@ -72,7 +72,7 @@ class DatasetBuilder:
                 X.sort_index(), tf_df.sort_index(),
                 left_index=True, right_index=True, direction="backward",
             )
-            logger.info(f"  Afegides features de {tf}: {len(tf_df.columns)} columnes")
+            logger.info(f"  Added features from {tf}: {len(tf_df.columns)} columns")
 
         X = X.iloc[:-self.forward_window]
         y = y.iloc[:-self.forward_window]
@@ -81,7 +81,7 @@ class DatasetBuilder:
         X, y = X[mask], y[mask]
 
         logger.info(
-            f"Dataset construït: {len(X)} files, {len(X.columns)} features, "
-            f"timeframes: {self.timeframes}, target positiu: {y.mean():.1%}"
+            f"Dataset built: {len(X)} rows, {len(X.columns)} features, "
+            f"timeframes: {self.timeframes}, positive target: {y.mean():.1%}"
         )
         return X, y

@@ -12,15 +12,15 @@ logger = logging.getLogger(__name__)
 
 class OHLCVFetcher:
     """
-    Descarrega candeles OHLCV d'un exchange via ccxt
-    i les persisteix a la DB.
+    Downloads OHLCV candles from an exchange via ccxt
+    and persists them to the DB.
     """
 
     def __init__(self, exchange_id: str = "binance"):
         self.exchange = getattr(ccxt, exchange_id)({
-            "enableRateLimit": True,  # respecta els límits de l'API automàticament
+            "enableRateLimit": True,  # respects API rate limits automatically
         })
-        logger.info(f"OHLCVFetcher inicialitzat amb exchange: {exchange_id}")
+        logger.info(f"OHLCVFetcher initialized with exchange: {exchange_id}")
 
     def fetch_and_store(
         self,
@@ -30,8 +30,8 @@ class OHLCVFetcher:
         until: datetime | None = None,
     ) -> int:
         """
-        Descarrega candles entre since i until i les guarda a la DB.
-        Retorna el nombre de candles guardades.
+        Downloads candles between since and until and saves them to the DB.
+        Returns the number of candles saved.
         """
         until = until or datetime.now(timezone.utc)
         since_ms = int(since.timestamp() * 1000)
@@ -40,14 +40,14 @@ class OHLCVFetcher:
         total_saved = 0
         current_since = since_ms
 
-        logger.info(f"Iniciant descàrrega {symbol} {timeframe} des de {since.date()} fins {until.date()}")
+        logger.info(f"Starting download {symbol} {timeframe} from {since.date()} to {until.date()}")
 
         while current_since < until_ms:
             raw = self.exchange.fetch_ohlcv(
                 symbol=symbol,
                 timeframe=timeframe,
                 since=current_since,
-                limit=1000,  # màxim per request a Binance
+                limit=1000,  # max per request at Binance
             )
 
             if not raw:
@@ -72,18 +72,18 @@ class OHLCVFetcher:
                     )
                     candles.append(candle)
                 except Exception as e:
-                    logger.warning(f"Candle invàlida descartada: {e}")
+                    logger.warning(f"Invalid candle discarded: {e}")
 
             saved = self._save(candles)
             total_saved += saved
             current_since = raw[-1][0] + 1
-            logger.info(f"  {saved} candles guardades fins {datetime.fromtimestamp(raw[-1][0]/1000, tz=timezone.utc).date()}")
+            logger.info(f"  {saved} candles saved until {datetime.fromtimestamp(raw[-1][0]/1000, tz=timezone.utc).date()}")
 
-        logger.info(f"Descàrrega completada: {total_saved} candles totals")
+        logger.info(f"Download completed: {total_saved} total candles")
         return total_saved
 
     def _save(self, candles: list[Candle]) -> int:
-        """Guarda una llista de candles a la DB, ignorant duplicats."""
+        """Saves a list of candles to the DB, ignoring duplicates."""
         if not candles:
             return 0
 
@@ -121,7 +121,7 @@ class OHLCVFetcher:
             session.close()
 
     def get_last_timestamp(self, symbol: str, timeframe: str) -> datetime | None:
-        """Retorna el timestamp de l'última candle a la DB."""
+        """Returns the timestamp of the last candle in the DB."""
         session = SessionLocal()
         try:
             from sqlalchemy import func
@@ -135,17 +135,17 @@ class OHLCVFetcher:
 
     def update(self, symbol: str, timeframe: str) -> int:
         """
-        Descarrega només les candles noves des de l'última a la DB fins ara.
-        És idempotent — es pot executar múltiples vegades sense duplicats.
+        Downloads only new candles from the last one in the DB until now.
+        Idempotent — can be run multiple times without duplicates.
         """
         last = self.get_last_timestamp(symbol=symbol, timeframe=timeframe)
 
         if last is None:
-            logger.warning(f"No hi ha dades per {symbol} {timeframe}, descarrega des de 2019")
+            logger.warning(f"No data for {symbol} {timeframe}, downloading from 2019")
             since = datetime(2019, 1, 1, tzinfo=timezone.utc)
         else:
             since = last
-            logger.info(f"Actualitzant {symbol} {timeframe} des de {since.date()}")
+            logger.info(f"Updating {symbol} {timeframe} from {since.date()}")
 
         return self.fetch_and_store(
             symbol=symbol,

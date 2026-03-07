@@ -3,14 +3,14 @@ import numpy as np
 import pandas as pd
 import gymnasium as gym
 from gymnasium import spaces
-from bots.rl.rewards import builtins  # importa per registrar les builtins
+from bots.rl.rewards import builtins  # import to register builtin reward functions
 from bots.rl.rewards.registry import get as get_reward
 
 
 class _BaseTradingEnv(gym.Env):
     """
-    Lògica comuna als dos entorns.
-    No s'instancia directament — usar BtcTradingEnvDiscrete o BtcTradingEnvContinuous.
+    Shared logic for both environment variants.
+    Not instantiated directly — use BtcTradingEnvDiscrete or BtcTradingEnvContinuous.
     """
 
     metadata = {"render_modes": ["human"]}
@@ -55,16 +55,16 @@ class _BaseTradingEnv(gym.Env):
         window = self.df.iloc[self.current_step - self.lookback:self.current_step]
         obs = window.values.astype(np.float32)
 
-        # Normalització robusta per evitar overflow i NaN
+        # Robust normalization to prevent overflow and NaN
         col_mean = obs.mean(axis=0)
         col_std = obs.std(axis=0)
-        col_std = np.where(col_std < 1e-8, 1.0, col_std)  # evita divisió per zero
+        col_std = np.where(col_std < 1e-8, 1.0, col_std)  # avoid division by zero
         obs = (obs - col_mean) / col_std
 
-        # Clip agressiu per evitar valors extrems que cauen fora de float32
+        # Aggressive clipping to avoid extreme values outside float32 range
         obs = np.clip(obs, -10.0, 10.0)
 
-        # Verificació de seguretat
+        # Safety check
         if not np.isfinite(obs).all():
             obs = np.nan_to_num(obs, nan=0.0, posinf=10.0, neginf=-10.0)
 
@@ -169,17 +169,17 @@ class BtcTradingEnvContinuous(_BaseTradingEnv):
     def step(self, action: np.ndarray):
         price = self._get_price()
 
-        # Posició target: fracció del portfolio en BTC [0, 1]
+        # Target position: fraction of portfolio in BTC [0, 1]
         target_position = float(np.clip(action[0], 0.0, 1.0))
 
-        # Valor total actual
+        # Total current value
         total_value = self.usdt_balance + self.btc_balance * price
 
-        # Fee proporcional al canvi de posició
+        # Fee proportional to the position change
         position_delta = abs(target_position - self.position)
         fee = position_delta * self.fee_rate * total_value
 
-        # Aplica fee
+        # Apply fee
         total_value = max(total_value - fee, 0.0)
 
         # Rebalancea

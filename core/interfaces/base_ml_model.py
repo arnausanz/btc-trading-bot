@@ -5,14 +5,14 @@ import pandas as pd
 
 class BaseMLModel(ABC):
     """
-    Interfície base per a tots els models ML/DL del projecte.
-    Garanteix que qualsevol model implementa el contracte mínim:
+    Base interface for all ML/DL models in the project.
+    Ensures every model implements the minimum contract:
       - train() / predict() / save() / load()
-      - feature_names: llista de features que espera
-      - lookback: quantes files necessita predict() (1 per tree-based, seq_len per RNNs)
-      - from_config(): constructor des de YAML per evitar duplicació de paràmetres
+      - feature_names: list of expected feature names
+      - lookback: number of rows needed by predict() (1 for tree-based, seq_len for RNNs)
+      - from_config(): YAML constructor to avoid parameter duplication
 
-    Afegir un model nou = crear classe que hereti BaseMLModel + afegir al registry.
+    Adding a new model = inherit BaseMLModel + add to registry.
     """
 
     feature_names: list[str] = []
@@ -21,16 +21,16 @@ class BaseMLModel(ABC):
     @property
     def lookback(self) -> int:
         """
-        Quantes files necessita predict().
-        Tree-based: 1 (només l'última candle)
-        RNNs/Transformers: seq_len (finestra temporal sencera)
+        Number of rows needed by predict().
+        Tree-based: 1 (last candle only)
+        RNNs/Transformers: seq_len (full temporal window)
         """
         return 1
 
     @abstractmethod
     def train(self, X: pd.DataFrame, y: pd.Series) -> dict:
         """
-        Entrena el model i retorna mètriques:
+        Trains the model and returns metrics:
         {accuracy_mean, accuracy_std, precision_mean, recall_mean}
         """
         ...
@@ -38,26 +38,26 @@ class BaseMLModel(ABC):
     @abstractmethod
     def predict(self, X: pd.DataFrame, threshold: float = 0.35) -> tuple[int, float]:
         """
-        Retorna (predicció, confiança).
-        X ha de tenir almenys self.lookback files.
+        Returns (prediction, confidence).
+        X must have at least self.lookback rows.
         """
         ...
 
     @abstractmethod
     def save(self, path: str) -> None:
-        """Guarda el model a disc."""
+        """Saves the model to disk."""
         ...
 
     @abstractmethod
     def load(self, path: str) -> None:
-        """Carrega el model des de disc."""
+        """Loads the model from disk."""
         ...
 
     @classmethod
     @abstractmethod
     def from_config(cls, config: dict) -> "BaseMLModel":
         """
-        Constructor des de config YAML.
-        Evita duplicar paràmetres entre el model i train_models.py.
+        Constructor from YAML config.
+        Avoids duplicating parameters between the model and train_models.py.
         """
         ...

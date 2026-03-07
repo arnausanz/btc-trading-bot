@@ -9,7 +9,7 @@ from core.config import TRAIN_UNTIL
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 logger = logging.getLogger(__name__)
 
-# Suprimim loggers sorollosos durant l'optimització
+# Suppress noisy loggers during optimization
 for _noisy in ("core.engine.runner", "exchanges.paper",
                "data.processing.technical", "data.observation.builder"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
@@ -17,12 +17,12 @@ for _noisy in ("core.engine.runner", "exchanges.paper",
 
 class BotOptimizer:
     """
-    Optimitza els hiperparàmetres d'un bot usant Optuna.
-    Cada trial és un backtest complet amb una configuració diferent.
-    El resultat de cada trial és el Sharpe Ratio — volem maximitzar-lo.
+    Optimizes hyperparameters of a bot using Optuna.
+    Each trial is a complete backtest with a different configuration.
+    The result of each trial is the Sharpe Ratio — we want to maximize it.
 
-    WALK-FORWARD: l'optimització es fa EXCLUSIVAMENT sobre el període de train
-    (fins a train_until). Mai veu les dades de test, evitant overfitting al futur.
+    WALK-FORWARD: optimization is performed EXCLUSIVELY on the training period
+    (until train_until). Never sees test data, avoiding overfitting to the future.
     """
 
     def __init__(
@@ -45,9 +45,9 @@ class BotOptimizer:
 
     def _objective(self, trial: optuna.Trial) -> float:
         """
-        Funció objectiu que Optuna minimitza/maximitza.
-        Construeix una config amb els paràmetres del trial i executa el backtest
-        limitat al període de train (end_date=train_until).
+        Objective function that Optuna minimizes/maximizes.
+        Builds a config with trial parameters and executes the backtest
+        limited to the training period (end_date=train_until).
         """
         with open(self.base_config_path) as f:
             config = yaml.safe_load(f)
@@ -85,20 +85,20 @@ class BotOptimizer:
             )
             return metrics.summary()["sharpe_ratio"]
         except Exception as e:
-            logger.warning(f"Trial {trial.number} ha fallat: {e}")
+            logger.warning(f"Trial {trial.number} failed: {e}")
             return -999.0
 
     def run(self) -> optuna.Study:
         """
-        Executa l'optimització amb barra de progrés tqdm.
-        Mostra trial actual, temps transcorregut, ETA i millor Sharpe fins ara.
+        Executes optimization with tqdm progress bar.
+        Shows current trial, elapsed time, ETA, and best Sharpe so far.
         """
         bot_name = self.bot_class.__name__
         study = optuna.create_study(direction="maximize")
 
         with tqdm(
             total=self.n_trials,
-            desc=f"Optimitzant {bot_name}",
+            desc=f"Optimizing {bot_name}",
             unit="trial",
             dynamic_ncols=True,
         ) as pbar:
@@ -114,3 +114,21 @@ class BotOptimizer:
             f"Params: {study.best_params}"
         )
         return study
+
+    def best_config(self, study: optuna.Study) -> dict:
+        """Returns the complete bot config with the best parameters."""
+        with open(self.base_config_path) as f:
+            config = yaml.safe_load(f)
+
+        # Update config with best parameters found by Optuna
+        for param_name, param_value in study.best_params.items():
+            config[param_name] = param_value
+
+        return config
+
+    def save_best_config(self, study: optuna.Study, output_path: str) -> None:
+        """Saves the best config as YAML ready for backtesting."""
+        best = self.best_config(study)
+        with open(output_path, "w") as f:
+            yaml.dump(best, f, default_flow_style=False, allow_unicode=True)
+        logger.info(f"  Optimized config saved to {output_path}")
