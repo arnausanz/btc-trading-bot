@@ -18,8 +18,8 @@ if __name__ == "__main__":
         HoldBot(config_path="config/bots/hold.yaml"),
         DCABot(config_path="config/bots/dca.yaml"),
         TrendBot(config_path="config/bots/trend.yaml"),
-        # GridBot(config_path="config/bots/grid.yaml"),
-        # MLBot(config_path="config/bots/ml_bot.yaml"),
+        GridBot(config_path="config/bots/grid.yaml"),
+        MLBot(config_path="config/bots/ml_bot.yaml"),
         MLBot(config_path="config/bots/ml_bot_xgb.yaml"),
     ]
     # train_until i test_from llegits automàticament de config/settings.yaml
