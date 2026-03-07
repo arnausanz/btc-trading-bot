@@ -24,6 +24,7 @@ class BacktestEngine:
         timeframe: str,
         start_date: str | None = None,
         end_date: str | None = None,
+        desc: str | None = None,
     ) -> BacktestMetrics:
         exchange = PaperExchange(config_path=self.exchange_config_path)
         initial_capital = exchange.get_balance("USDT")
@@ -45,6 +46,7 @@ class BacktestEngine:
                 timeframe=timeframe,
                 start_date=start_date,
                 end_date=end_date,
+                desc=desc,
             )
 
             metrics = BacktestMetrics(history=history, initial_capital=initial_capital, timeframe=timeframe)

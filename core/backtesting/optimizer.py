@@ -2,11 +2,17 @@
 import logging
 import optuna
 import yaml
+from tqdm import tqdm
 from core.backtesting.engine import BacktestEngine
 from core.config import TRAIN_UNTIL
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 logger = logging.getLogger(__name__)
+
+# Suprimim loggers sorollosos durant l'optimització
+for _noisy in ("core.engine.runner", "exchanges.paper",
+               "data.processing.technical", "data.observation.builder"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 
 class BotOptimizer:
@@ -43,11 +49,9 @@ class BotOptimizer:
         Construeix una config amb els paràmetres del trial i executa el backtest
         limitat al període de train (end_date=train_until).
         """
-        # Carrega la config base
         with open(self.base_config_path) as f:
             config = yaml.safe_load(f)
 
-        # Substitueix els paràmetres que Optuna proposa
         for param_name, param_def in self.param_space.items():
             if param_def["type"] == "int":
                 config[param_name] = trial.suggest_int(
@@ -66,7 +70,6 @@ class BotOptimizer:
             if config["ema_fast"] >= config["ema_slow"] - 10:
                 raise optuna.TrialPruned()
 
-        # Escriu la config temporal
         temp_config_path = f"/tmp/optuna_trial_{trial.number}.yaml"
         with open(temp_config_path, "w") as f:
             yaml.dump(config, f)
@@ -74,31 +77,40 @@ class BotOptimizer:
         try:
             bot = self.bot_class(config_path=temp_config_path)
             engine = BacktestEngine(bot=bot)
-            # Limita el backtest al període de train — NO veu dades de test
             metrics = engine.run(
                 symbol=self.symbol,
                 timeframe=self.timeframe,
                 end_date=self.train_until,
+                desc="train",
             )
-            sharpe = metrics.summary()["sharpe_ratio"]
-            return sharpe
+            return metrics.summary()["sharpe_ratio"]
         except Exception as e:
             logger.warning(f"Trial {trial.number} ha fallat: {e}")
             return -999.0
 
     def run(self) -> optuna.Study:
         """
-        Executa l'optimització i retorna l'study amb tots els resultats.
+        Executa l'optimització amb barra de progrés tqdm.
+        Mostra trial actual, temps transcorregut, ETA i millor Sharpe fins ara.
         """
-        logger.info(f"Optimitzant sobre dades fins a {self.train_until} (train only)")
+        bot_name = self.bot_class.__name__
         study = optuna.create_study(direction="maximize")
-        logging.getLogger("core.engine.runner").setLevel(logging.WARNING)
-        logging.getLogger("exchanges.paper").setLevel(logging.WARNING)
-        logging.getLogger("data.processing.technical").setLevel(logging.WARNING)
-        study.optimize(self._objective, n_trials=self.n_trials)
 
-        logger.info("=== OPTIMITZACIÓ COMPLETADA ===")
-        logger.info(f"Millors paràmetres: {study.best_params}")
-        logger.info(f"Millor Sharpe (train): {study.best_value:.4f}")
+        with tqdm(
+            total=self.n_trials,
+            desc=f"Optimitzant {bot_name}",
+            unit="trial",
+            dynamic_ncols=True,
+        ) as pbar:
+            def _callback(study: optuna.Study, trial: optuna.Trial) -> None:
+                best = study.best_value if study.best_value > -900 else float("nan")
+                pbar.set_postfix({"best_sharpe": f"{best:.3f}"}, refresh=False)
+                pbar.update(1)
 
+            study.optimize(self._objective, n_trials=self.n_trials, callbacks=[_callback])
+
+        tqdm.write(
+            f"  ✓ {bot_name} — Sharpe: {study.best_value:.3f} | "
+            f"Params: {study.best_params}"
+        )
         return study

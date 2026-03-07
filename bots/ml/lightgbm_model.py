@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import mlflow
+from tqdm import tqdm
 from lightgbm import LGBMClassifier
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score, precision_score, recall_score
@@ -71,27 +72,32 @@ class LightGBMModel(BaseMLModel):
             tscv = TimeSeriesSplit(n_splits=5)
             accuracies, precisions, recalls = [], [], []
 
-            for fold, (train_idx, val_idx) in enumerate(tscv.split(X)):
-                X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
-                y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+            with tqdm(enumerate(tscv.split(X)), total=5,
+                      desc="  LGB folds", unit="fold", leave=False,
+                      dynamic_ncols=True) as fold_bar:
+                for fold, (train_idx, val_idx) in fold_bar:
+                    X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+                    y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
-                X_train_scaled = pd.DataFrame(
-                    self.scaler.fit_transform(X_train), columns=self.feature_names
-                )
-                X_val_scaled = pd.DataFrame(
-                    self.scaler.transform(X_val), columns=self.feature_names
-                )
+                    X_train_scaled = pd.DataFrame(
+                        self.scaler.fit_transform(X_train), columns=self.feature_names
+                    )
+                    X_val_scaled = pd.DataFrame(
+                        self.scaler.transform(X_val), columns=self.feature_names
+                    )
 
-                self.model.fit(X_train_scaled, y_train)
-                y_pred = self.model.predict(X_val_scaled)
+                    self.model.fit(X_train_scaled, y_train)
+                    y_pred = self.model.predict(X_val_scaled)
 
-                acc = accuracy_score(y_val, y_pred)
-                prec = precision_score(y_val, y_pred, zero_division=0)
-                rec = recall_score(y_val, y_pred, zero_division=0)
-                accuracies.append(acc)
-                precisions.append(prec)
-                recalls.append(rec)
-                logger.info(f"  [{fold+1}/5] acc={acc:.3f} prec={prec:.3f} rec={rec:.3f}")
+                    acc = accuracy_score(y_val, y_pred)
+                    prec = precision_score(y_val, y_pred, zero_division=0)
+                    rec = recall_score(y_val, y_pred, zero_division=0)
+                    accuracies.append(acc)
+                    precisions.append(prec)
+                    recalls.append(rec)
+                    fold_bar.set_postfix(
+                        {"acc": f"{acc:.3f}", "prec": f"{prec:.3f}", "rec": f"{rec:.3f}"}
+                    )
 
             metrics = {
                 "accuracy_mean": float(np.mean(accuracies)),
@@ -107,7 +113,7 @@ class LightGBMModel(BaseMLModel):
             self.model.fit(X_scaled, y)
             self.is_trained = True
 
-            logger.info(f"  ✓ acc={metrics['accuracy_mean']:.3f} ± {metrics['accuracy_std']:.3f}")
+            tqdm.write(f"  ✓ LGB  acc={metrics['accuracy_mean']:.3f} ± {metrics['accuracy_std']:.3f}")
             return metrics
 
     def predict(self, X: pd.DataFrame, threshold: float = 0.35) -> tuple[int, float]:

@@ -3,6 +3,7 @@ import os
 import logging
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 import mlflow
 import torch
 import torch.nn as nn
@@ -151,31 +152,35 @@ class GRUModel(BaseMLModel):
             fold_size = n // 6
             accuracies, precisions, recalls = [], [], []
 
-            for fold in range(5):
-                split = fold_size * (fold + 1)
-                val_end = min(split + fold_size, n)
+            with tqdm(range(5), desc="  GRU folds", unit="fold",
+                      leave=False, dynamic_ncols=True) as fold_bar:
+                for fold in fold_bar:
+                    split = fold_size * (fold + 1)
+                    val_end = min(split + fold_size, n)
 
-                X_train_raw = X_arr[:split]
-                y_train_raw = y_arr[:split]
-                X_val_raw = X_arr[split:val_end]
-                y_val_raw = y_arr[split:val_end]
+                    X_train_raw = X_arr[:split]
+                    y_train_raw = y_arr[:split]
+                    X_val_raw = X_arr[split:val_end]
+                    y_val_raw = y_arr[split:val_end]
 
-                if len(X_val_raw) <= self.seq_len:
-                    continue
+                    if len(X_val_raw) <= self.seq_len:
+                        continue
 
-                X_train_sc = self.scaler.fit_transform(X_train_raw)
-                X_val_sc = self.scaler.transform(X_val_raw)
+                    X_train_sc = self.scaler.fit_transform(X_train_raw)
+                    X_val_sc = self.scaler.transform(X_val_raw)
 
-                net = self._build_net(n_features)
-                acc, prec, rec = self._train_fold(
-                    net, X_train_sc, y_train_raw,
-                    X_val_sc, y_val_raw,
-                    fold_num=fold + 1,
-                )
-                accuracies.append(acc)
-                precisions.append(prec)
-                recalls.append(rec)
-                logger.info(f"  [{fold+1}/5] acc={acc:.3f} prec={prec:.3f} rec={rec:.3f}")
+                    net = self._build_net(n_features)
+                    acc, prec, rec = self._train_fold(
+                        net, X_train_sc, y_train_raw,
+                        X_val_sc, y_val_raw,
+                        fold_num=fold + 1,
+                    )
+                    accuracies.append(acc)
+                    precisions.append(prec)
+                    recalls.append(rec)
+                    fold_bar.set_postfix(
+                        {"acc": f"{acc:.3f}", "prec": f"{prec:.3f}", "rec": f"{rec:.3f}"}
+                    )
 
             metrics = {
                 "accuracy_mean": float(np.mean(accuracies)),
@@ -185,7 +190,7 @@ class GRUModel(BaseMLModel):
             }
             mlflow.log_metrics(metrics)
 
-            logger.info("  Entrenant model final...")
+            tqdm.write("  Entrenant GRU model final...")
             X_scaled = self.scaler.fit_transform(X_arr)
             self.net = self._build_net(n_features)
             self._train_fold(
@@ -195,7 +200,7 @@ class GRUModel(BaseMLModel):
             )
             self.is_trained = True
 
-            logger.info(f"  ✓ acc={metrics['accuracy_mean']:.3f} ± {metrics['accuracy_std']:.3f}")
+            tqdm.write(f"  ✓ GRU  acc={metrics['accuracy_mean']:.3f} ± {metrics['accuracy_std']:.3f}")
             return metrics
 
         finally:
@@ -222,56 +227,50 @@ class GRUModel(BaseMLModel):
         best_val_loss = float("inf")
         patience_counter = 0
         best_state = None
-        total_batches = len(train_loader) * self.epochs
-        log_every = max(1, total_batches // 10)  # log cada 10%
         label = "final" if fold_num == 0 else f"fold {fold_num}"
 
-        batch_count = 0
-        for epoch in range(self.epochs):
-            net.train()
-            epoch_loss = 0.0
+        with tqdm(range(self.epochs), desc=f"    GRU {label}", unit="ep",
+                  leave=False, dynamic_ncols=True) as epoch_bar:
+            for epoch in epoch_bar:
+                net.train()
+                epoch_loss = 0.0
 
-            for X_batch, y_batch in train_loader:
-                X_batch = X_batch.to(self.device)
-                y_batch = y_batch.to(self.device)
-                optimizer.zero_grad()
-                preds = net(X_batch)
-                loss = criterion(preds, y_batch)
-                loss.backward()
-                nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
-                optimizer.step()
-                epoch_loss += loss.item()
-                batch_count += 1
+                for X_batch, y_batch in train_loader:
+                    X_batch = X_batch.to(self.device)
+                    y_batch = y_batch.to(self.device)
+                    optimizer.zero_grad()
+                    preds = net(X_batch)
+                    loss = criterion(preds, y_batch)
+                    loss.backward()
+                    nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
+                    optimizer.step()
+                    epoch_loss += loss.item()
 
-                if batch_count % log_every == 0:
-                    pct = batch_count / total_batches * 100
-                    logger.info(
-                        f"    {label} {pct:5.1f}% "
-                        f"ep={epoch+1}/{self.epochs} "
-                        f"loss={epoch_loss/len(train_loader):.4f} "
-                        f"lr={optimizer.param_groups[0]['lr']:.1e}"
-                    )
+                # Validació
+                net.eval()
+                val_losses = []
+                with torch.no_grad():
+                    for X_batch, y_batch in val_loader:
+                        preds = net(X_batch.to(self.device))
+                        val_losses.append(criterion(preds, y_batch.to(self.device)).item())
 
-            # Validació
-            net.eval()
-            val_losses = []
-            with torch.no_grad():
-                for X_batch, y_batch in val_loader:
-                    preds = net(X_batch.to(self.device))
-                    val_losses.append(criterion(preds, y_batch.to(self.device)).item())
+                val_loss = float(np.mean(val_losses))
+                scheduler.step(val_loss)
+                epoch_bar.set_postfix({
+                    "loss": f"{epoch_loss/len(train_loader):.4f}",
+                    "val":  f"{val_loss:.4f}",
+                    "lr":   f"{optimizer.param_groups[0]['lr']:.1e}",
+                })
 
-            val_loss = float(np.mean(val_losses))
-            scheduler.step(val_loss)
-
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                patience_counter = 0
-                best_state = {k: v.clone() for k, v in net.state_dict().items()}
-            else:
-                patience_counter += 1
-                if patience_counter >= self.patience:
-                    logger.info(f"    {label} early stop ep={epoch+1}")
-                    break
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    patience_counter = 0
+                    best_state = {k: v.clone() for k, v in net.state_dict().items()}
+                else:
+                    patience_counter += 1
+                    if patience_counter >= self.patience:
+                        epoch_bar.set_description(f"    GRU {label} (early stop)")
+                        break
 
         if best_state:
             net.load_state_dict(best_state)

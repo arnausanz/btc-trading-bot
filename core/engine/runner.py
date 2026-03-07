@@ -2,6 +2,7 @@
 import logging
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from core.interfaces.base_bot import BaseBot
 from core.interfaces.base_exchange import BaseExchange
 from data.observation.builder import ObservationBuilder
@@ -29,16 +30,14 @@ class Runner:
         timeframe: str,
         start_date: str | None = None,
         end_date: str | None = None,
+        desc: str | None = None,
     ) -> list[dict]:
         """
         Executa el bot tick a tick sobre les dades del symbol/timeframe.
 
         start_date / end_date (strings ISO opcionals) permeten limitar l'interval
-        d'iteració per al walk-forward backtesting:
-        - start_date → primer tick a processar (el lookback anterior s'usa com a warm-up)
-        - end_date   → últim tick a processar (inclòs)
-
-        Si cap data s'especifica, s'itera sobre tot el dataset (comportament original).
+        d'iteració per al walk-forward backtesting.
+        desc: etiqueta per a la barra de progrés (p.ex. 'train' o 'test').
         """
         schema = self.bot.observation_schema()
         self.builder.load(schema=schema, symbol=symbol)
@@ -72,36 +71,36 @@ class Runner:
             logger.warning(f"Interval buit: iter_start={iter_start} >= iter_end={iter_end}. Retornem buit.")
             return []
 
-        # ─── Bucle principal ───────────────────────────────────────────────────
-        total_ticks = iter_end - iter_start
+        # ─── Bucle principal amb barra de progrés ─────────────────────────────
+        bar_desc = f"  Backtest [{desc}]" if desc else "  Backtest"
         self.bot.on_start()
         history = []
 
-        for i in range(iter_start, iter_end):
-            current_price = float(df.iloc[i]["close"])
-            self.exchange.set_current_price(current_price)
+        with tqdm(
+            total=iter_end - iter_start,
+            desc=bar_desc,
+            unit="tick",
+            leave=False,
+            dynamic_ncols=True,
+        ) as pbar:
+            for i in range(iter_start, iter_end):
+                current_price = float(df.iloc[i]["close"])
+                self.exchange.set_current_price(current_price)
 
-            observation = self.builder.build(schema=schema, symbol=symbol, index=i)
-            observation["portfolio"] = self.exchange.get_portfolio()
+                observation = self.builder.build(schema=schema, symbol=symbol, index=i)
+                observation["portfolio"] = self.exchange.get_portfolio()
 
-            signal = self.bot.on_observation(observation)
-            order = self.exchange.send_order(signal)
+                signal = self.bot.on_observation(observation)
+                order = self.exchange.send_order(signal)
 
-            history.append({
-                "timestamp": df.index[i],
-                "price": current_price,
-                "signal": signal.action,
-                "order_status": order.status,
-                "portfolio_value": self.exchange.get_portfolio_value(),
-            })
+                history.append({
+                    "timestamp": df.index[i],
+                    "price": current_price,
+                    "signal": signal.action,
+                    "order_status": order.status,
+                    "portfolio_value": self.exchange.get_portfolio_value(),
+                })
+                pbar.update(1)
 
-            tick = i - iter_start + 1
-            if tick % max(1, total_ticks // 1000) == 0 or tick == total_ticks:
-                pct = tick / total_ticks * 100
-                filled = int(pct / 5)
-                bar = "█" * filled + "░" * (20 - filled)
-                print(f"\r  [{bar}] {pct:5.1f}% ({tick}/{total_ticks})", end="", flush=True)
-
-        print()
         self.bot.on_stop()
         return history

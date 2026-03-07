@@ -4,6 +4,7 @@ import logging
 import sys
 import yaml
 import mlflow
+from tqdm import tqdm
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
@@ -47,36 +48,42 @@ if __name__ == "__main__":
         "config/training/patchtst_experiment_1.yaml",
     ]
 
+    # Suprimim loggers sorollosos — tqdm mostra el progrés
+    for _noisy in ("data.processing.technical", "data.observation.builder",
+                   "core.db", "mlflow", "bots.ml"):
+        logging.getLogger(_noisy).setLevel(logging.WARNING)
+
     results = []
 
-    for config_path in CONFIGS:
-        with open(config_path) as f:
-            config = yaml.safe_load(f)
+    with tqdm(CONFIGS, desc="Entrenant models", unit="model", dynamic_ncols=True) as model_bar:
+        for config_path in model_bar:
+            with open(config_path) as f:
+                config = yaml.safe_load(f)
 
-        name = config["experiment_name"]
-        model_type = config["model_type"]
-        logger.info(f"=== {name} ===")
+            name = config["experiment_name"]
+            model_type = config["model_type"]
+            model_bar.set_description(f"Entrenant {name}")
 
-        mlflow.end_run()
+            mlflow.end_run()
 
-        builder = DatasetBuilder.from_config(config)
-        X, y = builder.build()
-        logger.info(f"  Dataset: {X.shape[0]} files x {X.shape[1]} features")
+            tqdm.write(f"\n── {name} ──")
+            builder = DatasetBuilder.from_config(config)
+            X, y = builder.build()
+            tqdm.write(f"  Dataset: {X.shape[0]} files x {X.shape[1]} features")
 
-        if model_type not in _MODEL_REGISTRY:
-            raise ValueError(f"Model desconegut: {model_type}")
+            if model_type not in _MODEL_REGISTRY:
+                raise ValueError(f"Model desconegut: {model_type}")
 
-        # from_config elimina la duplicació de paràmetres
-        model = _MODEL_REGISTRY[model_type].from_config(config)
-        metrics = model.train(X, y)
-        model.save(config["output"]["model_path"])
+            model = _MODEL_REGISTRY[model_type].from_config(config)
+            metrics = model.train(X, y)
+            model.save(config["output"]["model_path"])
 
-        results.append({
-            "name": name,
-            "accuracy": metrics["accuracy_mean"],
-            "precision": metrics["precision_mean"],
-            "recall": metrics["recall_mean"],
-        })
+            results.append({
+                "name": name,
+                "accuracy": metrics["accuracy_mean"],
+                "precision": metrics["precision_mean"],
+                "recall": metrics["recall_mean"],
+            })
 
     logger.info("=== COMPARATIVA FINAL ===")
     logger.info(f"{'Model':<30} {'Accuracy':>10} {'Precision':>10} {'Recall':>10}")

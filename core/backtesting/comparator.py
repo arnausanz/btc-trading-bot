@@ -1,5 +1,6 @@
 # core/backtesting/comparator.py
 import logging
+from tqdm import tqdm
 from core.interfaces.base_bot import BaseBot
 from core.backtesting.engine import BacktestEngine
 from core.backtesting.metrics import BacktestMetrics
@@ -10,15 +11,11 @@ logger = logging.getLogger(__name__)
 
 class BotComparator:
     """
-    Compara múltiples bots en backtest.
+    Compara múltiples bots en backtest (train + test separats).
 
-    WALK-FORWARD: si train_until i test_from estan configurats (per defecte sí),
-    cada bot es backtesta en DOS períodes separats:
-    - Train (in-sample):  fins a train_until — dades que els bots "coneixien"
-    - Test (out-of-sample): des de test_from — dades mai vistes durant optimització
-
-    Aquesta separació permet detectar si un bot ha sobreajustat (overfit) o
-    si les seves mètriques de train es mantenen en dades noves.
+    WALK-FORWARD: cada bot es backtesta en DOS períodes:
+    - Train (in-sample):     fins a train_until
+    - Test (out-of-sample):  des de test_from
     """
 
     def __init__(
@@ -39,36 +36,52 @@ class BotComparator:
 
     def run(self) -> list[dict]:
         results = []
-        for bot in self.bots:
-            print(f"\n▶ {bot.bot_id}")
 
-            # ─── Període de TRAIN ──────────────────────────────────────────────
-            print(f"  [train] fins {self.train_until}")
-            engine_train = BacktestEngine(bot=bot, exchange_config_path=self.exchange_config_path)
-            train_metrics = engine_train.run(
-                symbol=self.symbol,
-                timeframe=self.timeframe,
-                end_date=self.train_until,
-            )
-            train_summary = train_metrics.summary()
+        with tqdm(
+            self.bots,
+            desc="Comparant bots",
+            unit="bot",
+            dynamic_ncols=True,
+        ) as bot_bar:
+            for bot in bot_bar:
+                bot_bar.set_description(f"Backtesting {bot.bot_id}")
 
-            # ─── Període de TEST ───────────────────────────────────────────────
-            print(f"  [test]  des de {self.test_from}")
-            engine_test = BacktestEngine(bot=bot, exchange_config_path=self.exchange_config_path)
-            test_metrics = engine_test.run(
-                symbol=self.symbol,
-                timeframe=self.timeframe,
-                start_date=self.test_from,
-            )
-            test_summary = test_metrics.summary()
+                # ─── TRAIN ────────────────────────────────────────────────────
+                engine_train = BacktestEngine(
+                    bot=bot, exchange_config_path=self.exchange_config_path
+                )
+                train_metrics = engine_train.run(
+                    symbol=self.symbol,
+                    timeframe=self.timeframe,
+                    end_date=self.train_until,
+                    desc="train",
+                )
+                train_summary = train_metrics.summary()
 
-            results.append({
-                "bot_id": bot.bot_id,
-                "train": train_summary,
-                "test": test_summary,
-                "train_trades": self._count_trades(train_metrics),
-                "test_trades": self._count_trades(test_metrics),
-            })
+                # ─── TEST ─────────────────────────────────────────────────────
+                engine_test = BacktestEngine(
+                    bot=bot, exchange_config_path=self.exchange_config_path
+                )
+                test_metrics = engine_test.run(
+                    symbol=self.symbol,
+                    timeframe=self.timeframe,
+                    start_date=self.test_from,
+                    desc="test",
+                )
+                test_summary = test_metrics.summary()
+
+                results.append({
+                    "bot_id": bot.bot_id,
+                    "train": train_summary,
+                    "test": test_summary,
+                    "train_trades": self._count_trades(train_metrics),
+                    "test_trades": self._count_trades(test_metrics),
+                })
+                tqdm.write(
+                    f"  ✓ {bot.bot_id:<20} "
+                    f"train Sharpe={train_summary['sharpe_ratio']:+.3f}  "
+                    f"test Sharpe={test_summary['sharpe_ratio']:+.3f}"
+                )
 
         results.sort(key=lambda x: x["test"]["sharpe_ratio"], reverse=True)
         self._print_summary(results)
@@ -88,7 +101,6 @@ class BotComparator:
         print(f"  RANKING DE BOTS  (train fins {self.train_until} | test des de {self.test_from})")
         print("═" * W)
 
-        # ─── Taula de mètriques ────────────────────────────────────────────────
         hdr = f"  {'Bot':<20} {'Prd':>5} {'Return%':>9} {'Sharpe':>8} {'MaxDD%':>8} {'Calmar':>8} {'WinRate%':>10}"
         print(f"\n{hdr}")
         print("  " + "─" * (W - 2))
@@ -106,7 +118,6 @@ class BotComparator:
                 )
             print("  " + "·" * (W - 2))
 
-        # ─── Taula de trades ───────────────────────────────────────────────────
         print(f"\n  {'Bot':<20} {'Prd':>5} {'BUY':>8} {'SELL':>8} {'HOLD':>10} {'Capital Final':>15}")
         print("  " + "─" * (W - 2))
         for r in results:
