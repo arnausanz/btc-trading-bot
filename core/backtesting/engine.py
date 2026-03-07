@@ -18,7 +18,13 @@ class BacktestEngine:
         self.exchange_config_path = exchange_config_path
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
-    def run(self, symbol: str, timeframe: str) -> BacktestMetrics:
+    def run(
+        self,
+        symbol: str,
+        timeframe: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> BacktestMetrics:
         exchange = PaperExchange(config_path=self.exchange_config_path)
         initial_capital = exchange.get_balance("USDT")
 
@@ -28,11 +34,18 @@ class BacktestEngine:
                 "symbol": symbol,
                 "timeframe": timeframe,
                 "initial_capital": initial_capital,
+                "start_date": start_date or "all",
+                "end_date": end_date or "all",
                 **{k: v for k, v in self.bot.config.items() if isinstance(v, (str, int, float, bool))},
             })
 
             runner = Runner(bot=self.bot, exchange=exchange)
-            history = runner.run(symbol=symbol, timeframe=timeframe)
+            history = runner.run(
+                symbol=symbol,
+                timeframe=timeframe,
+                start_date=start_date,
+                end_date=end_date,
+            )
 
             metrics = BacktestMetrics(history=history, initial_capital=initial_capital, timeframe=timeframe)
             summary = metrics.summary()

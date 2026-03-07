@@ -8,6 +8,7 @@ from bots.classical.dca_bot import DCABot
 from bots.classical.trend_bot import TrendBot
 from bots.classical.grid_bot import GridBot
 from core.backtesting.optimizer import BotOptimizer
+from core.config import TRAIN_UNTIL
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,6 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
+    logger.info(f"Walk-forward: optimitzant ÚNICAMENT sobre dades fins a {TRAIN_UNTIL}")
 
     # Optimitza DCABot
     logger.info("Optimitzant DCABot...")
@@ -28,6 +30,7 @@ if __name__ == "__main__":
             "buy_size": {"type": "float", "low": 0.05, "high": 0.5},
         },
         n_trials=30,
+        train_until=TRAIN_UNTIL,
     )
     dca_study = dca_optimizer.run()
     logger.info(f"DCA millors params: {dca_study.best_params}")
@@ -45,6 +48,7 @@ if __name__ == "__main__":
             "rsi_oversold": {"type": "int", "low": 15, "high": 40},
         },
         n_trials=30,
+        train_until=TRAIN_UNTIL,
     )
     trend_study = trend_optimizer.run()
     logger.info(f"Trend millors params: {trend_study.best_params}")
@@ -60,6 +64,7 @@ if __name__ == "__main__":
             "rsi_filter_low": {"type": "int", "low": 15, "high": 40},
         },
         n_trials=30,
+        train_until=TRAIN_UNTIL,
     )
     grid_study = grid_optimizer.run()
     logger.info(f"Grid millors params: {grid_study.best_params}")

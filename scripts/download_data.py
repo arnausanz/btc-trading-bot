@@ -15,7 +15,7 @@ logging.basicConfig(
 if __name__ == "__main__":
     fetcher = OHLCVFetcher(exchange_id="binance")
 
-    since = datetime(2022, 1, 1, tzinfo=timezone.utc)  # 3 anys de dades
+    since = datetime(2019, 1, 1, tzinfo=timezone.utc)  # des de 2019: cobreix bear recovery, COVID, 2021 ATH, 2022 bear, 2023-24 recovery
 
     for timeframe in ["1h", "4h", "1d"]:
         fetcher.fetch_and_store(

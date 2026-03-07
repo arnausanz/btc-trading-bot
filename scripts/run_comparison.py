@@ -21,5 +21,6 @@ if __name__ == "__main__":
         GridBot(config_path="config/bots/grid.yaml"),
         MLBot(config_path="config/bots/ml_bot.yaml"),
     ]
+    # train_until i test_from llegits automàticament de config/settings.yaml
     comparator = BotComparator(bots=bots, symbol="BTC/USDT", timeframe="1h")
     comparator.run()

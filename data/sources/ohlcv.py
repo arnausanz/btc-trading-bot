@@ -141,8 +141,8 @@ class OHLCVFetcher:
         last = self.get_last_timestamp(symbol=symbol, timeframe=timeframe)
 
         if last is None:
-            logger.warning(f"No hi ha dades per {symbol} {timeframe}, descarrega des de 2022")
-            since = datetime(2022, 1, 1, tzinfo=timezone.utc)
+            logger.warning(f"No hi ha dades per {symbol} {timeframe}, descarrega des de 2019")
+            since = datetime(2019, 1, 1, tzinfo=timezone.utc)
         else:
             since = last
             logger.info(f"Actualitzant {symbol} {timeframe} des de {since.date()}")

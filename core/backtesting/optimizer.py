@@ -2,9 +2,8 @@
 import logging
 import optuna
 import yaml
-from typing import Callable
 from core.backtesting.engine import BacktestEngine
-from core.interfaces.base_bot import BaseBot
+from core.config import TRAIN_UNTIL
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -15,6 +14,9 @@ class BotOptimizer:
     Optimitza els hiperparàmetres d'un bot usant Optuna.
     Cada trial és un backtest complet amb una configuració diferent.
     El resultat de cada trial és el Sharpe Ratio — volem maximitzar-lo.
+
+    WALK-FORWARD: l'optimització es fa EXCLUSIVAMENT sobre el període de train
+    (fins a train_until). Mai veu les dades de test, evitant overfitting al futur.
     """
 
     def __init__(
@@ -25,6 +27,7 @@ class BotOptimizer:
         symbol: str = "BTC/USDT",
         timeframe: str = "1h",
         n_trials: int = 50,
+        train_until: str = TRAIN_UNTIL,
     ):
         self.bot_class = bot_class
         self.base_config_path = base_config_path
@@ -32,11 +35,13 @@ class BotOptimizer:
         self.symbol = symbol
         self.timeframe = timeframe
         self.n_trials = n_trials
+        self.train_until = train_until
 
     def _objective(self, trial: optuna.Trial) -> float:
         """
         Funció objectiu que Optuna minimitza/maximitza.
-        Construeix una config amb els paràmetres del trial i executa el backtest.
+        Construeix una config amb els paràmetres del trial i executa el backtest
+        limitat al període de train (end_date=train_until).
         """
         # Carrega la config base
         with open(self.base_config_path) as f:
@@ -69,7 +74,12 @@ class BotOptimizer:
         try:
             bot = self.bot_class(config_path=temp_config_path)
             engine = BacktestEngine(bot=bot)
-            metrics = engine.run(symbol=self.symbol, timeframe=self.timeframe)
+            # Limita el backtest al període de train — NO veu dades de test
+            metrics = engine.run(
+                symbol=self.symbol,
+                timeframe=self.timeframe,
+                end_date=self.train_until,
+            )
             sharpe = metrics.summary()["sharpe_ratio"]
             return sharpe
         except Exception as e:
@@ -80,14 +90,15 @@ class BotOptimizer:
         """
         Executa l'optimització i retorna l'study amb tots els resultats.
         """
+        logger.info(f"Optimitzant sobre dades fins a {self.train_until} (train only)")
         study = optuna.create_study(direction="maximize")
         logging.getLogger("core.engine.runner").setLevel(logging.WARNING)
         logging.getLogger("exchanges.paper").setLevel(logging.WARNING)
         logging.getLogger("data.processing.technical").setLevel(logging.WARNING)
         study.optimize(self._objective, n_trials=self.n_trials)
 
-        logger.info(f"=== OPTIMITZACIÓ COMPLETADA ===")
+        logger.info("=== OPTIMITZACIÓ COMPLETADA ===")
         logger.info(f"Millors paràmetres: {study.best_params}")
-        logger.info(f"Millor Sharpe: {study.best_value:.4f}")
+        logger.info(f"Millor Sharpe (train): {study.best_value:.4f}")
 
         return study
