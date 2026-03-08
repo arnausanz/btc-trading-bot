@@ -10,6 +10,10 @@ Granularitat:
 Notes sobre limitacions de l'API de Binance:
   - Funding rate: historial complet disponible (des de 2019-09-13)
   - Open interest: màxim 30 dies enrere, 500 registres per crida
+
+Bug conegut de Binance: l'endpoint /futures/data/openInterestHist retorna -1130
+quan s'envia `startTime`. La descàrrega d'OI usa paginació inversa via `endTime`
+per evitar-ho: comença pels registres més recents i pagina cap enrere.
 """
 import logging
 import ccxt
@@ -171,33 +175,37 @@ class FuturesFetcher:
         since: datetime | None = None,
     ) -> int:
         """
-        Descarrega l'open interest des de since fins ara.
-        Binance conserva un màxim de 30 dies d'historial; si since és anterior
-        a 30 dies es trunca automàticament.
-        Pagina fins a obtenir tots els registres disponibles (500 per crida).
-        Retorna el nombre de registres nous guardats.
-        """
-        # Límit de 30 dies de Binance; no té sentit demanar més
-        cutoff = datetime.now(timezone.utc) - timedelta(days=_OI_MAX_HISTORY_DAYS)
-        since = max(since, cutoff) if since else cutoff
-        since_ms = int(since.timestamp() * 1000)
-        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        Descarrega l'OI via paginació inversa (endTime) per evitar el bug de
+        Binance que retorna -1130 quan s'usa startTime en aquest endpoint.
 
-        total_saved = 0
-        current_since = since_ms
+        Estratègia:
+          1. Crida sense endTime → registres més recents (els últims 500)
+          2. Si hi ha més dades i no hem arribat a `since`, pagina cap enrere
+             usant endTime = oldest_ts - 1 de la crida anterior
+          3. Para quan: hi ha menys de 500 registres O el més antic ≤ stop_ms
+
+        `since` s'usa com a floor: no es guarden registres anteriors a aquest ts.
+        Si since és None, el floor és el cutoff de 30 dies de Binance.
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(days=_OI_MAX_HISTORY_DAYS)
+        stop_dt = max(since, cutoff) if since else cutoff
+        stop_ms = int(stop_dt.timestamp() * 1000)
+
+        all_entries: list[OpenInterestEntry] = []
+        extra_params: dict = {}  # primera crida: sense endTime (→ registres més recents)
 
         logger.info(
-            f"Descàrrega open interest {symbol} {timeframe} "
-            f"des de {since.date()}"
+            f"Descàrrega OI {symbol} {timeframe} (paginació inversa, "
+            f"stop={stop_dt.date()})"
         )
 
-        while current_since < now_ms:
+        while True:
             try:
                 raw = self.exchange.fetch_open_interest_history(
                     symbol=symbol,
                     timeframe=timeframe,
-                    since=current_since,
                     limit=500,
+                    params=extra_params,
                 )
             except Exception as e:
                 logger.error(f"Error fetch_open_interest_history: {e}")
@@ -206,8 +214,10 @@ class FuturesFetcher:
             if not raw:
                 break
 
-            entries: list[OpenInterestEntry] = []
+            batch: list[OpenInterestEntry] = []
             for row in raw:
+                if row["timestamp"] < stop_ms:
+                    continue  # anterior al rang desitjat, descarta
                 try:
                     entry = OpenInterestEntry(
                         symbol=symbol,
@@ -215,28 +225,42 @@ class FuturesFetcher:
                         timestamp=datetime.fromtimestamp(
                             row["timestamp"] / 1000, tz=timezone.utc
                         ),
-                        open_interest_btc=float(row["openInterestAmount"]),
-                        open_interest_usdt=float(row["openInterestValue"]),
+                        # Defensiu: alguns builds de ccxt usen noms lleugerament
+                        # diferents per a aquests camps
+                        open_interest_btc=float(
+                            row.get("openInterestAmount", row.get("openInterest", 0))
+                        ),
+                        open_interest_usdt=float(row.get("openInterestValue", 0)),
                     )
-                    entries.append(entry)
+                    batch.append(entry)
                 except Exception as e:
-                    logger.warning(f"Open interest descartada: {e} — raw={row}")
+                    logger.warning(f"OI descartada: {e} — raw={row}")
 
-            saved = self._save_open_interest(entries)
-            total_saved += saved
+            # Prepend per mantenir ordre cronològic (les crides anteriors son més antigues)
+            all_entries = batch + all_entries
 
-            last_ts = raw[-1]["timestamp"]
+            oldest_ts = raw[0]["timestamp"]
             logger.info(
-                f"  {saved} OI guardades fins "
-                f"{datetime.fromtimestamp(last_ts / 1000, tz=timezone.utc)}"
+                f"  {len(batch)} OI rebudes, "
+                f"oldest={datetime.fromtimestamp(oldest_ts / 1000, tz=timezone.utc)}"
             )
 
+            # Condicions de parada
             if len(raw) < 500:
-                break
-            current_since = last_ts + 1
+                break  # Binance no té més dades disponibles
+            if oldest_ts <= stop_ms:
+                break  # ja hem cobert tot el rang desitjat
 
-        logger.info(f"Open interest completat: {total_saved} registres nous")
-        return total_saved
+            # Paginar cap enrere: la crida següent s'acaba on aquesta comença
+            extra_params = {"endTime": oldest_ts - 1}
+
+        if not all_entries:
+            logger.info("OI: cap registre nou rebut de l'API")
+            return 0
+
+        saved = self._save_open_interest(all_entries)
+        logger.info(f"OI completat: {saved} nous registres guardats")
+        return saved
 
     def _save_open_interest(self, entries: list[OpenInterestEntry]) -> int:
         """Guarda un lot d'open interest, ignorant duplicats (idempotent)."""
