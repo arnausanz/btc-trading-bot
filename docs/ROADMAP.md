@@ -29,7 +29,7 @@
 | Mètriques backtesting | ✅ Correctes | Sharpe/Calmar/WinRate correctament implementats |
 | Dashboard (Streamlit) | ⚠️ Bàsic | Només preus de la BD |
 | Tests d'integració | ⚠️ Esquelet | 5 tests, necessiten BD real |
-| Dades externes | ❌ Pendent | Fear & Greed, on-chain, NLP |
+| Dades externes (Fear&Greed + on-chain) | ✅ Operatiu | fear_greed, funding_rates, open_interest, blockchain_metrics |
 | EnsembleBot | ❌ Pendent | Meta-capa de combinació |
 | Feature Store | ❌ Pendent | Placeholder reservat |
 | Risk Manager | ❌ Pendent | Placeholder reservat |
@@ -40,39 +40,27 @@
 
 ---
 
-### 🟡 B — Dades externes
+### ✅ B — Dades externes (implementat)
 
-L'objectiu és enriquir el feature vector de tots els models amb informació que va més enllà del preu. Cada font necessita: **script de descàrrega d'historial**, **taula a la BD**, **script d'actualització periòdica (cron)**, i **integració al DatasetBuilder / ObservationBuilder**.
+Fonts implementades i operatives. Scripts de descàrrega inicial + update incremental per a cron.
 
-#### B1. Fear & Greed Index
-La font més fàcil i gratuïta. Impacte directe en sentiment del mercat.
+| Font | Taula BD | Cobertura | Script cron |
+|------|----------|-----------|-------------|
+| Fear & Greed Index | `fear_greed` | Des de feb. 2018, diari | `update_fear_greed.py` (diari) |
+| Funding rates | `funding_rates` | Des de set. 2019, cada 8h | `update_futures.py` (horari) |
+| Open Interest (Vision S3) | `open_interest` (5m) | Des de des. 2021, cada 5min | `update_binance_vision.py` (diari) |
+| Open Interest (REST) | `open_interest` (1h) | Darrers 30 dies, cada 1h | `update_futures.py` (horari) |
+| Hash rate | `blockchain_metrics` | Des de ~2009, diari | `update_blockchain.py` (diari) |
+| Adreces actives | `blockchain_metrics` | Des de ~2009, diari | `update_blockchain.py` (diari) |
+| Transaction fees | `blockchain_metrics` | Des de ~2009, diari | `update_blockchain.py` (diari) |
 
-- **API gratuïta:** `https://api.alternative.me/fng/`
-- Historial: `?limit=2000&format=json` (des de 2018, diari)
-- Valor actual: `?limit=1&format=json` → 0 (Extreme Fear) a 100 (Extreme Greed)
-- **Taula BD nova:** `fear_greed (timestamp, value, classification)`
-- **Script nou:** `scripts/update_fear_greed.py` (cron diari)
-- **Feature:** `fear_greed_value` com a columna numèrica al feature vector
+**Comprovació de completesa:** `python scripts/check_data_completeness.py`
 
----
-
-#### B2. Dades on-chain
-Indicadors de comportament dels wallets i xarxa Bitcoin. Correlació alta amb cicles de mercat.
-
-| Mètrica | Descripció | Font |
-|---------|-----------|------|
-| SOPR | Spent Output Profit Ratio: ven la gent amb guanys o pèrdues? | Glassnode (API de pagament) |
-| MVRV Z-score | Valora si BTC és car o barat vs. valor realitzat | Glassnode / CryptoQuant |
-| Exchange flows | Entrada/sortida de BTC als exchanges (acumulació vs. distribució) | Glassnode / CryptoQuant |
-| Funding rates | Cost de mantenir posicions als futurs perpetus | Binance API (gratuïta) |
-| Open Interest | Posicions obertes en derivats | Binance / Coinglass API |
-| Dominàncid BTC | % de dominàncid de BTC sobre el mercat cripto | CoinGecko API (gratuïta) |
-
-**Acció:** Valorar quines APIs son gratuïtes o assequibles, prioritzar funding rates i dominàncid (gratuïtes) primer.
+**Pendent d'aquesta fase:** integrar les noves features al `DatasetBuilder` i `ObservationBuilder` per que els models les puguin usar en entrenament.
 
 ---
 
-#### B3. Anàlisi de notícies i sentiment (NLP)
+#### B_pendent. Anàlisi de notícies i sentiment (NLP)
 La font més complexa però potencialment la més poderosa per anticipar moviments.
 
 **Opcions per obtenir el senyal:**
@@ -252,13 +240,15 @@ L'objectiu final d'aquesta fase del projecte:
 ## Seqüència recomanada
 
 ```
-[B1] Fear & Greed (dades + feature) ← fàcil, alt impacte
+[B ✅] Fear & Greed + on-chain (dades a la BD, scripts operatius)
+              ↓
+[B_pendent] Integrar features al DatasetBuilder + re-entrenar models
               ↓
 [C1] MeanReversionBot + MomentumBot ← clàssics, ràpids
               ↓
 [C3] Investigació RL professional → nova política → TD3 / Curriculum
               ↓
-[B2/B3] On-chain + NLP sentiment ← més complex, prioritzar funding rates
+[B_pendent/NLP] NLP sentiment ← quan els models ML ja consumeixin les noves features
               ↓
 [C2] TFT / N-BEATS ← quan les dades externes estiguin llestes
               ↓

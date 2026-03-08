@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 _SYMBOL = "BTC/USDT:USDT"           # Binance USDT-M perpetual
 _OI_TIMEFRAME = "1h"                 # granularitat de l'open interest
-_FUNDING_SINCE = datetime(2019, 9, 13, tzinfo=timezone.utc)  # llançament dels perps USDT-M
+_FUNDING_SINCE = datetime(2019, 1, 1, tzinfo=timezone.utc)  # llançament dels perps USDT-M
 _OI_MAX_HISTORY_DAYS = 29            # Binance conserva menys de 30 dies d'historial d'OI
 
 

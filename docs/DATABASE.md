@@ -215,14 +215,104 @@ repo.save_tick(bot_id, timestamp, price, action, portfolio_value, usdt, btc, rea
 
 ---
 
+### `fear_greed`
+Fear & Greed Index diari d'[alternative.me](https://api.alternative.me/fng/). Disponible des de febrer 2018.
+
+| Columna | Tipus | Descripció |
+|---------|-------|-----------|
+| `id` | int PK | Autoincrement |
+| `timestamp` | datetime tz (UNIQUE) | UTC, mignight del dia |
+| `value` | int | 0 (Extreme Fear) → 100 (Extreme Greed) |
+| `classification` | str(50) | `"Extreme Fear"`, `"Fear"`, `"Neutral"`, `"Greed"`, `"Extreme Greed"` |
+
+**Script de descàrrega inicial:** `python scripts/download_fear_greed.py`
+**Script d'update (cron diari):** `python scripts/update_fear_greed.py`
+
+---
+
+### `funding_rates`
+Funding rate del contracte perpetu BTC/USDT:USDT de Binance USDT-M. Cada 8h, des de setembre 2019.
+
+| Columna | Tipus | Descripció |
+|---------|-------|-----------|
+| `id` | int PK | Autoincrement |
+| `symbol` | str(30) | `"BTC/USDT:USDT"` |
+| `timestamp` | datetime tz | UTC, cada 8h (00:00, 08:00, 16:00) |
+| `rate` | float | Ex: `0.0001` = 0.01% per 8h; pot ser negatiu |
+
+**Script de descàrrega inicial:** `python scripts/download_futures.py`
+**Script d'update (cron horari):** `python scripts/update_futures.py`
+
+---
+
+### `open_interest`
+Open interest del contracte perpetu BTC/USDT:USDT. Dues fonts coexisteixen a la mateixa taula diferenciades per `timeframe`:
+
+| `timeframe` | Font | Cobertura | Granularitat |
+|-------------|------|-----------|--------------|
+| `"5m"` | Binance Vision S3 (bucket públic) | des de 2021-12-01 | 5 minuts (288/dia) |
+| `"1h"` | Binance REST API | darrers 30 dies | 1 hora |
+
+| Columna | Tipus | Descripció |
+|---------|-------|-----------|
+| `id` | int PK | Autoincrement |
+| `symbol` | str(30) | `"BTC/USDT:USDT"` |
+| `timeframe` | str(10) | `"5m"` o `"1h"` |
+| `timestamp` | datetime tz | UTC |
+| `open_interest_btc` | float | Quantitat en BTC |
+| `open_interest_usdt` | float | Valor en USDT |
+
+**Script de descàrrega inicial (Vision/historial):** `python scripts/download_binance_vision.py`
+**Script de descàrrega inicial (REST/30d):** `python scripts/download_futures.py`
+**Script d'update (cron diari Vision):** `python scripts/update_binance_vision.py`
+**Script d'update (cron horari REST):** `python scripts/update_futures.py`
+
+⚠️ **Nota sobre re-descàrrega:** Si perds les dades de Vision (5m), pots recuperar-les íntegrament amb `download_binance_vision.py` — el script és idempotent (salta dies ja complets). Les dades REST (1h) només cobreixen els últims 30 dies.
+
+---
+
+### `blockchain_metrics`
+Mètriques diàries de la xarxa Bitcoin via [Blockchain.com Charts API](https://www.blockchain.com/explorer/api/charts_api). Gratuïta, sense API key. Des de ~2009.
+
+| Columna | Tipus | Descripció |
+|---------|-------|-----------|
+| `id` | int PK | Autoincrement |
+| `metric` | str(50) | Discriminador: `"hash-rate"`, `"n-unique-addresses"`, `"transaction-fees"` |
+| `timestamp` | datetime tz | UTC, midnight del dia |
+| `value` | float | Valor de la mètrica (unitat depèn de la mètrica) |
+
+**Mètriques disponibles:**
+
+| Mètrica | Unitat | Significat |
+|---------|--------|-----------|
+| `hash-rate` | TH/s | Potència de mineria total de la xarxa |
+| `n-unique-addresses` | count/dia | Adreces actives úniques (proxy d'activitat on-chain) |
+| `transaction-fees` | BTC/dia | Comissions totals pagades (proxy de demanda de blockspace) |
+
+**Afegir una nova mètrica** no requereix canvi d'esquema: afegeix el nom a `BLOCKCHAIN_METRICS` a `core/models.py` i crida `fetch_and_store(metric, timespan="all")`.
+
+**Script de descàrrega inicial:** `python scripts/download_blockchain.py`
+**Script d'update (cron diari):** `python scripts/update_blockchain.py`
+
+---
+
+## Comprovació de completesa
+
+```bash
+python scripts/check_data_completeness.py          # resum
+python scripts/check_data_completeness.py --verbose # mostra gaps individuals
+```
+
+Reporta per a cada font: total de registres, rang de dates, cobertura estimada, gaps i cross-check entre fonts.
+
+---
+
 ## Taules futures (ROADMAP)
 
 | Taula | Per a | Notes |
 |-------|-------|-------|
-| `fear_greed` | Fear & Greed Index | `timestamp`, `value` (0-100), `classification` |
-| `external_signals` | Qualsevol font externa | Taula genèrica: `source`, `key`, `value`, `timestamp` |
 | `backtest_results` | Resultats de backtests | Per evitar recalcular sempre |
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.1*
+*Última actualització: Març 2026 · Versió 1.2*
