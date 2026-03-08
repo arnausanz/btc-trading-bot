@@ -94,14 +94,20 @@ TEST_FROM   = "2025-01-01"   # primera data del backtest de validació
 
 ## Bots disponibles
 
-| Família | Bot | Tipus de senyal | Config |
+| Família | Bot | Tipus de senyal | Config (unificat) |
 |---------|-----|----------------|--------|
-| Classical | DCABot | Discret (BUY/HOLD) | `config/bots/dca.yaml` |
-| Classical | TrendBot | Discret (BUY/SELL/HOLD) | `config/bots/trend.yaml` |
-| Classical | GridBot | Discret (BUY/SELL/HOLD) | `config/bots/grid.yaml` |
-| Classical | HoldBot | Discret (BUY/HOLD) — benchmark | `config/bots/hold.yaml` |
-| ML | MLBot | Discret (qualsevol model ML) | `config/bots/ml_bot*.yaml` |
-| RL | RLBot | Discret o Continu | `config/bots/rl_bot*.yaml` |
+| classic | DCABot | Discret (BUY/HOLD) | `config/models/dca.yaml` |
+| classic | TrendBot | Discret (BUY/SELL/HOLD) | `config/models/trend.yaml` |
+| classic | GridBot | Discret (BUY/SELL/HOLD) | `config/models/grid.yaml` |
+| classic | HoldBot | Discret (BUY/HOLD) — benchmark | `config/models/hold.yaml` |
+| ML | MLBot (Random Forest) | Discret | `config/models/random_forest.yaml` |
+| ML | MLBot (XGBoost) | Discret | `config/models/xgboost.yaml` |
+| ML | MLBot (LightGBM) | Discret | `config/models/lightgbm.yaml` |
+| ML | MLBot (CatBoost) | Discret | `config/models/catboost.yaml` |
+| ML | MLBot (GRU) | Discret | `config/models/gru.yaml` |
+| ML | MLBot (PatchTST) | Discret | `config/models/patchtst.yaml` |
+| RL | RLBot (PPO) | Discret | `config/models/ppo.yaml` |
+| RL | RLBot (SAC) | Continu | `config/models/sac.yaml` |
 
 Veure **[MODELS.md](./MODELS.md)** per a descripció detallada de cada model.
 
@@ -130,11 +136,12 @@ btc-trading-bot/
 │   ├── ml/              MLBot + Random Forest, XGBoost, LightGBM, CatBoost, GRU, PatchTST
 │   └── rl/              RLBot + PPO (discret), SAC (continu), entorn Gym
 ├── config/
-│   ├── bots/            {bot}.yaml + {bot}_optimized.yaml (auto-generat per Optuna)
-│   ├── training/        {model}_experiment_1.yaml + {model}_optimized.yaml
-│   ├── optimization/    search spaces per a Optuna
-│   ├── settings.yaml    paràmetres globals (BD, exchange, etc.)
-│   └── demo.yaml        quins bots s'executen al DemoRunner
+│   ├── models/          UN YAML per model/bot (base + training + optimization + bot)
+│   │   ├── {bot}.yaml          Config base (hand-crafted)
+│   │   └── {bot}_optimized.yaml  Config optimitzada per Optuna (auto-generat)
+│   ├── exchanges/       Configuració del paper exchange
+│   ├── settings.yaml    Paràmetres globals (BD, exchange, etc.)
+│   └── demo.yaml        Quins bots s'executen al DemoRunner
 ├── core/
 │   ├── backtesting/     BacktestEngine, BacktestMetrics, Optimizer, Comparator
 │   ├── engine/          Runner (backtest), DemoRunner (paper trading)
@@ -142,7 +149,7 @@ btc-trading-bot/
 │   ├── interfaces/      BaseBot, BaseMLModel, BaseRLAgent, BaseExchange, BaseStrategy
 │   └── models.py        Candle, Signal, Order, Trade (Pydantic)
 ├── data/
-│   ├── processing/      TechnicalIndicators, DatasetBuilder
+│   ├── processing/      FeatureBuilder, DatasetBuilder, TechnicalIndicators
 │   └── observation/     ObservationBuilder
 ├── exchanges/
 │   └── paper.py         PaperExchange (simulació amb fees + slippage)
@@ -154,6 +161,7 @@ btc-trading-bot/
 │   ├── unit/            57 tests — lògica amb dades mock
 │   └── integration/     5 tests — pipeline complet (necessita BD real)
 ├── models/              Models entrenats: *.pkl, *.pt, *.zip
+├── [OLD]config/         Arxius antics (conservats per referència)
 └── docs/                Tota la documentació del projecte
 ```
 
@@ -163,7 +171,7 @@ btc-trading-bot/
 
 | Script | Propòsit | Comanda típica |
 |--------|----------|----------------|
-| `optimize_bots.py` | Optuna per a bots clàssics | `python scripts/optimize_bots.py --bots dca trend grid --trials 50` |
+| `optimize_bots.py` | Optuna per a bots clàssics | `python scripts/optimize_bots.py --bots dca trend grid` |
 | `optimize_models.py` | Optuna per a ML + RL | `python scripts/optimize_models.py --no-rl --trials 15` |
 | `train_models.py` | Entrena models ML | `python scripts/train_models.py` |
 | `train_rl.py` | Entrena agents RL (500k steps) | `python scripts/train_rl.py` |
@@ -171,23 +179,28 @@ btc-trading-bot/
 | `run_demo.py` | Executa paper trading 24/7 | `python scripts/run_demo.py` |
 | `validate_data.py` | Valida gaps i duplicats a la BD | `python scripts/validate_data.py` |
 
-**Tots els scripts auto-carreguen `_optimized.yaml` si existeix.** Si no, usen `_experiment_1.yaml` o el YAML base.
+**Tots els scripts auto-carreguen `{model}_optimized.yaml` si existeix** a `config/models/`.
+Si no existeix, usen `{model}.yaml` (el YAML base amb hyperparàmetres hand-crafted).
 
 ---
 
 ## Cicle de vida complet
 
 ```
-optimize_bots   →  config/bots/{bot}_optimized.yaml
-optimize_models →  config/training/{model}_optimized.yaml
+optimize_bots   →  config/models/{bot}_optimized.yaml
+optimize_models →  config/models/{model}_optimized.yaml
                         ↓
 train_models    →  models/{model}.pkl / .pt
-train_rl        →  agents/{agent}.zip
+train_rl        →  models/{agent}.zip
                         ↓
 run_comparison  →  BacktestMetrics + MLflow (validació)
                         ↓
 run_demo        →  Paper trading 24/7 + Telegram + DB
 ```
+
+**YAML unificat per model:** cada fitxer `config/models/{model}.yaml` conté
+la configuració completa: features, training, optimization i bot deployment.
+No cal gestionar múltiples fitxers per model.
 
 ---
 

@@ -141,7 +141,7 @@ Estat de l'art per a forecasting de séries temporals; necessita GPU per ser pr�
 
 ## RL Agents (via RLBot)
 
-Aprenen per interacció amb un entorn Gym que simula el mercat. Entrenen 500k timesteps. Guarden l'agent a `agents/`.
+Aprenen per interacció amb un entorn Gym que simula el mercat. Entrenen 500k timesteps. Guarden l'agent a `models/`.
 
 ### PPO (Proximal Policy Optimization)
 Agent de política discreta (BUY / SELL / HOLD). Estable i fàcil d'entrenar.

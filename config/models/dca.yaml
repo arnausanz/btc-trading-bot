@@ -1,0 +1,35 @@
+# config/models/dca.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# DCABot — Dollar Cost Averaging
+# Compra una fracció fixa del capital cada N ticks, ignorant el preu.
+# Estratègia òptima per a mercats amb tendència alcista a llarg termini.
+# ─────────────────────────────────────────────────────────────────────────────
+category: classic
+model_type: dca
+bot_id: dca_v1
+symbol: BTC/USDT
+timeframe: 1h
+lookback: 50
+features:
+  - close
+
+# ── Paràmetres d'estratègia ─────────────────────────────────────────────────
+buy_every_n_ticks: 163   # Compra cada N candles (163h ≈ 1 setmana)
+buy_size: 0.05           # Fracció del capital per compra (5%)
+
+# ── Optimització (Optuna) ────────────────────────────────────────────────────
+# Executar: python scripts/optimize_bots.py --bots dca
+# Resultat guardat a: config/models/dca_optimized.yaml
+optimization:
+  n_trials: 100
+  metric: sharpe_ratio
+  direction: maximize
+  search_space:
+    buy_every_n_ticks:
+      type: int
+      low: 6
+      high: 168
+    buy_size:
+      type: float
+      low: 0.05
+      high: 0.5

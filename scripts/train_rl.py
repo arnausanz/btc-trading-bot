@@ -23,18 +23,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger(__name__)
 
 
+AVAILABLE_AGENTS = {
+    "ppo": "config/models/ppo.yaml",
+    "sac": "config/models/sac.yaml",
+}
+
+
 def get_best_config_path(agent_name: str) -> str:
     """
-    Load optimized config if it exists, otherwise fall back to experiment_1.
+    Carrega el config optimitzat si existeix, sinó usa el YAML base.
 
     Args:
-        agent_name: Name of the agent (e.g., 'sac', 'ppo')
+        agent_name: Nom de l'agent ('sac' | 'ppo')
 
     Returns:
-        Path to the config file to use
+        Path al fitxer de config a usar
     """
-    optimized = f"config/training/{agent_name}_optimized.yaml"
-    default = f"config/training/{agent_name}_experiment_1.yaml"
+    optimized = f"config/models/{agent_name}_optimized.yaml"
+    default = AVAILABLE_AGENTS[agent_name]
 
     if os.path.exists(optimized):
         logger.info(f"Found optimized config: {optimized}")
@@ -43,13 +49,11 @@ def get_best_config_path(agent_name: str) -> str:
     logger.info(f"Using default config: {default}")
     return default
 
-AVAILABLE_AGENTS = ["sac", "ppo"]
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train RL agents (PPO, SAC)")
     parser.add_argument(
-        "--agents", nargs="+", default=AVAILABLE_AGENTS,
-        choices=AVAILABLE_AGENTS,
+        "--agents", nargs="+", default=list(AVAILABLE_AGENTS.keys()),
+        choices=list(AVAILABLE_AGENTS.keys()),
         metavar="AGENT",
         help=f"Agents to train (default: all). Options: {AVAILABLE_AGENTS}",
     )
@@ -57,11 +61,12 @@ if __name__ == "__main__":
 
     from bots.rl.trainer import RLTrainer
 
-    logger.info(f"Selected agents: {args.agents}")
+    selected = args.agents
+    logger.info(f"Selected agents: {selected}")
     logger.info("NOTE: RL with 500k timesteps can take 30-90 min per agent.")
 
     results = []
-    for agent_key in args.agents:
+    for agent_key in selected:
         config_path = get_best_config_path(agent_key)
         logger.info(f"=== Training {agent_key.upper()} ({config_path}) ===")
         trainer = RLTrainer(config_path=config_path)

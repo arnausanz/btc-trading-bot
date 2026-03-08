@@ -5,29 +5,28 @@
 
 ---
 
-## Fitxers de configuració — mapa
+## Estructura de configuració — mapa
 
 ```
 config/
 ├── settings.yaml          → Globals: BD, exchange, símbols, walk-forward dates
-├── demo.yaml              → Quins bots s'activen al DemoRunner
-├── bots/
-│   ├── {bot}.yaml         → Config base d'un bot (hand-crafted o punt de partida)
-│   └── {bot}_optimized.yaml → Config optimitzada per Optuna (auto-generat)
-├── training/
-│   ├── {model}_experiment_N.yaml → Config d'entrenament per a ML/RL
-│   └── {model}_optimized.yaml    → Config optimitzada per Optuna (auto-generat)
-└── optimization/
-    └── {model}.yaml       → Search space d'Optuna per a cada model
+├── demo.yaml              → Quins bots s'executen al DemoRunner
+├── exchanges/
+│   └── paper.yaml         → Configuració del PaperExchange (simulació)
+└── models/
+    ├── {model}.yaml        → Config UNIFICADA per a cada model/bot
+    └── {model}_optimized.yaml  → Config optimitzada per Optuna (auto-generat)
 ```
 
-**Regla d'auto-carrega:** tots els scripts comproven si existeix `_optimized.yaml` i el carreguen per defecte. Si no existeix, usen `_experiment_1.yaml` o el YAML base.
+**Un sol YAML per model** conté tota la informació: dades, entrenament, optimització i desplegament.
+
+**Regla d'auto-carrega:** els scripts comproven si existeix `{model}_optimized.yaml` i el carreguen per defecte. Si no existeix, usen `{model}.yaml`.
 
 ---
 
 ## `config/settings.yaml`
 
-Variables globals del sistema. Les més importants:
+Variables globals del sistema:
 
 ```yaml
 database:
@@ -57,7 +56,7 @@ backtesting:
 
 ## `config/demo.yaml`
 
-Controla quins bots s'executen al DemoRunner.
+Controla quins bots s'executen al DemoRunner:
 
 ```yaml
 demo:
@@ -66,11 +65,11 @@ demo:
   update_interval_seconds: 60
 
 bots:
-  - config_path: config/bots/trend.yaml
+  - config_path: config/models/trend.yaml
     enabled: true
-  - config_path: config/bots/ml_bot.yaml
+  - config_path: config/models/xgboost.yaml
     enabled: true
-  - config_path: config/bots/rl_bot_ppo.yaml
+  - config_path: config/models/ppo.yaml
     enabled: false    # ← desactivat sense eliminar
 
 exchange:
@@ -82,99 +81,189 @@ telegram:
 
 ---
 
-## `config/bots/{bot}.yaml`
+## `config/models/{model}.yaml` — Schema unificat
 
-Exemple per a un bot clàssic (`trend.yaml`):
+**Camp discriminant: `category`**
+
+| `category` | Exemples | Descripció |
+|------------|----------|------------|
+| `classic`  | hold, dca, trend, grid | Bots basats en regles, sense ML |
+| `ML`       | xgboost, gru, patchtst | Models supervisats (predicció de preu) |
+| `RL`       | ppo, sac | Agents de reinforcement learning |
+
+---
+
+### Schema — `category: classic`
 
 ```yaml
-bot_id: trend_v1
+category: classic
+model_type: dca           # Identifica la classe de bot (dca/trend/grid/hold)
+bot_id: dca_v1
 symbol: BTC/USDT
 timeframe: 1h
-lookback: 200
+lookback: 50
+features: [close]
+
+# Paràmetres d'estratègia (a nivell arrel, llegits directament pel bot)
+buy_every_n_ticks: 163
+buy_size: 0.05
+
+# Search space per Optuna — llegit per optimize_bots.py
+optimization:
+  n_trials: 100
+  metric: sharpe_ratio
+  direction: maximize
+  search_space:
+    buy_every_n_ticks:
+      type: int
+      low: 6
+      high: 168
+    buy_size:
+      type: float
+      low: 0.05
+      high: 0.5
+```
+
+---
+
+### Schema — `category: ML`
+
+```yaml
+category: ML
+model_type: xgboost       # Clau al _MODEL_REGISTRY de MLBot
+symbol: BTC/USDT
+timeframes: [1h]          # Llista (suporta multi-timeframe)
+forward_window: 24        # Horitzó de predicció (hores)
+threshold_pct: 0.005      # Mínim % de moviment per a senyal positiu
+
+# Features (passades a FeatureBuilder i DatasetBuilder)
 features:
-  - close
-  - rsi_14
+  select: null            # null = totes les columnes; llista = subset
+  external: {}            # fonts externes (fear_greed, funding_rate, etc.)
 
-ema_fast: 47        # ← paràmetres del bot
-ema_slow: 179
-rsi_overbought: 70
-rsi_oversold: 33
-trade_size: 0.53
+# Secció d'entrenament (llegida per train_models.py i MLOptimizer)
+training:
+  experiment_name: xgboost_v1
+  model_path: models/xgboost_v1.pkl
+  model:
+    n_estimators: 500
+    max_depth: 5
+    learning_rate: 0.02
+    scale_pos_weight: 2.0
+
+# Search space per Optuna — llegit per optimize_models.py
+optimization:
+  n_trials: 30
+  metric: accuracy_mean
+  direction: maximize
+  search_space:
+    n_estimators: {type: int, low: 100, high: 500}
+    max_depth: {type: int, low: 3, high: 10}
+    learning_rate: {type: float, low: 0.01, high: 0.3, log: true}
+
+# Configuració de desplegament (llegida per MLBot)
+bot:
+  bot_id: ml_xgb_v1
+  lookback: 200
+  min_confidence: 0.4
+  trade_size: 0.5
+  prediction_threshold: 0.35
 ```
 
-Exemple per a un bot ML (`ml_bot.yaml`):
+---
+
+### Schema — `category: RL`
 
 ```yaml
-bot_id: ml_rf_v1
+category: RL
+model_type: ppo            # Clau al _AGENT_REGISTRY
 symbol: BTC/USDT
 timeframe: 1h
-model_type: random_forest          # ← clau al _MODEL_REGISTRY
-model_path: models/random_forest.pkl
-config_path: config/training/rf_experiment_1.yaml
+
+# Features — CRÍTIC: obs_shape = len(select) × lookback
+# Ha de ser idèntic entre entrenament i desplegament.
+features:
+  lookback: 96
+  select:
+    - close
+    - rsi_14
+    - macd
+    - macd_signal
+    - macd_hist
+    - atr_14
+    - bb_upper_20
+    - bb_lower_20
+    - bb_middle_20
+  external: {}             # fonts externes (fear_greed, funding_rate, etc.)
+
+# Secció d'entrenament (llegida per train_rl.py i RLOptimizer)
+training:
+  experiment_name: ppo_optimized
+  train_pct: 0.8
+  model_path: models/ppo_btc_v1
+  environment:
+    initial_capital: 10000.0
+    fee_rate: 0.001
+    reward_scaling: 100.0
+    reward_type: sharpe    # simple | sharpe | sortino | penalize_inaction
+  model:
+    total_timesteps: 500000
+    learning_rate: 0.00012
+    batch_size: 128
+    n_steps: 2048
+    n_epochs: 10
+    gamma: 0.967
+    policy: MlpPolicy
+
+# Search space per Optuna — llegit per optimize_models.py
+optimization:
+  n_trials: 15
+  probe_timesteps: 20000   # Timesteps per trial (molt menys que total_timesteps)
+  metric: val_return_pct
+  direction: maximize
+  search_space:
+    learning_rate: {type: float, low: 0.0001, high: 0.001, log: true}
+    n_steps: {type: categorical, choices: [512, 1024, 2048]}
+    reward_type: {type: categorical, choices: [simple, sharpe, sortino]}
+    lookback: {type: categorical, choices: [30, 50, 96]}
+
+# Configuració de desplegament (llegida per RLBot)
+bot:
+  bot_id: rl_ppo_v1
+  trade_size: 0.5
 ```
 
 ---
 
-## `config/training/{model}_experiment_N.yaml`
+## Regla crítica: `obs_shape` per a RL
 
-Config d'entrenament per a un model ML:
-
-```yaml
-model_type: random_forest
-params:
-  n_estimators: 100
-  max_depth: 6
-  min_samples_split: 5
-  max_features: sqrt
-
-# Walk-forward (hereta de settings.yaml si no s'especifica)
-train_until: "2024-12-31"
-target: price_up_1pct_in_24h     # columna target del DatasetBuilder
-features:                          # features d'entrada (columnes del DataFrame)
-  - close
-  - rsi_14
-  - ema_9
-  - ema_21
-  - macd
-  - bb_upper
-  - bb_lower
-  - atr_14
-  - volume_sma_20
 ```
+obs_shape = len(features.select) × features.lookback
+```
+
+- `features.select` ha de ser **idèntic** al que s'ha usat per entrenar
+- `features.lookback` ha de ser **idèntic** a `training.environment.lookback`
+- **Mai canviar sense re-entrenar el model** — causaria `ValueError: Unexpected observation shape`
 
 ---
 
-## `config/optimization/{model}.yaml`
-
-Search space per a Optuna. Camps principals:
+## Features externes
 
 ```yaml
-base_config: config/training/rf_experiment_1.yaml   # punt de partida
-model_type: random_forest
-n_trials: 30
-metric: accuracy_mean          # accuracy_mean | sharpe_ratio | precision_mean
-direction: maximize            # maximize | minimize
-
-search_space:
-  n_estimators:
-    type: int
-    low: 50
-    high: 500
-  max_depth:
-    type: int
-    low: 3
-    high: 20
-  learning_rate:               # per a models amb LR
-    type: float
-    low: 0.001
-    high: 0.3
-    log: true                  # escala logarítmica
-  max_features:
-    type: categorical
-    choices: [sqrt, log2]
+features:
+  external:
+    fear_greed: true                    # afegeix: fear_greed_value, fear_greed_class
+    funding_rate: true                  # afegeix: funding_rate
+    funding_rate_symbol: BTC/USDT:USDT # opcional, sobreescriu el valor per defecte
+    open_interest:
+      - symbol: BTC/USDT:USDT
+        timeframe: 1h                   # afegeix: oi_btc_1h, oi_usdt_1h
+    blockchain:
+      - hash-rate                       # afegeix: hash_rate
+      - n-unique-addresses              # afegeix: n_unique_addresses
 ```
 
-**Tipus de paràmetres Optuna:** `int`, `float`, `categorical`.
+Veure `ppo_onchain.yaml` com a exemple complet.
 
 ---
 
@@ -182,8 +271,8 @@ search_space:
 
 ### `optimize_bots.py`
 ```
---bots      dca trend grid hold    # Selecció de bots (default: tots)
---trials    50                      # Override de n_trials
+--bots      dca trend grid    # Selecció de bots (default: tots)
+--trials    50                # Override de n_trials (default: usa el YAML)
 ```
 
 ### `optimize_models.py`
@@ -203,14 +292,16 @@ search_space:
 ### `train_rl.py`
 ```
 --agents    sac ppo                # Agents a entrenar (default: tots)
---steps     500000                 # Timesteps d'entrenament (default: 500k)
 ```
 
 ### `run_comparison.py`
 ```
---all                              # Executa tots els bots configurats
---bots      dca trend rf           # Executa només els bots indicats
+--all                              # Executa tots els bots (inclou RL)
+--bots      dca trend rf ppo       # Executa només els bots indicats
+--no-rl                            # Exclou agents RL
 ```
+
+**Noms de bots disponibles:** `hold`, `dca`, `trend`, `grid`, `rf`, `xgb`, `lgbm`, `catboost`, `gru`, `patchtst`, `ppo`, `sac`
 
 ### `run_demo.py`
 ```
@@ -258,4 +349,4 @@ Cada experiment registra: `model_type`, `params`, `sharpe`, `drawdown`, `win_rat
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.1*
+*Última actualització: Març 2026 · Versió 2.0*

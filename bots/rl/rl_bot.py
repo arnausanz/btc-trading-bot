@@ -24,9 +24,22 @@ class RLBot(BaseBot):
     Adding a new agent = adding an entry to _AGENT_REGISTRY.
     """
 
-    def __init__(self, config_path: str = "config/bots/rl_bot.yaml"):
+    def __init__(self, config_path: str = "config/models/ppo.yaml"):
         with open(config_path) as f:
-            config = yaml.safe_load(f)
+            raw = yaml.safe_load(f)
+
+        # Construïm config plana des del YAML unificat.
+        # features.select i features.lookback es mapegen a top-level per
+        # compatibilitat amb observation_schema() i on_observation().
+        features_cfg = raw["features"]
+        config = {
+            **raw,
+            **raw.get("bot", {}),
+            "model_path": raw["training"]["model_path"],
+            "features": features_cfg["select"],
+            "lookback": features_cfg["lookback"],
+            "external": features_cfg.get("external", {}),
+        }
         super().__init__(bot_id=config["bot_id"], config=config)
         self._agent = self._load_agent()
         self._observation_buffer: list[np.ndarray] = []

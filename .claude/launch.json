@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "streamlit-dashboard",
+      "runtimeExecutable": "poetry",
+      "runtimeArgs": ["run", "streamlit", "run", "monitoring/dashboard.py", "--server.port", "8501"],
+      "port": 8501
+    },
+    {
+      "name": "mlflow-ui",
+      "runtimeExecutable": "poetry",
+      "runtimeArgs": ["run", "mlflow", "ui", "--port", "5000"],
+      "port": 5000
+    }
+  ]
+}

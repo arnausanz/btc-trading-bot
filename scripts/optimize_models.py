@@ -38,19 +38,20 @@ logging.getLogger("mlflow").setLevel(logging.WARNING)
 logging.getLogger("lightgbm").setLevel(logging.WARNING)
 logging.getLogger("catboost").setLevel(logging.WARNING)
 
-# Registry: short key → optimization config path
+# Registry: clau curta → YAML unificat (config/models/*.yaml)
+# Tots els YAMLs contenen la secció optimization amb el search space.
 ALL_ML_CONFIGS = {
-    "rf":       "config/optimization/random_forest.yaml",
-    "xgb":      "config/optimization/xgboost.yaml",
-    "lgbm":     "config/optimization/lightgbm.yaml",
-    "catboost": "config/optimization/catboost.yaml",
-    "gru":      "config/optimization/gru.yaml",
-    "patchtst": "config/optimization/patchtst.yaml",
+    "rf":       "config/models/random_forest.yaml",
+    "xgb":      "config/models/xgboost.yaml",
+    "lgbm":     "config/models/lightgbm.yaml",
+    "catboost": "config/models/catboost.yaml",
+    "gru":      "config/models/gru.yaml",
+    "patchtst": "config/models/patchtst.yaml",
 }
 
 ALL_RL_CONFIGS = {
-    "sac": "config/optimization/sac.yaml",
-    "ppo": "config/optimization/ppo.yaml",
+    "sac": "config/models/sac.yaml",
+    "ppo": "config/models/ppo.yaml",
 }
 
 if __name__ == "__main__":
@@ -118,7 +119,8 @@ if __name__ == "__main__":
         study = optimizer.run()
 
         model_type = optimizer.model_type
-        out_path = f"config/training/{model_type}_optimized.yaml"
+        # Resultat guardat al YAML unificat: config/models/{model_type}_optimized.yaml
+        out_path = f"config/models/{model_type}_optimized.yaml"
         optimizer.save_best_config(study, out_path)
 
         results.append({
@@ -139,7 +141,8 @@ if __name__ == "__main__":
         study = optimizer.run()
 
         model_type = optimizer.model_type
-        out_path = f"config/training/{model_type}_optimized.yaml"
+        # Resultat guardat al YAML unificat: config/models/{model_type}_optimized.yaml
+        out_path = f"config/models/{model_type}_optimized.yaml"
         optimizer.save_best_config(study, out_path)
 
         results.append({
@@ -165,6 +168,7 @@ if __name__ == "__main__":
             )
             logger.info(f"       Config saved to: {r['output_config']}")
 
-        logger.info("\nTo train with the best parameters:")
+        logger.info("\nOptimized configs saved to config/models/{model_type}_optimized.yaml")
+        logger.info("To train with the best parameters:")
         logger.info("  python scripts/train_models.py   # uses *_optimized.yaml if present")
         logger.info("  python scripts/train_rl.py       # uses *_optimized.yaml if present")

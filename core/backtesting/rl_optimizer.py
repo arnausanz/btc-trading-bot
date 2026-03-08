@@ -16,23 +16,28 @@ class RLOptimizer:
     Each trial = short training (probe_timesteps) + validation.
     Objective metric: val_return_pct | val_max_drawdown_pct.
 
+    Llegeix des del YAML unificat (config/models/*.yaml) — un sol fitxer conté
+    tota la informació: features, training, optimization search space i bot config.
+
     Uses probe_timesteps << total_timesteps to perform many trials quickly.
     The best config is re-trained afterward with full total_timesteps.
     """
 
-    def __init__(self, optimization_config_path: str):
-        with open(optimization_config_path) as f:
-            self.opt_cfg = yaml.safe_load(f)
+    def __init__(self, config_path: str):
+        """
+        Args:
+            config_path: ruta al YAML unificat (config/models/{agent}.yaml)
+        """
+        with open(config_path) as f:
+            self.unified_cfg = yaml.safe_load(f)
 
-        with open(self.opt_cfg["base_config"]) as f:
-            self.base_train_cfg = yaml.safe_load(f)
-
-        self.model_type = self.opt_cfg["model_type"]
-        self.n_trials = self.opt_cfg["n_trials"]
-        self.metric = self.opt_cfg.get("metric", "val_return_pct")
-        self.direction = self.opt_cfg.get("direction", "maximize")
-        self.probe_timesteps = self.opt_cfg.get("probe_timesteps", 20000)
-        self.search_space = self.opt_cfg["search_space"]
+        opt = self.unified_cfg["optimization"]
+        self.model_type = self.unified_cfg["model_type"]
+        self.n_trials = opt["n_trials"]
+        self.metric = opt.get("metric", "val_return_pct")
+        self.direction = opt.get("direction", "maximize")
+        self.probe_timesteps = opt.get("probe_timesteps", 20000)
+        self.search_space = opt["search_space"]
 
     def _sample_params(self, trial: optuna.Trial) -> dict:
         params = {}
@@ -49,13 +54,18 @@ class RLOptimizer:
         return params
 
     def _build_config(self, params: dict) -> dict:
-        config = copy.deepcopy(self.base_train_cfg)
+        """Aplica paràmetres del trial al config unificat."""
+        config = copy.deepcopy(self.unified_cfg)
         for name, value in params.items():
-            # Environment parameters go to config["environment"]
+            # Paràmetres d'entorn → training.environment
             if name in ("lookback", "reward_type", "reward_scaling"):
-                config["environment"][name] = value
+                config["training"]["environment"][name] = value
+                # Sincronitzem lookback a features.lookback també
+                if name == "lookback":
+                    config["features"]["lookback"] = value
             else:
-                config["model"][name] = value
+                # Hiperparàmetres del model → training.model
+                config["training"]["model"][name] = value
         return config
 
     def _objective(self, trial: optuna.Trial) -> float:
@@ -78,17 +88,21 @@ class RLOptimizer:
         try:
             mlflow.end_run()
             from data.processing.feature_builder import FeatureBuilder
-            df = FeatureBuilder.from_config(config["data"]).build()
-            split = int(len(df) * config["data"]["train_pct"])
+            # FeatureBuilder.from_config llegeix des del top-level (symbol, timeframe, features)
+            df = FeatureBuilder.from_config(config).build()
+            train_cfg = config["training"]
+            split = int(len(df) * train_cfg["train_pct"])
             df_train = df.iloc[:split]
             df_val = df.iloc[split:]
 
             env_class = _ENV_REGISTRY[self.model_type]
-            env_cfg = config["environment"]
+            # Sincronitzem lookback de features a l'entorn
+            env_cfg = {**train_cfg["environment"], "lookback": config["features"]["lookback"]}
             train_env = env_class(df=df_train, **env_cfg)
             val_env = env_class(df=df_val, **env_cfg)
 
-            agent = _AGENT_REGISTRY[self.model_type].from_config(config)
+            # L'agent rep la secció training (que té la clau "model") igual que en PPOAgent.from_config
+            agent = _AGENT_REGISTRY[self.model_type].from_config(train_cfg)
             metrics = agent.train(
                 train_env=train_env,
                 val_env=val_env,
@@ -132,8 +146,9 @@ class RLOptimizer:
         return self._build_config(study.best_params)
 
     def save_best_config(self, study: optuna.Study, output_path: str) -> None:
+        """Guarda el millor config unificat com a YAML llest per entrenar."""
         best = self.best_config(study)
-        best["experiment_name"] = f"{self.model_type}_optimized"
+        best["training"]["experiment_name"] = f"{self.model_type}_optimized"
         with open(output_path, "w") as f:
             yaml.dump(best, f, default_flow_style=False, allow_unicode=True)
         logger.info(f"  Optimized config saved to {output_path}")

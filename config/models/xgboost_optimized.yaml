@@ -1,0 +1,46 @@
+bot:
+  bot_id: ml_xgb_v1
+  lookback: 200
+  min_confidence: 0.4
+  prediction_threshold: 0.35
+  trade_size: 0.5
+category: ML
+features:
+  external: {}
+  select: null
+forward_window: 24
+model_type: xgboost
+optimization:
+  direction: maximize
+  metric: accuracy_mean
+  n_trials: 30
+  search_space:
+    learning_rate:
+      high: 0.3
+      log: true
+      low: 0.01
+      type: float
+    max_depth:
+      high: 10
+      low: 3
+      type: int
+    n_estimators:
+      high: 500
+      low: 100
+      type: int
+    scale_pos_weight:
+      high: 5.0
+      low: 1.0
+      type: float
+symbol: BTC/USDT
+threshold_pct: 0.005
+timeframes:
+- 1h
+training:
+  experiment_name: xgboost_optimized
+  model:
+    learning_rate: 0.04400379913689943
+    max_depth: 6
+    n_estimators: 490
+    scale_pos_weight: 1.043195514381067
+  model_path: models/xgboost_v1_optimized.pkl

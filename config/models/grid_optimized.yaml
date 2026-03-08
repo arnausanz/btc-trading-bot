@@ -1,0 +1,34 @@
+bot_id: grid_v1
+category: classic
+features:
+- close
+- bb_upper_20
+- bb_lower_20
+- bb_middle_20
+- rsi_14
+grid_spread: 0.02
+level_size: 0.2986563711473068
+lookback: 50
+model_type: grid
+num_levels: 5
+optimization:
+  direction: maximize
+  metric: sharpe_ratio
+  n_trials: 100
+  search_space:
+    level_size:
+      high: 0.3
+      low: 0.02
+      type: float
+    rsi_filter_high:
+      high: 85
+      low: 60
+      type: int
+    rsi_filter_low:
+      high: 40
+      low: 15
+      type: int
+rsi_filter_high: 71
+rsi_filter_low: 40
+symbol: BTC/USDT
+timeframe: 1h

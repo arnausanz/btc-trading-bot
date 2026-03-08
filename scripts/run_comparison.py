@@ -2,21 +2,25 @@
 """
 Compares all bots (classical, ML, RL) on train and test periods.
 
+Llegeix configs unificades de config/models/*.yaml.
+El camp 'category' del YAML determina el tipus de bot (classic/ML/RL).
+
 Usage:
   python scripts/run_comparison.py                          # all available bots
   python scripts/run_comparison.py --bots hold trend dca    # selection
-  python scripts/run_comparison.py --bots ml_rf ml_gru rl_ppo
+  python scripts/run_comparison.py --bots rf xgb ppo
   python scripts/run_comparison.py --no-rl                  # all except RL (if not trained)
 
 Available bots:
-  Classical: hold, dca, trend, grid
-  ML       : ml_rf, ml_xgb, ml_lgbm, ml_catboost, ml_gru, ml_patchtst
-  RL       : rl_ppo, rl_sac (require running train_rl.py)
+  Classic: hold, dca, trend, grid
+  ML     : rf, xgb, lgbm, catboost, gru, patchtst
+  RL     : ppo, sac (require running train_rl.py)
 """
 import argparse
 import logging
 import os
 import sys
+import yaml
 
 sys.path.append(".")
 
@@ -24,96 +28,118 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger(__name__)
 
 
-def get_best_bot_config_path(bot_name: str) -> str:
+# ── Registry de tots els bots: clau → YAML base ─────────────────────────────
+BOT_REGISTRY = {
+    # Clàssics
+    "hold":     "config/models/hold.yaml",
+    "dca":      "config/models/dca.yaml",
+    "trend":    "config/models/trend.yaml",
+    "grid":     "config/models/grid.yaml",
+    # ML supervisat
+    "rf":       "config/models/random_forest.yaml",
+    "xgb":      "config/models/xgboost.yaml",
+    "lgbm":     "config/models/lightgbm.yaml",
+    "catboost": "config/models/catboost.yaml",
+    "gru":      "config/models/gru.yaml",
+    "patchtst": "config/models/patchtst.yaml",
+    # RL
+    "ppo":      "config/models/ppo.yaml",
+    "sac":      "config/models/sac.yaml",
+}
+
+# Mapeig clau → classe de bot clàssic (per a instanciació)
+_CLASSICAL_CLASSES = {
+    "hold": None,   # s'omple lazy a _instantiate_bot
+    "dca":  None,
+    "trend": None,
+    "grid":  None,
+}
+
+
+def get_best_config_path(bot_key: str) -> str:
     """
-    Check if an optimized config exists for the given bot.
-    If yes, use it; otherwise fall back to default config.
+    Retorna el millor config disponible per a un bot.
 
-    Args:
-        bot_name: The bot name (e.g., 'dca', 'trend', 'hold', 'grid')
-
-    Returns:
-        Path to the optimized config if it exists, otherwise default config path
+    Prefereix {bot_key}_optimized.yaml si existeix (generat per Optuna),
+    sinó usa el YAML base del registry.
     """
-    optimized = f"config/bots/{bot_name}_optimized.yaml"
-    default = f"config/bots/{bot_name}.yaml"
-
+    default = BOT_REGISTRY[bot_key]
+    # Construïm el nom _optimized a partir del YAML base
+    optimized = default.replace(".yaml", "_optimized.yaml")
     if os.path.exists(optimized):
-        logger.info(f"Using optimized bot config: {optimized}")
+        logger.info(f"Using optimized config: {optimized}")
         return optimized
-
-    logger.info(f"Using default bot config: {default}")
+    logger.info(f"Using default config: {default}")
     return default
 
 
-# ── Registry of all bots ────────────────────────────────────────────────
-BOT_CONFIGS = {
-    # Classical - use helper function for config path resolution
-    "hold":        {"type": "classical", "config": get_best_bot_config_path("hold")},
-    "dca":         {"type": "classical", "config": get_best_bot_config_path("dca")},
-    "trend":       {"type": "classical", "config": get_best_bot_config_path("trend")},
-    "grid":        {"type": "classical", "config": get_best_bot_config_path("grid")},
-    # Supervised ML
-    "ml_rf":       {"type": "ml",        "config": "config/bots/ml_bot.yaml"},
-    "ml_xgb":      {"type": "ml",        "config": "config/bots/ml_bot_xgb.yaml"},
-    "ml_lgbm":     {"type": "ml",        "config": "config/bots/ml_bot_lgbm.yaml"},
-    "ml_catboost": {"type": "ml",        "config": "config/bots/ml_bot_catboost.yaml"},
-    "ml_gru":      {"type": "ml",        "config": "config/bots/ml_bot_gru.yaml"},
-    "ml_patchtst": {"type": "ml",        "config": "config/bots/ml_bot_patchtst.yaml"},
-    # RL
-    "rl_ppo":      {"type": "rl",        "config": "config/bots/rl_bot_ppo.yaml", "model": "models/ppo_btc_v1.zip"},
-    "rl_sac":      {"type": "rl",        "config": "config/bots/rl_bot_sac.yaml", "model": "models/sac_btc_v1.zip"},
-}
-
-DEFAULT_BOTS = [k for k in BOT_CONFIGS if BOT_CONFIGS[k]["type"] != "rl"]  # all except RL by default
-
-
 def _instantiate_bot(key: str):
-    """Instantiate the corresponding bot. Returns None if model does not exist (RL not trained)."""
-    cfg = BOT_CONFIGS[key]
+    """
+    Instancia el bot corresponent llegint el camp 'category' del YAML.
+    Retorna None si el model RL no existeix (no entrenat).
+    """
+    config_path = get_best_config_path(key)
 
-    # Check if RL model exists
-    if cfg["type"] == "rl":
-        model_path = cfg.get("model", "")
-        # stable-baselines3 can save as .zip or as folder
+    with open(config_path) as f:
+        cfg = yaml.safe_load(f)
+
+    category = cfg.get("category", "classic")
+
+    if category == "RL":
+        # Comprova que el model entrenat existeix
+        model_path = cfg["training"]["model_path"]
         if not (os.path.exists(model_path) or os.path.exists(model_path + ".zip")):
-            logger.warning(f"RL model not found: {model_path} — skipping {key}. Run train_rl.py first.")
+            logger.warning(
+                f"RL model not found: {model_path} — skipping '{key}'. "
+                f"Run: python scripts/train_rl.py --agents {cfg['model_type']}"
+            )
             return None
         from bots.rl.rl_bot import RLBot
-        return RLBot(config_path=cfg["config"])
+        return RLBot(config_path=config_path)
 
-    if cfg["type"] == "ml":
+    if category == "ML":
         from bots.ml.ml_bot import MLBot
-        return MLBot(config_path=cfg["config"])
+        return MLBot(config_path=config_path)
 
-    # Classical
+    # Classic
     from bots.classical.hold_bot  import HoldBot
     from bots.classical.dca_bot   import DCABot
     from bots.classical.trend_bot import TrendBot
     from bots.classical.grid_bot  import GridBot
-    _CLASSICAL = {"hold": HoldBot, "dca": DCABot, "trend": TrendBot, "grid": GridBot}
-    return _CLASSICAL[key](config_path=cfg["config"])
+    _CLASSICAL = {
+        "hold": HoldBot, "dca": DCABot,
+        "trend": TrendBot, "grid": GridBot,
+    }
+    model_type = cfg.get("model_type", key)
+    if model_type not in _CLASSICAL:
+        raise ValueError(f"Unknown classic bot model_type: '{model_type}'")
+    return _CLASSICAL[model_type](config_path=config_path)
+
+
+# Bots per defecte: tots excepte RL
+BOT_CONFIGS = BOT_REGISTRY  # alias per compatibilitat
+DEFAULT_BOTS = [k for k in BOT_REGISTRY if k not in ("ppo", "sac")]
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compare bots in walk-forward backtesting")
     parser.add_argument(
         "--bots", nargs="+", default=None,
-        choices=list(BOT_CONFIGS.keys()),
+        choices=list(BOT_REGISTRY.keys()),
         metavar="BOT",
-        help=f"Bots to compare (default: all except RL). Options: {list(BOT_CONFIGS.keys())}",
+        help=f"Bots to compare (default: all except RL). Options: {list(BOT_REGISTRY.keys())}",
     )
-    parser.add_argument("--no-rl",  action="store_true", help="Exclude RL agents (useful if not trained)")
-    parser.add_argument("--all",    action="store_true", help="Include RL if models exist")
+    parser.add_argument("--no-rl", action="store_true", help="Exclude RL agents (useful if not trained)")
+    parser.add_argument("--all",   action="store_true", help="Include RL if models exist")
     args = parser.parse_args()
 
     # Determine list of bots
     if args.bots:
         selected_keys = args.bots
     elif args.all:
-        selected_keys = list(BOT_CONFIGS.keys())
+        selected_keys = list(BOT_REGISTRY.keys())
     elif args.no_rl:
-        selected_keys = [k for k in BOT_CONFIGS if BOT_CONFIGS[k]["type"] != "rl"]
+        selected_keys = [k for k in BOT_REGISTRY if k not in ("ppo", "sac")]
     else:
         selected_keys = DEFAULT_BOTS  # all except RL
 

@@ -1,8 +1,7 @@
 # config/demo.yaml
 # Bots actius en el Demo Runner.
 # Posa enabled: false per desactivar un bot sense eliminar-lo.
-# El DemoRunner detecta automàticament el tipus (classic/ML/RL) pel camp
-# category del YAML unificat.
+# El DemoRunner detecta automàticament el tipus (classical/ML/RL) pel camp model_type del YAML.
 
 demo:
   symbol: BTC/USDT
@@ -12,33 +11,33 @@ demo:
 
 bots:
   # Classics
-  - config_path: config/models/hold.yaml
+  - config_path: config/bots/hold.yaml
     enabled: true
-  - config_path: config/models/trend.yaml
+  - config_path: config/bots/trend.yaml
     enabled: true
-  - config_path: config/models/dca.yaml
+  - config_path: config/bots/dca.yaml
     enabled: true
-  - config_path: config/models/grid.yaml
+  - config_path: config/bots/grid.yaml
     enabled: false
 
   # ML supervisat
-  - config_path: config/models/random_forest.yaml
+  - config_path: config/bots/ml_bot.yaml
     enabled: true
-  - config_path: config/models/xgboost.yaml
+  - config_path: config/bots/ml_bot_xgb.yaml
     enabled: true
-  - config_path: config/models/lightgbm.yaml
+  - config_path: config/bots/ml_bot_lgbm.yaml
     enabled: true
-  - config_path: config/models/catboost.yaml
+  - config_path: config/bots/ml_bot_catboost.yaml
     enabled: true
-  - config_path: config/models/gru.yaml
+  - config_path: config/bots/ml_bot_gru.yaml
     enabled: true
-  - config_path: config/models/patchtst.yaml
+  - config_path: config/bots/ml_bot_patchtst.yaml
     enabled: true
 
   # RL - activar despres d'executar train_rl.py
-  - config_path: config/models/ppo.yaml
+  - config_path: config/bots/rl_bot_ppo.yaml
     enabled: false
-  - config_path: config/models/sac.yaml
+  - config_path: config/bots/rl_bot_sac.yaml
     enabled: false
 
 exchange:

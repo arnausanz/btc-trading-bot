@@ -2,12 +2,14 @@
 
 > Instruccions concretes per afegir nous bots, models, agents i fonts de dades.
 > El sistema és dissenyat per ser extensible per herència i registre.
+> Per al schema complet dels YAMLs: veure **[CONFIGURATION.md](./CONFIGURATION.md)**.
 
 ---
 
 ## 1. Afegir un Bot Clàssic
 
 Un bot clàssic implementa regles deterministes (sense entrenament).
+**Un sol YAML** conté la config base i el search space d'Optuna.
 
 **Passos:**
 
@@ -46,36 +48,62 @@ class MyBot(BaseBot):
         )
 ```
 
-**1.2** Crea `config/bots/my_bot.yaml`:
+**1.2** Crea `config/models/my_bot.yaml` (YAML unificat):
 ```yaml
+category: classic
+model_type: my_bot       # ← ha de coincidir amb la clau del diccionari _CLASSICAL
 bot_id: my_bot_v1
-bot_class: bots.classical.my_bot.MyBot
-strategy_class: bots.classical.my_bot.MyStrategy
-params:
-  param1: 10
+symbol: BTC/USDT
+timeframe: 1h
+lookback: 50
+features: [close, rsi_14, ema_9]
+
+# Paràmetres de la estratègia (llegits directament pel bot)
+param1: 10
+
+# Search space per Optuna
+optimization:
+  n_trials: 50
+  metric: sharpe_ratio
+  direction: maximize
+  search_space:
+    param1:
+      type: int
+      low: 5
+      high: 50
 ```
 
-**1.3** Afegeix a `scripts/optimize_bots.py` (si vols optimitzar):
+**1.3** Afegeix a `scripts/optimize_bots.py`:
 ```python
+from bots.classical.my_bot import MyBot
+
 ALL_BOTS = {
-    "dca": "config/bots/dca.yaml",
-    "trend": "config/bots/trend.yaml",
-    "my_bot": "config/bots/my_bot.yaml",   # ← afegeix aquí
+    "dca":    {"class": DCABot,  "config": "config/models/dca.yaml"},
+    "trend":  {"class": TrendBot, "config": "config/models/trend.yaml"},
+    "my_bot": {"class": MyBot,   "config": "config/models/my_bot.yaml"},  # ← nou
 }
 ```
 
 **1.4** Afegeix a `scripts/run_comparison.py`:
 ```python
-BOT_CONFIGS = {
+BOT_REGISTRY = {
     ...
-    "my_bot": get_best_bot_config_path("my_bot"),  # ← afegeix aquí
+    "my_bot": "config/models/my_bot.yaml",   # ← nou
+}
+
+# I al diccionari _CLASSICAL dins _instantiate_bot():
+_CLASSICAL = {
+    "hold": HoldBot, "dca": DCABot,
+    "trend": TrendBot, "grid": GridBot,
+    "my_bot": MyBot,                         # ← nou
 }
 ```
 
 **1.5** Afegeix a `config/demo.yaml` (si vols al demo):
 ```yaml
 bots:
-  - config/bots/my_bot.yaml
+  - config_path: config/models/my_bot.yaml
+    enabled: true
 ```
 
 ---
@@ -83,6 +111,7 @@ bots:
 ## 2. Afegir un Model ML
 
 Un model ML s'integra via `MLBot` com a backend intercambiable.
+**Un sol YAML** conté tota la configuració: features, entrenament, Optuna i desplegament.
 
 **Passos:**
 
@@ -97,8 +126,13 @@ class MyModel(BaseMLModel):
         self.param1 = param1
         self.model = None
 
-    def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
-        # Entrena el model aquí
+    @classmethod
+    def from_config(cls, training_cfg: dict) -> "MyModel":
+        return cls(**training_cfg.get("model", {}))
+
+    def train(self, X: pd.DataFrame, y: pd.Series) -> dict:
+        # Entrena el model, retorna mètriques
+        # {"accuracy_mean": ..., "precision_mean": ..., "recall_mean": ...}
         pass
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
@@ -116,40 +150,78 @@ class MyModel(BaseMLModel):
 
 **2.2** Afegeix al registry de `bots/ml/ml_bot.py`:
 ```python
+from bots.ml.my_model import MyModel
+
 _MODEL_REGISTRY = {
-    "rf": RandomForestModel,
-    "xgb": XGBoostModel,
+    "random_forest": RandomForestModel,
+    "xgboost":       XGBoostModel,
     ...
-    "my_model": MyModel,   # ← afegeix aquí
+    "my_model": MyModel,   # ← model_type que posem al YAML
 }
 ```
 
-**2.3** Crea `config/training/my_model_experiment_1.yaml`:
+**2.3** Crea `config/models/my_model.yaml` (YAML unificat):
 ```yaml
-model_type: my_model
-params:
-  param1: 100
-train_until: "2024-12-31"
-target: price_up_1pct_in_24h
+category: ML
+model_type: my_model     # ← clau al _MODEL_REGISTRY
+symbol: BTC/USDT
+timeframes: [1h]
+forward_window: 24
+threshold_pct: 0.005
+
+features:
+  select: null           # null = totes; llista = subset de columnes
+  external: {}           # fonts externes (fear_greed, funding_rate, etc.)
+
+training:
+  experiment_name: my_model_v1
+  model_path: models/my_model_v1.pkl
+  model:
+    param1: 100
+
+optimization:
+  n_trials: 20
+  metric: accuracy_mean
+  direction: maximize
+  search_space:
+    param1:
+      type: int
+      low: 50
+      high: 300
+
+bot:
+  bot_id: ml_my_model_v1
+  lookback: 200
+  min_confidence: 0.4
+  trade_size: 0.5
+  prediction_threshold: 0.35
 ```
 
-**2.4** Crea `config/optimization/my_model.yaml`:
-```yaml
-model_type: my_model
-n_trials: 15
-metric: sharpe_ratio
-search_space:
-  param1:
-    type: int
-    low: 50
-    high: 300
+**2.4** Afegeix a `scripts/train_models.py`:
+```python
+ALL_CONFIGS = {
+    ...
+    "my_model": "config/models/my_model.yaml",   # ← nou
+}
+_KEY_TO_MODEL_TYPE = {
+    ...
+    "my_model": "my_model",                      # ← nou (clau → model_type al YAML)
+}
 ```
 
-**2.5** Afegeix a `optimize_models.py`:
+**2.5** Afegeix a `scripts/optimize_models.py`:
 ```python
 ALL_ML_CONFIGS = {
     ...
-    "my_model": "config/optimization/my_model.yaml",
+    "my_model": "config/models/my_model.yaml",   # ← nou
+}
+```
+
+**2.6** Afegeix a `scripts/run_comparison.py`:
+```python
+BOT_REGISTRY = {
+    ...
+    "my_model": "config/models/my_model.yaml",   # ← nou
 }
 ```
 
@@ -158,6 +230,8 @@ Ara `optimize_models.py`, `train_models.py` i `run_comparison.py` el detecten au
 ---
 
 ## 3. Afegir un Agent RL
+
+**Un sol YAML** unificat per a entrenament, Optuna i desplegament.
 
 **Passos:**
 
@@ -170,6 +244,10 @@ class MyAgent(BaseRLAgent):
     def __init__(self, learning_rate: float = 3e-4, **kwargs):
         self.learning_rate = learning_rate
         self.model = None
+
+    @classmethod
+    def from_config(cls, training_cfg: dict) -> "MyAgent":
+        return cls(**training_cfg.get("model", {}))
 
     def train(self, env, total_timesteps: int = 500_000) -> None:
         self.model = A2C("MlpPolicy", env, learning_rate=self.learning_rate, verbose=0)
@@ -187,14 +265,78 @@ class MyAgent(BaseRLAgent):
 
 **3.2** Afegeix al registry de `bots/rl/rl_bot.py`:
 ```python
+from bots.rl.agents.my_agent import MyAgent
+
 _AGENT_REGISTRY = {
-    "ppo": PPOAgent,
-    "sac": SACAgent,
-    "my_agent": MyAgent,   # ← afegeix aquí
+    "ppo":      PPOAgent,
+    "sac":      SACAgent,
+    "my_agent": MyAgent,   # ← nou
 }
 ```
 
-**3.3** Crea `config/training/my_agent_experiment_1.yaml` i `config/optimization/my_agent.yaml` seguint el mateix patró que `ppo` o `sac`.
+**3.3** Crea `config/models/my_agent.yaml` (YAML unificat):
+```yaml
+category: RL
+model_type: my_agent    # ← clau al _AGENT_REGISTRY
+symbol: BTC/USDT
+timeframe: 1h
+
+# CRÍTIC: obs_shape = len(select) × lookback
+# Ha de ser idèntic entre entrenament i desplegament.
+features:
+  lookback: 96
+  select:
+    - close
+    - rsi_14
+    - macd
+    - atr_14
+  external: {}
+
+training:
+  experiment_name: my_agent_v1
+  train_pct: 0.8
+  model_path: models/my_agent_v1
+  environment:
+    initial_capital: 10000.0
+    fee_rate: 0.001
+    reward_scaling: 100.0
+    reward_type: sharpe
+  model:
+    total_timesteps: 500000
+    learning_rate: 0.0003
+    policy: MlpPolicy
+
+optimization:
+  n_trials: 10
+  probe_timesteps: 20000
+  metric: val_return_pct
+  direction: maximize
+  search_space:
+    learning_rate: {type: float, low: 0.0001, high: 0.001, log: true}
+    reward_type: {type: categorical, choices: [simple, sharpe, sortino]}
+
+bot:
+  bot_id: rl_my_agent_v1
+  trade_size: 0.5
+```
+
+**3.4** Afegeix a `scripts/train_rl.py`:
+```python
+AVAILABLE_AGENTS = {
+    ...
+    "my_agent": "config/models/my_agent.yaml",   # ← nou
+}
+```
+
+**3.5** Afegeix a `scripts/run_comparison.py`:
+```python
+BOT_REGISTRY = {
+    ...
+    "my_agent": "config/models/my_agent.yaml",   # ← nou
+}
+```
+
+⚠️ **Regla crítica `obs_shape`:** si canvies `features.select` o `features.lookback` al YAML, has de re-entrenar el model. Mai canviar-los sense re-entrenar — causaria `ValueError: Unexpected observation shape`.
 
 ---
 
@@ -220,7 +362,17 @@ def compute_features(self, df: pd.DataFrame) -> pd.DataFrame:
     return df
 ```
 
-**4.3** Declara-la a l'`observation_schema()` del bot que la necessita:
+**4.3** Declara-la a `features.select` del YAML del bot que la necessita:
+```yaml
+# config/models/my_bot.yaml
+features:
+  select:
+    - close
+    - rsi_14
+    - my_indicator_14   # ← la nova feature
+```
+
+O per a bots clàssics, a l'`observation_schema()` del bot:
 ```python
 def observation_schema(self):
     return ObservationSchema(
@@ -233,54 +385,94 @@ def observation_schema(self):
 
 ## 5. Afegir una Font de Dades Externa
 
-> ⚠️ La infraestructura per a fonts externes és un **ROADMAP item** (pendent d'implementar).
-> Instruccions provisionals per al que existeix ara.
+El sistema ja té infraestructura completa per a fonts externes. Segueix el patró establert.
 
-**Situació actual:** L'`ObservationSchema` té un camp `extras: dict` però l'`ObservationBuilder` no el processa encara. Per ara, la manera d'afegir dades externes és com a columna addicional al DataFrame de features.
+**Fonts ja implementades** (com a referència):
+- `data/sources/fear_greed.py` → Fear & Greed Index (diari)
+- `data/sources/futures.py` → Funding Rate + Open Interest (8h / 1h)
+- `data/sources/blockchain.py` → Hash rate, adreces, fees (diari)
+- `data/sources/binance_vision.py` → Open Interest (5m, historial S3)
 
-**Exemple Fear & Greed Index (provisional):**
+**Passos per afegir una nova font:**
 
-**5.1** Crea `data/sources/fear_greed.py`:
+**5.1** Crea el model Pydantic a `core/models.py` (validació):
 ```python
-import requests
-import pandas as pd
+class MyExternalData(BaseModel):
+    timestamp: datetime
+    value: float
 
-def fetch_fear_greed_history() -> pd.DataFrame:
-    """Descàrrega l'historial del Fear & Greed Index (gratuït)."""
-    url = "https://api.alternative.me/fng/?limit=365&format=json"
-    resp = requests.get(url).json()
-    records = [{"timestamp": pd.Timestamp(int(r["timestamp"]), unit="s", tz="UTC"),
-                "fear_greed": int(r["value"])} for r in resp["data"]]
-    return pd.DataFrame(records).sort_values("timestamp").reset_index(drop=True)
-
-def fetch_fear_greed_current() -> int:
-    """Retorna el valor actual del Fear & Greed Index (0-100)."""
-    url = "https://api.alternative.me/fng/?limit=1&format=json"
-    resp = requests.get(url).json()
-    return int(resp["data"][0]["value"])
+    @field_validator("timestamp")
+    @classmethod
+    def ensure_utc(cls, v):
+        return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
 ```
 
-**5.2** Crea la taula a la BD:
-```sql
-CREATE TABLE fear_greed (
-    id SERIAL PRIMARY KEY,
-    timestamp TIMESTAMPTZ NOT NULL UNIQUE,
-    value INTEGER NOT NULL,         -- 0 (Extreme Fear) → 100 (Extreme Greed)
-    classification VARCHAR(50)      -- "Extreme Fear", "Fear", "Neutral", etc.
-);
-```
-
-**5.3** Afegeix el model SQLAlchemy a `core/db/models.py`:
+**5.2** Crea el model SQLAlchemy a `core/db/models.py`:
 ```python
-class FearGreedDB(Base):
-    __tablename__ = "fear_greed"
+class MyExternalDB(Base):
+    __tablename__ = "my_external"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, unique=True)
-    value: Mapped[int] = mapped_column(Integer, nullable=False)
-    classification: Mapped[str] = mapped_column(String(50))
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    value: Mapped[float] = mapped_column(Float, nullable=False)
+    __table_args__ = (UniqueConstraint("timestamp", name="uq_my_external_ts"),)
 ```
 
-**5.4** Incorpora com a feature al `DatasetBuilder` o `ObservationBuilder` via JOIN amb la taula de candles per `timestamp`.
+**5.3** Crea el fetcher `data/sources/my_source.py`:
+```python
+class MySourceFetcher:
+    def fetch_and_store(self, since: datetime | None = None) -> int:
+        """Descàrrega + validació + save. Idempotent."""
+        ...
+
+    def _save(self, entries: list[MyExternalData]) -> int:
+        """Bulk insert, omiteix duplicats via set de timestamps existents."""
+        ...
+
+    def get_last_timestamp(self) -> datetime | None:
+        ...
+
+    def update(self) -> int:
+        """Incremental: si BD buida → tot l'historial, sinó → darrers N registres."""
+        ...
+```
+
+**5.4** Crea la migració Alembic:
+```bash
+alembic revision --autogenerate -m "add_my_external"
+alembic upgrade head
+```
+
+**5.5** Afegeix el loader a `data/processing/external.py`:
+```python
+def load_my_external() -> pd.DataFrame:
+    """Retorna DataFrame UTC-indexed amb columna 'my_value'."""
+    with SessionLocal() as session:
+        rows = session.query(MyExternalDB).order_by(MyExternalDB.timestamp).all()
+    df = pd.DataFrame([{"timestamp": r.timestamp, "my_value": r.value} for r in rows])
+    return df.set_index("timestamp")
+```
+
+**5.6** Integra a `FeatureBuilder` (a `data/processing/feature_builder.py`):
+```python
+if self.external_cfg.get("my_source"):
+    ext = load_my_external()
+    df = pd.merge_asof(df, ext, left_index=True, right_index=True, direction="backward")
+```
+
+**5.7** Activa al YAML del model que la necesita:
+```yaml
+features:
+  external:
+    my_source: true
+  select:
+    - close
+    - rsi_14
+    - my_value   # ← nom de la columna afegida pel loader
+```
+
+**5.8** Crea els scripts de càrrega inicial i update:
+- `scripts/download_my_source.py` — descàrrega inicial (1 sola vegada)
+- `scripts/update_my_source.py` — actualització incremental (cron)
 
 ---
 
@@ -322,4 +514,4 @@ class EnsembleBot(BaseBot):
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.1*
+*Última actualització: Març 2026 · Versió 2.0*

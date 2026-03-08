@@ -1,0 +1,61 @@
+# config/models/xgboost.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# XGBoost — gradient boosting optimitzat
+# lr baix + molts arbres = recepta "golden" per a dades financeres sorolloses.
+# ─────────────────────────────────────────────────────────────────────────────
+category: ML
+model_type: xgboost
+symbol: BTC/USDT
+timeframes:
+  - 1h
+forward_window: 24       # Horitzó de predicció (hores)
+threshold_pct: 0.005     # Mínim 0.5% de moviment per considerar senyal positiu
+
+# ── Features ────────────────────────────────────────────────────────────────
+features:
+  select: null            # null = totes les columnes de FeatureBuilder
+  external: {}            # sense dades externes en aquest baseline
+
+# ── Entrenament ─────────────────────────────────────────────────────────────
+training:
+  experiment_name: xgboost_v1
+  model_path: models/xgboost_v1.pkl
+  model:
+    n_estimators: 500     # +300: compensa el learning_rate més baix
+    max_depth: 5          # -1: menys profund, millor generalització en sèries sorolloses
+    learning_rate: 0.02   # -0.03: lr baix + molts arbres és la recepta golden
+    scale_pos_weight: 2.0 # Compensació del desequilibri de classes
+
+# ── Optimització (Optuna) ────────────────────────────────────────────────────
+# Executar: python scripts/optimize_models.py --models xgb
+# Resultat guardat a: config/models/xgboost_optimized.yaml
+optimization:
+  n_trials: 30
+  metric: accuracy_mean
+  direction: maximize
+  search_space:
+    n_estimators:
+      type: int
+      low: 100
+      high: 500
+    max_depth:
+      type: int
+      low: 3
+      high: 10
+    learning_rate:
+      type: float
+      low: 0.01
+      high: 0.3
+      log: true
+    scale_pos_weight:
+      type: float
+      low: 1.0
+      high: 5.0
+
+# ── Desplegament (bot) ──────────────────────────────────────────────────────
+bot:
+  bot_id: ml_xgb_v1
+  lookback: 200
+  min_confidence: 0.4
+  trade_size: 0.5
+  prediction_threshold: 0.35

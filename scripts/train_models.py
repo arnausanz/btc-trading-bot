@@ -24,38 +24,50 @@ sys.path.append(".")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# Key → config file map (recommended training order: fast first)
+# Clau → YAML unificat (config/models/*.yaml)
+# Ordre recomanat: ràpids primer
 ALL_CONFIGS = {
-    "rf":       "config/training/rf_experiment_1.yaml",
-    "xgb":      "config/training/xgb_experiment_1.yaml",
-    "lgbm":     "config/training/lgbm_experiment_1.yaml",
-    "catboost": "config/training/catboost_experiment_1.yaml",
-    "gru":      "config/training/gru_experiment_1.yaml",
-    "patchtst": "config/training/patchtst_experiment_1.yaml",
+    "rf":       "config/models/random_forest.yaml",
+    "xgb":      "config/models/xgboost.yaml",
+    "lgbm":     "config/models/lightgbm.yaml",
+    "catboost": "config/models/catboost.yaml",
+    "gru":      "config/models/gru.yaml",
+    "patchtst": "config/models/patchtst.yaml",
+}
+
+# Mapeig clau → model_type per al registry
+_KEY_TO_MODEL_TYPE = {
+    "rf": "random_forest",
+    "xgb": "xgboost",
+    "lgbm": "lightgbm",
+    "catboost": "catboost",
+    "gru": "gru",
+    "patchtst": "patchtst",
 }
 
 
-def get_best_config_path(model_name: str) -> str:
+def get_best_config_path(model_key: str) -> str:
     """
-    Get the best available config path for a model.
+    Retorna el millor config disponible per a un model.
 
-    Checks for {model_name}_optimized.yaml first, then falls back to
-    {model_name}_experiment_1.yaml. Logs which config was selected.
+    Cerca primer {model_type}_optimized.yaml (generat per Optuna),
+    si no existeix usa el YAML base (config/models/{model_key}.yaml).
 
     Args:
-        model_name: Model key (e.g., 'rf', 'xgb', 'gru')
+        model_key: Clau del model (e.g., 'rf', 'xgb', 'gru')
 
     Returns:
-        Path to the config file to use
+        Path al fitxer de config a usar
     """
-    optimized = f"config/training/{model_name}_optimized.yaml"
-    default = f"config/training/{model_name}_experiment_1.yaml"
+    model_type = _KEY_TO_MODEL_TYPE.get(model_key, model_key)
+    optimized = f"config/models/{model_type}_optimized.yaml"
+    default = ALL_CONFIGS[model_key]
 
     if os.path.exists(optimized):
-        logger.info(f"Found optimized config for {model_name}: {optimized}")
+        logger.info(f"Found optimized config for {model_key}: {optimized}")
         return optimized
 
-    logger.info(f"Using default config for {model_name}: {default}")
+    logger.info(f"Using default config for {model_key}: {default}")
     return default
 
 if __name__ == "__main__":
@@ -100,12 +112,14 @@ if __name__ == "__main__":
             with open(config_path) as f:
                 config = yaml.safe_load(f)
 
-            name       = config["experiment_name"]
+            # Llegim des de la nova estructura unificada
+            name       = config["training"]["experiment_name"]
             model_type = config["model_type"]
             model_bar.set_description(f"Training {name}")
             mlflow.end_run()
 
             tqdm.write(f"\n── {name} ──")
+            # DatasetBuilder.from_config llegeix des del top-level (symbol, timeframes, ...)
             builder = DatasetBuilder.from_config(config)
             X, y    = builder.build()
             tqdm.write(f"  Dataset: {X.shape[0]} rows x {X.shape[1]} features")
@@ -113,9 +127,10 @@ if __name__ == "__main__":
             if model_type not in _MODEL_REGISTRY:
                 raise ValueError(f"Unknown model: {model_type}")
 
-            model   = _MODEL_REGISTRY[model_type].from_config(config)
+            # El model llegeix config["model"] → passem config["training"]
+            model   = _MODEL_REGISTRY[model_type].from_config(config["training"])
             metrics = model.train(X, y)
-            model.save(config["output"]["model_path"])
+            model.save(config["training"]["model_path"])
             results.append({"name": name, "accuracy": metrics["accuracy_mean"],
                 "precision": metrics["precision_mean"], "recall": metrics["recall_mean"]})
 

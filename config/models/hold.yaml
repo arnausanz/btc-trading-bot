@@ -1,0 +1,18 @@
+# config/models/hold.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# HoldBot — benchmark passiu (buy & hold)
+# Compra a l'inici i manté. Serveix de baseline per comparar la resta de bots.
+# ─────────────────────────────────────────────────────────────────────────────
+category: classic
+model_type: hold
+bot_id: hold_v1
+symbol: BTC/USDT
+timeframe: 1h
+lookback: 50
+features:
+  - close
+  - rsi_14
+  - ema_20
+
+# HoldBot no té paràmetres d'estratègia ni d'optimització.
+# Inclòs aquí per uniformitat del registry.

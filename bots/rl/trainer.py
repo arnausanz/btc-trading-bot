@@ -48,8 +48,29 @@ class RLTrainer:
             self.config = yaml.safe_load(f)
 
     def run(self) -> dict:
+        """
+        Entrena l'agent RL llegint del YAML unificat (config/models/*.yaml).
+
+        Schema esperat:
+          model_type: ppo
+          symbol: BTC/USDT
+          timeframe: 1h
+          features:
+            lookback: 96
+            select: [close, rsi_14, ...]
+            external: {}
+          training:
+            experiment_name: ppo_optimized
+            train_pct: 0.8
+            model_path: models/ppo_btc_v1
+            environment: {fee_rate: 0.001, ...}
+            model: {total_timesteps: 500000, learning_rate: ..., ...}
+        """
+        train_cfg = self.config["training"]
+        features_cfg = self.config["features"]
+
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-        mlflow.set_experiment(self.config["experiment_name"])
+        mlflow.set_experiment(train_cfg["experiment_name"])
         mlflow.end_run()
 
         with mlflow.start_run():
@@ -60,40 +81,34 @@ class RLTrainer:
                     f"Available: {list(_AGENT_REGISTRY.keys())}"
                 )
 
-            env_cfg = self.config["environment"]
-            features_cfg = self.config["data"].get("features", {})
-            select = features_cfg.get("select")
+            env_cfg = train_cfg["environment"]
+            # Sincronitzem lookback de features amb el de l'entorn
+            env_cfg = {**env_cfg, "lookback": features_cfg["lookback"]}
 
             # Build feature DataFrame via FeatureBuilder (consistent with deployment)
-            fb = FeatureBuilder.from_config(self.config["data"])
+            # FeatureBuilder.from_config() llegeix: symbol, timeframe, features (select + external)
+            fb = FeatureBuilder.from_config(self.config)
             df = fb.build()
 
             n_features = len(df.columns)
-            obs_shape = env_cfg["lookback"] * n_features
+            obs_shape = features_cfg["lookback"] * n_features
             logger.info(
-                f"Features: {n_features} columns, lookback={env_cfg['lookback']}, "
+                f"Features: {n_features} columns, lookback={features_cfg['lookback']}, "
                 f"obs_shape={obs_shape}"
             )
-            if select:
-                logger.info(f"  Selected: {select}")
-            else:
-                logger.warning(
-                    "  data.features.select is not configured — using ALL columns. "
-                    "This may cause obs_shape mismatch at inference if the bot config "
-                    "specifies a feature subset. Consider adding features.select."
-                )
+            logger.info(f"  Selected: {features_cfg.get('select')}")
 
             mlflow.log_params({
                 "model_type": agent_type,
-                "total_timesteps": self.config["model"]["total_timesteps"],
-                "lookback": env_cfg["lookback"],
+                "total_timesteps": train_cfg["model"]["total_timesteps"],
+                "lookback": features_cfg["lookback"],
                 "reward_type": env_cfg["reward_type"],
-                "timeframe": self.config["data"]["timeframe"],
+                "timeframe": self.config["timeframe"],
                 "n_features": n_features,
                 "obs_shape": obs_shape,
             })
 
-            split = int(len(df) * self.config["data"]["train_pct"])
+            split = int(len(df) * train_cfg["train_pct"])
             df_train = df.iloc[:split]
             df_val = df.iloc[split:]
             logger.info(f"Train: {len(df_train)} rows | Val: {len(df_val)} rows")
@@ -102,15 +117,16 @@ class RLTrainer:
             train_env = env_class(df=df_train, **env_cfg)
             val_env = env_class(df=df_val, **env_cfg)
 
-            agent = _AGENT_REGISTRY[agent_type].from_config(self.config)
+            # L'agent rep la secció training (que té la clau "model") igual que abans
+            agent = _AGENT_REGISTRY[agent_type].from_config(train_cfg)
             metrics = agent.train(
                 train_env=train_env,
                 val_env=val_env,
-                total_timesteps=self.config["model"]["total_timesteps"],
+                total_timesteps=train_cfg["model"]["total_timesteps"],
             )
 
             mlflow.log_metrics(metrics)
-            agent.save(self.config["output"]["model_path"])
+            agent.save(train_cfg["model_path"])
 
             logger.info(
                 f"  ✓ return={metrics['val_return_pct']}% "
@@ -118,3 +134,4 @@ class RLTrainer:
                 f"trades={metrics['val_trades']}"
             )
             return metrics
+

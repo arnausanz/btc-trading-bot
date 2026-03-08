@@ -28,12 +28,36 @@ _MODEL_REGISTRY: dict[str, type[BaseMLModel]] = {
 class MLBot(BaseBot):
     """
     ML/DL model-agnostic bot.
-    Adding a new model = adding an entry to _MODEL_REGISTRY.
+    Llegeix configs unificades de config/models/*.yaml.
+    Afegir un nou model = una línia a _MODEL_REGISTRY.
+
+    Config esperada (config/models/{model}.yaml):
+      category: ML
+      model_type: xgboost
+      timeframes: [1h]
+      training:
+        model_path: models/xgboost_v1.pkl
+      bot:
+        bot_id: ml_xgb_v1
+        lookback: 200
+        min_confidence: 0.4
+        trade_size: 0.5
+        prediction_threshold: 0.35
     """
 
-    def __init__(self, config_path: str = "config/bots/ml_bot.yaml"):
+    def __init__(self, config_path: str = "config/models/xgboost.yaml"):
         with open(config_path) as f:
-            config = yaml.safe_load(f)
+            raw = yaml.safe_load(f)
+
+        # Construïm config plana combinant root + bot section + claus derivades.
+        # Permet que observation_schema() i on_observation() accedeixin via
+        # self.config["key"] sense canviar la resta del codi.
+        config = {
+            **raw,
+            **raw.get("bot", {}),
+            "timeframe": raw.get("timeframe") or raw["timeframes"][0],
+            "model_path": raw["training"]["model_path"],
+        }
         super().__init__(bot_id=config["bot_id"], config=config)
         self._model = self._load_model()
         self._in_position = False

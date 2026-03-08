@@ -56,13 +56,19 @@ class DatasetBuilder:
 
     @classmethod
     def from_config(cls, config: dict) -> "DatasetBuilder":
+        """
+        Construeix DatasetBuilder des d'un config unificat (config/models/*.yaml).
+
+        Llegeix les claus directament del primer nivell del config:
+          symbol, timeframes, forward_window, threshold_pct, features.
+        """
         return cls(
-            symbol=config["data"]["symbol"],
-            timeframes=config["data"]["timeframes"],
-            forward_window=config["data"]["forward_window"],
-            threshold_pct=config["data"]["threshold_pct"],
-            train_until=config["data"].get("train_until", TRAIN_UNTIL),
-            features_cfg=config["data"].get("features", {}),
+            symbol=config["symbol"],
+            timeframes=config["timeframes"],
+            forward_window=config["forward_window"],
+            threshold_pct=config["threshold_pct"],
+            train_until=config.get("train_until", TRAIN_UNTIL),
+            features_cfg=config.get("features", {}),
         )
 
     def build(self) -> tuple[pd.DataFrame, pd.Series]:

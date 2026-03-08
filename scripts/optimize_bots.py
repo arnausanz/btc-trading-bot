@@ -2,15 +2,20 @@
 """
 Optimizes classical bots with Optuna (walk-forward, data up to TRAIN_UNTIL).
 
+El search space es llegeix del YAML unificat (config/models/{bot}.yaml),
+secció optimization.search_space. No cal modificar codi Python per canviar
+el search space — tot és configurable via YAML.
+
 Usage:
   python scripts/optimize_bots.py                    # optimize all
   python scripts/optimize_bots.py --bots dca trend   # only DCA and Trend
   python scripts/optimize_bots.py --bots grid        # only Grid
-  python scripts/optimize_bots.py --trials 50        # 50 trials instead of 30
+  python scripts/optimize_bots.py --trials 50        # override n_trials per tots
 """
 import argparse
 import logging
 import sys
+import yaml
 
 sys.path.append(".")
 
@@ -23,36 +28,13 @@ from core.config import TRAIN_UNTIL
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# ── Definition of all optimizable bots ──────────────────────────────────
+# ── Registry de bots optimitzables ──────────────────────────────────────────
+# El search space s'obté del YAML (secció optimization.search_space)
+# en lloc d'estar hardcoded aquí. Afegir un nou bot = 1 línia.
 ALL_BOTS = {
-    "dca": {
-        "class": DCABot,
-        "config": "config/bots/dca.yaml",
-        "space": {
-            "buy_every_n_ticks": {"type": "int",   "low": 6,    "high": 168},
-            "buy_size":          {"type": "float",  "low": 0.05, "high": 0.5},
-        },
-    },
-    "trend": {
-        "class": TrendBot,
-        "config": "config/bots/trend.yaml",
-        "space": {
-            "ema_fast":       {"type": "int",   "low": 5,   "high": 50},
-            "ema_slow":       {"type": "int",   "low": 20,  "high": 200},
-            "trade_size":     {"type": "float", "low": 0.1, "high": 1.0},
-            "rsi_overbought": {"type": "int",   "low": 60,  "high": 85},
-            "rsi_oversold":   {"type": "int",   "low": 15,  "high": 40},
-        },
-    },
-    "grid": {
-        "class": GridBot,
-        "config": "config/bots/grid.yaml",
-        "space": {
-            "level_size":      {"type": "float", "low": 0.02, "high": 0.3},
-            "rsi_filter_high": {"type": "int",   "low": 60,   "high": 85},
-            "rsi_filter_low":  {"type": "int",   "low": 15,   "high": 40},
-        },
-    },
+    "dca":   {"class": DCABot,  "config": "config/models/dca.yaml"},
+    "trend": {"class": TrendBot, "config": "config/models/trend.yaml"},
+    "grid":  {"class": GridBot,  "config": "config/models/grid.yaml"},
 }
 
 if __name__ == "__main__":
@@ -63,28 +45,39 @@ if __name__ == "__main__":
         metavar="BOT",
         help=f"Bots to optimize (default: all). Options: {list(ALL_BOTS.keys())}",
     )
-    parser.add_argument("--trials", type=int, default=30, help="Number of Optuna trials (default: 30)")
+    parser.add_argument(
+        "--trials", type=int, default=None,
+        help="Override n_trials (default: usa el valor del YAML optimization.n_trials)"
+    )
     args = parser.parse_args()
 
     logger.info(f"Walk-forward: optimizing ONLY on data up to {TRAIN_UNTIL}")
-    logger.info(f"Selected bots: {args.bots} | Trials: {args.trials}")
+    logger.info(f"Selected bots: {args.bots}")
 
     studies = {}
     for bot_key in args.bots:
-        cfg     = ALL_BOTS[bot_key]
-        logger.info(f"Optimizing {bot_key.upper()}Bot...")
+        cfg = ALL_BOTS[bot_key]
+
+        # Llegim search_space i n_trials directament del YAML unificat
+        with open(cfg["config"]) as f:
+            bot_yaml = yaml.safe_load(f)
+        opt_cfg = bot_yaml.get("optimization", {})
+        param_space = opt_cfg.get("search_space", {})
+        n_trials = args.trials if args.trials is not None else opt_cfg.get("n_trials", 30)
+
+        logger.info(f"Optimizing {bot_key.upper()}Bot | {n_trials} trials...")
         optimizer = BotOptimizer(
             bot_class=cfg["class"],
             base_config_path=cfg["config"],
-            param_space=cfg["space"],
-            n_trials=args.trials,
+            param_space=param_space,
+            n_trials=n_trials,
             train_until=TRAIN_UNTIL,
         )
         study = optimizer.run()
         studies[bot_key] = study
 
-        # Save the best config to config/bots/{bot_name}_optimized.yaml
-        out_path = f"config/bots/{bot_key}_optimized.yaml"
+        # Guarda el millor config a config/models/{bot}_optimized.yaml
+        out_path = f"config/models/{bot_key}_optimized.yaml"
         optimizer.save_best_config(study, out_path)
 
     logger.info("=== FINAL OPTIMIZATION SUMMARY ===")

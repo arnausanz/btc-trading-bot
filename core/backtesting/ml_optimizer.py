@@ -17,21 +17,26 @@ class MLOptimizer:
     Each trial = a complete training with Walk-Forward Cross-Validation.
     Objective metric: accuracy_mean | precision_mean | recall_mean (configurable).
 
+    Llegeix des del YAML unificat (config/models/*.yaml) — un sol fitxer conté
+    tota la informació: dades, training, optimization search space i bot config.
+
     Adding a new model to registry = automatically optimizable.
     """
 
-    def __init__(self, optimization_config_path: str):
-        with open(optimization_config_path) as f:
-            self.opt_cfg = yaml.safe_load(f)
+    def __init__(self, config_path: str):
+        """
+        Args:
+            config_path: ruta al YAML unificat (config/models/{model}.yaml)
+        """
+        with open(config_path) as f:
+            self.unified_cfg = yaml.safe_load(f)
 
-        with open(self.opt_cfg["base_config"]) as f:
-            self.base_train_cfg = yaml.safe_load(f)
-
-        self.model_type = self.opt_cfg["model_type"]
-        self.n_trials = self.opt_cfg["n_trials"]
-        self.metric = self.opt_cfg.get("metric", "accuracy_mean")
-        self.direction = self.opt_cfg.get("direction", "maximize")
-        self.search_space = self.opt_cfg["search_space"]
+        opt = self.unified_cfg["optimization"]
+        self.model_type = self.unified_cfg["model_type"]
+        self.n_trials = opt["n_trials"]
+        self.metric = opt.get("metric", "accuracy_mean")
+        self.direction = opt.get("direction", "maximize")
+        self.search_space = opt["search_space"]
 
     def _sample_params(self, trial: optuna.Trial) -> dict:
         """Samples hyperparameters from the search space defined in YAML."""
@@ -49,10 +54,10 @@ class MLOptimizer:
         return params
 
     def _build_config(self, params: dict) -> dict:
-        """Applies trial parameters to the base config."""
-        config = copy.deepcopy(self.base_train_cfg)
+        """Aplica paràmetres del trial al config unificat."""
+        config = copy.deepcopy(self.unified_cfg)
         for name, value in params.items():
-            config["model"][name] = value
+            config["training"]["model"][name] = value
         return config
 
     def _objective(self, trial: optuna.Trial) -> float:
@@ -77,10 +82,12 @@ class MLOptimizer:
 
         try:
             mlflow.end_run()
+            # DatasetBuilder.from_config llegeix des del top-level del config unificat
             builder = DatasetBuilder.from_config(config)
             X, y = builder.build()
 
-            model = _REGISTRY[self.model_type].from_config(config)
+            # El model llegeix config["model"] → passem config["training"]
+            model = _REGISTRY[self.model_type].from_config(config["training"])
             metrics = model.train(X, y)
 
             score = metrics.get(self.metric, 0.0)
@@ -121,12 +128,14 @@ class MLOptimizer:
         return self._build_config(study.best_params)
 
     def save_best_config(self, study: optuna.Study, output_path: str) -> None:
-        """Saves the best config as YAML ready for training."""
+        """Guarda el millor config unificat com a YAML llest per entrenar."""
         best = self.best_config(study)
-        best["experiment_name"] = f"{self.model_type}_optimized"
-        best["output"]["model_path"] = best["output"]["model_path"].replace(
-            ".pkl", "_optimized.pkl"
-        ).replace(".pt", "_optimized.pt")
+        best["training"]["experiment_name"] = f"{self.model_type}_optimized"
+        orig_path = best["training"]["model_path"]
+        best["training"]["model_path"] = (
+            orig_path.replace(".pkl", "_optimized.pkl")
+                     .replace(".pt", "_optimized.pt")
+        )
         with open(output_path, "w") as f:
             yaml.dump(best, f, default_flow_style=False, allow_unicode=True)
         logger.info(f"  Optimized config saved to {output_path}")

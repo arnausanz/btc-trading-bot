@@ -1,0 +1,61 @@
+# config/models/catboost.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# CatBoost — gradient boosting amb ordered boosting per a dades tabulars
+# L'ordered boosting protegeix de l'overfitting amb dades temporals.
+# ─────────────────────────────────────────────────────────────────────────────
+category: ML
+model_type: catboost
+symbol: BTC/USDT
+timeframes:
+  - 1h
+forward_window: 24       # Horitzó de predicció (hores)
+threshold_pct: 0.005     # Mínim 0.5% de moviment per considerar senyal positiu
+
+# ── Features ────────────────────────────────────────────────────────────────
+features:
+  select: null            # null = totes les columnes de FeatureBuilder
+  external: {}            # sense dades externes en aquest baseline
+
+# ── Entrenament ─────────────────────────────────────────────────────────────
+training:
+  experiment_name: catboost_v1
+  model_path: models/catboost_v1.pkl
+  model:
+    iterations: 700       # +400: CatBoost convergeix bé amb ordered boosting
+    depth: 6              # Sweet spot per a dades tabulars financeres
+    learning_rate: 0.03   # Robust a lr entre 0.01-0.1
+    scale_pos_weight: 2.0
+
+# ── Optimització (Optuna) ────────────────────────────────────────────────────
+# Executar: python scripts/optimize_models.py --models catboost
+# Resultat guardat a: config/models/catboost_optimized.yaml
+optimization:
+  n_trials: 30
+  metric: accuracy_mean
+  direction: maximize
+  search_space:
+    iterations:
+      type: int
+      low: 100
+      high: 500
+    depth:
+      type: int
+      low: 3
+      high: 10
+    learning_rate:
+      type: float
+      low: 0.01
+      high: 0.3
+      log: true
+    scale_pos_weight:
+      type: float
+      low: 1.0
+      high: 5.0
+
+# ── Desplegament (bot) ──────────────────────────────────────────────────────
+bot:
+  bot_id: ml_catboost_v1
+  lookback: 200
+  min_confidence: 0.4
+  trade_size: 0.5
+  prediction_threshold: 0.35

@@ -1,0 +1,51 @@
+# config/models/trend.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# TrendBot — seguiment de tendència amb EMA creuament + filtre RSI
+# Compra quan EMA ràpida creua per sobre EMA lenta i RSI no és sobrecomprat.
+# Ven quan es dóna el creuament invers o RSI sobrecomprat.
+# ─────────────────────────────────────────────────────────────────────────────
+category: classic
+model_type: trend
+bot_id: trend_v1
+symbol: BTC/USDT
+timeframe: 1h
+lookback: 200
+features:
+  - close
+  - rsi_14
+
+# ── Paràmetres d'estratègia ─────────────────────────────────────────────────
+ema_fast: 47             # EMA ràpida (períodes)
+ema_slow: 179            # EMA lenta (períodes) — sempre > ema_fast + 10
+rsi_overbought: 70       # No compra si RSI supera aquest valor
+rsi_oversold: 33         # No ven si RSI és inferior a aquest valor
+trade_size: 0.53         # Fracció del capital per operació
+
+# ── Optimització (Optuna) ────────────────────────────────────────────────────
+# Executar: python scripts/optimize_bots.py --bots trend
+# Resultat guardat a: config/models/trend_optimized.yaml
+optimization:
+  n_trials: 100
+  metric: sharpe_ratio
+  direction: maximize
+  search_space:
+    ema_fast:
+      type: int
+      low: 5
+      high: 50
+    ema_slow:
+      type: int
+      low: 20
+      high: 200
+    trade_size:
+      type: float
+      low: 0.1
+      high: 1.0
+    rsi_overbought:
+      type: int
+      low: 60
+      high: 85
+    rsi_oversold:
+      type: int
+      low: 15
+      high: 40

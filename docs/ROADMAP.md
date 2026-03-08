@@ -24,8 +24,9 @@
 | TelegramNotifier | ✅ Operatiu | Trades, status horari, drawdown |
 | Tests (smoke + unit) | ✅ 123 tests | Cobertura bàsica sense BD |
 | Optimize workflow | ✅ Operatiu | Auto-carrega `_optimized.yaml` |
+| Config YAML unificat | ✅ Operatiu | Un YAML per model (classic/ML/RL), search space integrat |
 | Walk-forward split | ✅ Operatiu | TRAIN_UNTIL / TEST_FROM al settings |
-| Documentació | ✅ Completa | PROJECT, MODELS, DB, EXTENDING, CONFIG |
+| Documentació | ✅ Completa | PROJECT, MODELS, DB, EXTENDING, CONFIG (v2.0 YAML unificat) |
 | Mètriques backtesting | ✅ Correctes | Sharpe/Calmar/WinRate correctament implementats |
 | Dashboard (Streamlit) | ⚠️ Bàsic | Només preus de la BD |
 | Tests d'integració | ⚠️ Esquelet | 5 tests, necessiten BD real |
