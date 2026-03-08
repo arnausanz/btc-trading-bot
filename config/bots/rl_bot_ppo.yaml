@@ -2,11 +2,14 @@
 bot_id: rl_ppo_v1
 symbol: BTC/USDT
 timeframe: 1h
-lookback: 50
+lookback: 96             # MUST match environment.lookback in ppo_optimized.yaml
 model_type: ppo
 model_path: models/ppo_btc_v1
 trade_size: 0.5
 
+# ── Feature list ───────────────────────────────────────────────────────────────
+# MUST match data.features.select in ppo_optimized.yaml (the training config used)
+# obs_shape = len(features) × lookback = 9 × 96 = 864
 features:
   - close
   - rsi_14
@@ -17,3 +20,8 @@ features:
   - bb_upper_20
   - bb_lower_20
   - bb_middle_20
+
+# ── External data sources ──────────────────────────────────────────────────────
+# MUST match data.features.external in the training config.
+# ObservationBuilder uses this to load the same data as training.
+external: {}   # no external features in this baseline bot

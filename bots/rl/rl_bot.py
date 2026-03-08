@@ -51,6 +51,10 @@ class RLBot(BaseBot):
             features=self.config["features"],
             timeframes=[self.config["timeframe"]],
             lookback=self.config["lookback"],
+            # Pass external config so ObservationBuilder loads the same data
+            # sources as used during training. Must match data.features.external
+            # in the corresponding training config.
+            extras={"external": self.config.get("external", {})},
         )
 
     def on_observation(self, observation: dict) -> Signal:

@@ -62,7 +62,6 @@ class RLOptimizer:
         from bots.rl.agents import SACAgent, PPOAgent
         from bots.rl.environment import BtcTradingEnvDiscrete, BtcTradingEnvContinuous
         from bots.rl.rewards import builtins  # noqa: registra builtins
-        from data.processing.technical import compute_features
 
         _AGENT_REGISTRY: dict[str, type[BaseRLAgent]] = {
             "sac": SACAgent,
@@ -78,10 +77,8 @@ class RLOptimizer:
 
         try:
             mlflow.end_run()
-            df = compute_features(
-                symbol=config["data"]["symbol"],
-                timeframe=config["data"]["timeframe"],
-            )
+            from data.processing.feature_builder import FeatureBuilder
+            df = FeatureBuilder.from_config(config["data"]).build()
             split = int(len(df) * config["data"]["train_pct"])
             df_train = df.iloc[:split]
             df_val = df.iloc[split:]

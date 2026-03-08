@@ -2,10 +2,27 @@ data:
   symbol: BTC/USDT
   timeframe: 1h
   train_pct: 0.8
+
+  # ── Feature config ──────────────────────────────────────────────────────────
+  # features.select MUST match config/bots/rl_bot_sac.yaml features list
+  # obs_shape = len(select) × environment.lookback = 9 × 96 = 864
+  features:
+    external: {}
+    select:
+      - close
+      - rsi_14
+      - macd
+      - macd_signal
+      - macd_hist
+      - atr_14
+      - bb_upper_20
+      - bb_lower_20
+      - bb_middle_20
+
 environment:
   fee_rate: 0.001
   initial_capital: 10000.0
-  lookback: 96
+  lookback: 96           # MUST match config/bots/rl_bot_sac.yaml lookback
   reward_scaling: 100.0
   reward_type: sortino
 experiment_name: sac_optimized

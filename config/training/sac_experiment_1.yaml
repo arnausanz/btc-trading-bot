@@ -7,6 +7,22 @@ data:
   timeframe: 1h
   train_pct: 0.8
 
+  # ── Feature config ──────────────────────────────────────────────────────────
+  # features.select MUST match config/bots/rl_bot_sac.yaml features list
+  # obs_shape = len(select) × environment.lookback = 9 × 50 = 450
+  features:
+    external: {}   # no external features in this baseline experiment
+    select:
+      - close
+      - rsi_14
+      - macd
+      - macd_signal
+      - macd_hist
+      - atr_14
+      - bb_upper_20
+      - bb_lower_20
+      - bb_middle_20
+
 environment:
   lookback: 50
   initial_capital: 10000.0
