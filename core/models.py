@@ -101,3 +101,72 @@ class Trade(BaseModel):
     @property
     def is_profitable(self) -> bool:
         return self.pnl_realized > 0
+
+
+class FearGreedEntry(BaseModel):
+    timestamp: datetime
+    value: int
+    classification: str
+
+    @field_validator("value")
+    @classmethod
+    def value_in_range(cls, v):
+        if not 0 <= v <= 100:
+            raise ValueError("value ha d'estar entre 0 i 100")
+        return v
+
+
+# --- Dades on-chain ---
+
+class FundingRateEntry(BaseModel):
+    """Funding rate d'un contracte perp de Binance (cada 8h)."""
+    symbol: str
+    timestamp: datetime
+    rate: float  # e.g. 0.0001 = 0.01%; pot ser negatiu
+
+
+class OpenInterestEntry(BaseModel):
+    """Open interest d'un contracte perp de Binance a una granularitat donada."""
+    symbol: str
+    timeframe: str          # e.g. '1h'
+    timestamp: datetime
+    open_interest_btc: float   # quantitat en BTC
+    open_interest_usdt: float  # valor en USDT
+
+    @field_validator("open_interest_btc", "open_interest_usdt")
+    @classmethod
+    def must_be_non_negative(cls, v):
+        if v < 0:
+            raise ValueError("open interest no pot ser negatiu")
+        return v
+
+
+# Mètriques vàlides de Blockchain.com Charts
+BLOCKCHAIN_METRICS = frozenset({
+    "hash-rate",           # TH/s — potència de mineria de la xarxa
+    "n-unique-addresses",  # nombre d'adreces actives úniques diàries
+    "transaction-fees",    # comissions totals diàries (en BTC)
+})
+
+
+class BlockchainMetricEntry(BaseModel):
+    """Mètrica diària de la xarxa Bitcoin via Blockchain.com Charts API."""
+    metric: str
+    timestamp: datetime
+    value: float
+
+    @field_validator("metric")
+    @classmethod
+    def metric_must_be_known(cls, v):
+        if v not in BLOCKCHAIN_METRICS:
+            raise ValueError(
+                f"metric '{v}' no és coneguda. Vàlides: {sorted(BLOCKCHAIN_METRICS)}"
+            )
+        return v
+
+    @field_validator("value")
+    @classmethod
+    def value_must_be_non_negative(cls, v):
+        if v < 0:
+            raise ValueError("value no pot ser negatiu")
+        return v

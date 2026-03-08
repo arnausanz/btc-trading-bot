@@ -1,0 +1,22 @@
+data:
+  symbol: BTC/USDT
+  timeframe: 1h
+  train_pct: 0.8
+environment:
+  fee_rate: 0.001
+  initial_capital: 10000.0
+  lookback: 96
+  reward_scaling: 100.0
+  reward_type: sharpe
+experiment_name: ppo_optimized
+model:
+  batch_size: 128
+  gamma: 0.9674809130079859
+  learning_rate: 0.00012260057359187533
+  n_epochs: 10
+  n_steps: 2048
+  policy: MlpPolicy
+  total_timesteps: 500000
+model_type: ppo
+output:
+  model_path: models/ppo_btc_v1

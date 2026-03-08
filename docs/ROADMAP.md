@@ -22,189 +22,255 @@
 | BotComparator | ✅ Operatiu | Ranking per Sharpe |
 | DemoRunner (multi-bot) | ✅ Operatiu | Persistència + Telegram |
 | TelegramNotifier | ✅ Operatiu | Trades, status horari, drawdown |
-| Tests (smoke + unit) | ✅ 123 tests | Smoke + unit passen |
+| Tests (smoke + unit) | ✅ 123 tests | Cobertura bàsica sense BD |
+| Optimize workflow | ✅ Operatiu | Auto-carrega `_optimized.yaml` |
+| Walk-forward split | ✅ Operatiu | TRAIN_UNTIL / TEST_FROM al settings |
+| Documentació | ✅ Completa | PROJECT, MODELS, DB, EXTENDING, CONFIG |
+| Mètriques backtesting | ✅ Correctes | Sharpe/Calmar/WinRate correctament implementats |
 | Dashboard (Streamlit) | ⚠️ Bàsic | Només preus de la BD |
+| Tests d'integració | ⚠️ Esquelet | 5 tests, necessiten BD real |
+| Dades externes | ❌ Pendent | Fear & Greed, on-chain, NLP |
+| EnsembleBot | ❌ Pendent | Meta-capa de combinació |
 | Feature Store | ❌ Pendent | Placeholder reservat |
 | Risk Manager | ❌ Pendent | Placeholder reservat |
-| Dades externes | ❌ Pendent | Fear & Greed, on-chain |
-| EnsembleBot | ❌ Pendent | Meta-capa de combinació |
-| Tests d'integració | ⚠️ Buits | Necessiten BD real |
 
 ---
 
-## Prioritats — ordre recomanat
-
-### 🔴 Crític (fer primer)
-
-#### 1. Corregir les mètriques de backtesting
-Les mètriques actuals estan mal calculades i fan que tots els resultats siguin incomparables amb benchmarks estàndard.
-
-- **Sharpe Ratio:** ha d'usar `sqrt(252*24)` per a dades horàries (no `sqrt(365)`)
-- **Calmar Ratio:** cal calcular dies reals, no `len(df)`
-- **Win Rate:** cal mesurar round-trips (buy→sell), no canvis positius entre ticks
-- **Afegir:** Sortino Ratio, Profit Factor, Max Consecutive Losses, Average Trade Duration
-
-_Fitxers afectats:_ `core/backtesting/metrics.py`
+## Tasques pendents
 
 ---
 
-#### 2. Walk-forward backtesting real
-El backtesting actual fa un sol split train/test. Cal implementar validació amb finestra lliscant.
+### 🟡 B — Dades externes
 
-- Implementar `TimeSeriesSplit` amb N folds sobre el temps
-- Assegurar que les últimes N setmanes mai s'usen per a optimització
-- Benchmark automàtic: HoldBot s'executa en cada fold
+L'objectiu és enriquir el feature vector de tots els models amb informació que va més enllà del preu. Cada font necessita: **script de descàrrega d'historial**, **taula a la BD**, **script d'actualització periòdica (cron)**, i **integració al DatasetBuilder / ObservationBuilder**.
 
-_Fitxers afectats:_ `core/backtesting/optimizer.py`, `scripts/run_comparison.py`
+#### B1. Fear & Greed Index
+La font més fàcil i gratuïta. Impacte directe en sentiment del mercat.
 
----
-
-#### 3. Re-executar tots els backtests amb mètriques correctes
-Quan les mètriques siguin correctes, els resultats anteriors no seran vàlids. Cal reiniciar els backtests.
-
----
-
-### 🟡 Prioritat mitjana
-
-#### 4. Fear & Greed Index com a feature
-
-**API disponible (gratuïta):** `https://api.alternative.me/fng/`
-
-- Descarregar historial complet (des de 2018): `?limit=2000&format=json`
-- Valor actual: `?limit=1&format=json`
-- Retorna un valor 0-100 i una classificació: `Extreme Fear`, `Fear`, `Neutral`, `Greed`, `Extreme Greed`
-
-**Implementació:**
-1. Crear `data/sources/fear_greed.py` amb `fetch_history()` i `fetch_current()`
-2. Crear taula `fear_greed` a la BD: `(timestamp, value, classification)`
-3. Afegir script `scripts/update_fear_greed.py` (cridat per cron diàriament)
-4. Integrar com a feature numèrica al `DatasetBuilder` i `ObservationBuilder`
-5. Els models ML reben `fear_greed_value` com a columna del feature vector
-
-Veure recepte complet a **[EXTENDING.md → Secció 5](./EXTENDING.md)**.
+- **API gratuïta:** `https://api.alternative.me/fng/`
+- Historial: `?limit=2000&format=json` (des de 2018, diari)
+- Valor actual: `?limit=1&format=json` → 0 (Extreme Fear) a 100 (Extreme Greed)
+- **Taula BD nova:** `fear_greed (timestamp, value, classification)`
+- **Script nou:** `scripts/update_fear_greed.py` (cron diari)
+- **Feature:** `fear_greed_value` com a columna numèrica al feature vector
 
 ---
 
-#### 5. EnsembleBot
+#### B2. Dades on-chain
+Indicadors de comportament dels wallets i xarxa Bitcoin. Correlació alta amb cicles de mercat.
 
-Meta-bot que combina senyals de múltiples sub-bots sense necessitat d'entrenament addicional.
+| Mètrica | Descripció | Font |
+|---------|-----------|------|
+| SOPR | Spent Output Profit Ratio: ven la gent amb guanys o pèrdues? | Glassnode (API de pagament) |
+| MVRV Z-score | Valora si BTC és car o barat vs. valor realitzat | Glassnode / CryptoQuant |
+| Exchange flows | Entrada/sortida de BTC als exchanges (acumulació vs. distribució) | Glassnode / CryptoQuant |
+| Funding rates | Cost de mantenir posicions als futurs perpetus | Binance API (gratuïta) |
+| Open Interest | Posicions obertes en derivats | Binance / Coinglass API |
+| Dominàncid BTC | % de dominàncid de BTC sobre el mercat cripto | CoinGecko API (gratuïta) |
 
-**Polítiques a implementar:**
-- `majority_vote`: si >50% de bots diuen BUY → BUY
-- `weighted`: pes proporcional al Sharpe dels últims N dies
-- `unanimous`: només actua si TOTS coincideixen (molt conservador)
-- `stacking`: un model ML de 2a capa entrena sobre les prediccions dels bots base
-
-**Fitxers nous:** `bots/ensemble/ensemble_bot.py`, `config/bots/ensemble.yaml`
-
-Veure disseny a **[EXTENDING.md → Secció 6](./EXTENDING.md)**.
-
----
-
-#### 6. Nous bots clàssics
-
-| Bot | Lògica | Prioritat |
-|-----|--------|-----------|
-| MeanReversionBot | RSI extrems (<20 / >80) + Z-score del preu | 🟡 |
-| MomentumBot | Rate of Change (ROC) + confirmació de volum | 🟡 |
-| BreakoutBot | Suports/resistències (pivot points) + ATR per confirmar | 🟢 |
+**Acció:** Valorar quines APIs son gratuïtes o assequibles, prioritzar funding rates i dominàncid (gratuïtes) primer.
 
 ---
 
-#### 7. Nous models ML
+#### B3. Anàlisi de notícies i sentiment (NLP)
+La font més complexa però potencialment la més poderosa per anticipar moviments.
 
-| Model | Tipus | Descripció |
-|-------|-------|-----------|
-| Temporal Fusion Transformer (TFT) | Deep Learning | Estat de l'art per séries temporals financeres; suporta covarites externes, multi-horizon |
-| N-BEATS / N-HiTS | Deep Learning | Arquitectures pures sense RNN; molt eficients per forecasting |
-| TabNet | Tabular | Supera XGBoost en alguns benchmarks; interpretable via atenció |
+**Opcions per obtenir el senyal:**
+- **Claude API:** enviar titulars/articles i demanar un score de sentiment BTC (-1.0 a 1.0) + classificació de rellevància. Flexible i d'alta qualitat, però té cost per token.
+- **BERT/FinBERT fine-tuned:** model local entrenat en notícies financeres. Gratuït en inferència, però cal mantenir-lo.
+- **CryptoPanic API:** agrega notícies de cripto amb votes (bullish/bearish) de la comunitat. Té pla gratuït.
+
+**Fonts de notícies candidates:** CryptoPanic, CoinDesk RSS, Reuters cripto, tweets de comptes influents (X API).
+
+**Historial per entrenament:** CryptoPanic té historial via API. Per a sentiment retroactiu amb Claude/BERT, caldria processar un arxiu de titulars antics.
+
+**Estructura proposada:**
+```
+data/sources/
+├── fear_greed.py        # B1
+├── onchain.py           # B2
+└── news_sentiment.py    # B3 (fetch + score via Claude API o FinBERT)
+```
+
+**Taula BD genèrica per a tot extern:**
+```sql
+CREATE TABLE external_signals (
+    id SERIAL PRIMARY KEY,
+    source VARCHAR(50),        -- 'fear_greed', 'sopr', 'news_sentiment', etc.
+    timestamp TIMESTAMPTZ,
+    value FLOAT,               -- el valor numèric principal
+    metadata JSON              -- dades extra (classificació, text, etc.)
+);
+```
 
 ---
 
-#### 8. Millores RL
+### 🟡 C — Nous bots
 
-| Millora | Descripció | Prioritat |
+Cada bot nou segueix el cicle complet: recerca → implementació → configuració → optimització Optuna → backtest → (si supera HoldBot) → demo.
+
+#### C1. Bots clàssics pendents
+
+| Bot | Lògica | Estat |
+|-----|--------|-------|
+| MeanReversionBot | RSI extrems (<20/>80) + Z-score del preu vs. mitjana | ❌ Pendent |
+| MomentumBot | Rate of Change (ROC) + confirmació de volum | ❌ Pendent |
+| BreakoutBot | Suports/resistències (pivot points) + ATR per confirmar | ❌ Pendent |
+
+---
+
+#### C2. Nous models ML
+
+Cada model nou necessita: implementació `BaseMLModel`, entrada al `_MODEL_REGISTRY`, config d'entrenament + Optuna, backtest complet.
+
+| Model | Tipus | Notes |
+|-------|-------|-------|
+| Temporal Fusion Transformer (TFT) | Deep Learning | Estat de l'art per séries temporals financeres amb covarites externes; ideal per incorporar dades de B1/B2/B3 |
+| N-BEATS / N-HiTS | Deep Learning | Arquitectures pures sense RNN; molt eficients |
+| TabNet | Tabular | Competitiu amb XGBoost, interpretable via atenció |
+
+---
+
+#### C3. Nous agents RL — investigació profunda
+
+**El problema actual:** PPO i SAC s'han implementat ràpidament amb rewards simples (retorn directe). Però un trader professional no pren decisions basant-se únicament en el retorn instantani.
+
+**Objectiu d'aquesta fase:** fer una investigació profunda sobre com treballa un trader professional — quins factors considera, com gestiona el risc, quan entra i surt — i traduir aquesta mentalitat en una política RL ben definida.
+
+**Preguntes a respondre durant la recerca:**
+- Com gestiona el risc un trader professional? (stop-loss, position sizing, correlació d'actius)
+- Quina és la diferència entre momentum trading, swing trading i scalping en termes de senyals d'entrada?
+- Com es defineix "una bona entrada"? (confirmació múltiple vs. senyal ràpid)
+- Com s'aplica el concepte de "regime detection" (tendència vs. rang vs. alta volatilitat)?
+- Quins indicadors usen els traders professionals vs. els que usen els bots? On hi ha divergència?
+
+**Elements clau per a la política RL:**
+
+| Element | Descripció |
+|---------|-----------|
+| Reward shaping | Penalitzar drawdown (calmar-based), overtrading (cost per operació), inactivitat excessiva |
+| Position sizing | L'agent controla el sizing [0.0–1.0], no sempre tot el capital |
+| Regime detection | L'entorn informa l'agent del règim de mercat actual |
+| Multi-timeframe obs | L'observation inclou 1h + 4h + 1d simultàniament |
+| Portfolio state | USDT balance, BTC balance, PnL latent com a part de l'observation |
+| Stop-loss implícit | Reward molt negatiu per drawdowns superiors a X% |
+
+**Nous agents a investigar i implementar:**
+
+| Agent | Notes |
+|-------|-------|
+| TD3 (Twin Delayed DDPG) | Millor que SAC en entorns molt sorollosos; estable |
+| Curriculum learning (PPO/SAC) | Entrenar en fases: tendències clares → rangs → alta volatilitat |
+| DreamerV3 | Model-based RL; aprèn un model intern del mercat i simula internament — molt eficient en mostres |
+
+---
+
+### 🟡 D — EnsembleBot
+
+La capa de meta-decisió: combinar els senyals de tots els bots per produir un sol senyal més robust.
+
+**Més allà del propi bot, caldrà:**
+- **Historial de prediccions:** guardar els senyals de cada bot a la BD per poder calcular pesos dinàmics
+- **Mètriques en finestra lliscant:** calcular el Sharpe dels últims N dies per bot per ponderar el vote
+- **Backtest de l'ensemble:** sistema per backtesta combinacions de bots (no un bot sol)
+- **Selecció de components:** assegurar diversitat baixa correlació entre els bots seleccionats
+
+**Polítiques a implementar (per ordre de complexitat):**
+
+| Política | Descripció | Quan usar |
 |---------|-----------|-----------|
-| Reward shaping | Penalitzar drawdown i trading excessiu (calmar-based reward) | 🔴 |
-| Position sizing PPO | L'agent discret hauria de poder invertir fraccions, no sempre el 100% | 🔴 |
-| TD3 (Twin Delayed DDPG) | Millor que SAC per a entorns molt sorollosos | 🟡 |
-| Curriculum learning | Entrenar primer en tendències clares, després en rangs | 🟡 |
-| Multi-step returns | Millora la propagació de recompenses a llarg termini | 🟡 |
-| DreamerV3 | Model-based RL; aprèn un model intern del mercat | 🟢 |
+| `majority_vote` | Si >50% de bots diuen BUY → BUY | Punt de partida |
+| `weighted` | Pes proporcional al Sharpe dels últims N dies | Quan alguns bots son clarament millors |
+| `unanimous` | Només actua si TOTS coincideixen | Molt conservador, poques operacions |
+| `regime_routing` | Selecciona el millor bot per règim de mercat | Quan tenim detecció de règim |
+| `stacking` | Model ML de 2a capa entrena sobre les prediccions | Quan tenim prou historial de predictions |
 
 ---
 
-### 🟢 Futur (quan hi hagi dades demo de qualitat)
+### 🟢 E — Millores del sistema
 
-#### 9. Correccions del DemoRunner
+#### E1. Telegram millorat per al demo
+Quan hi hagi mesos de dades de demo reals, millorar les notificacions:
 
-- **Sincronització de candles:** el bot ha d'actuar quan tanca una candle, no cada minut. Implementar detecció de "nova candle tancada"
+- **Resum diari:** PnL de cada bot, millor/pitjor del dia, comparativa vs. BTC spot
+- **Alertes de drawdown:** configurables per bot (ex: alerta si drawdown > 10%)
+- **Rànquing setmanal:** quin bot va millor la setmana
+- **Comandes interactives:** `/status`, `/portfolio`, `/trades`, `/ranking` via Telegram bot
+- **Gràfics:** enviar una imatge amb el portfolio de cada bot (matplotlib inline)
+
+---
+
+#### E2. Correccions del DemoRunner
+
+- **Sincronització de candles:** el bot ha d'actuar quan tanca una candle (1 cop/hora), no cada 60s sobre la mateixa candle oberta
 - **Persistir estat intern:** `_in_position` i `_tick_count` han de persistir a la BD i restaurar-se en reiniciar
 
 ---
 
-#### 10. Infraestructura de dades externes
+#### E3. Dashboard complet
+Quan hi hagi mesos de dades de demo reals:
 
-Crear `DataSourceRegistry`: un sistema d'extensions on cada font de dades s'integra com a mòdul independent.
-
-**Fonts candidates:**
-- Fear & Greed Index (gratuïta) ← **PRIORITAT ALTA** (veure punt 4)
-- Sentiment de Twitter/X (API de pagament)
-- On-chain: SOPR, MVRV, exchange flows (Glassnode API — de pagament)
-- Dominàncid BTC (CoinGecko API — gratuïta)
-- Google Trends (pytrends — gratuïta)
-- Funding rates perpetus (Binance API — gratuïta)
-
----
-
-#### 11. Dashboard complet
-
-Quan hi hagi dades de demo reals:
-- Portfolios en temps real per bot
-- PnL acumulat i diari (gràfic)
-- Drawdowns visuals
-- Trade log amb filtre per bot
-- Comparativa vs BTC spot (benchmark)
+- Portfolios en temps real per bot (gràfic PnL acumulat)
+- Drawdowns visuals i alertes configurables
+- Trade log amb filtre per bot i data
+- Comparativa vs. BTC spot (benchmark)
 - Matriu de correlació de retorns entre bots
-- Alertes de drawdown configurable
+- Ranking per Sharpe + Calmar dels últims 30/90/180 dies
 
 ---
 
-#### 12. Feature Store
+### 🔵 F — Desplegament i demo llarg
 
-Pre-calcular TOTES les features una sola vegada i emmagatzemar-les. Avui cada bot recalcula les mateixes EMAs i RSIs. El Feature Store elimina la duplicació i assegura consistència.
+#### F1. Migrar a servidor
+Explorar opcions (queda lluny, però cal tenir-ho en ment):
+
+| Opció | Cost | Notes |
+|-------|------|-------|
+| Oracle Cloud Free Tier | Gratuït | 4 vCPU, 24GB RAM; suficient per ara |
+| Hetzner Cloud CX22 | ~4€/mes | Millor latència a Europa |
+| Raspberry Pi 4/5 | Hardware únic | Opció local, sense cost mensual |
+
+**Infraestructura mínima per al desplegament:**
+- Cron per `update_data.py` + `update_fear_greed.py` cada hora
+- Systemd (o Docker) per restart automàtic del DemoRunner
+- Backup automàtic de la BD (pg_dump diari)
+- Watchdog extern amb alerta Telegram per caigudes
 
 ---
 
-#### 13. Desplegament 24/7
+#### F2. Demo 24/7 durant mesos
+L'objectiu final d'aquesta fase del projecte:
 
-- Oracle Cloud Free Tier (o equivalent)
-- Cron per `update_data.py` cada hora
-- Systemd per restart automàtic del DemoRunner
-- Watchdog extern amb Telegram per caigudes del sistema
+- Mínimament **3-6 mesos** de paper trading en temps real
+- Tots els bots que hagin superat el criteri de backtest (Sharpe > 1.5, Drawdown < -20%, supera HoldBot)
+- L'EnsembleBot actiu des del primer dia del demo llarg
+- Registre complet a la BD de tots els ticks i trades
+- Anàlisi mensual: ajustar pesos de l'ensemble si cal
 
 ---
 
-## Seqüència recomanada d'implementació
+## Seqüència recomanada
 
 ```
-[CRÍTIC] Corregir mètriques → Re-executar backtests
+[B1] Fear & Greed (dades + feature) ← fàcil, alt impacte
               ↓
-[CRÍTIC] Walk-forward real
+[C1] MeanReversionBot + MomentumBot ← clàssics, ràpids
               ↓
-[IMPORTANT] Fear & Greed Index (dades + feature + script)
+[C3] Investigació RL professional → nova política → TD3 / Curriculum
               ↓
-[IMPORTANT] EnsembleBot (majority vote primer)
+[B2/B3] On-chain + NLP sentiment ← més complex, prioritzar funding rates
               ↓
-[IMPORTANT] MeanReversionBot + MomentumBot
+[C2] TFT / N-BEATS ← quan les dades externes estiguin llestes
               ↓
-[ML] TFT / TD3 / Reward shaping RL
+[D] EnsembleBot (majority vote → weighted → stacking)
               ↓
-[SISTEMA] Corregir DemoRunner · Feature Store
+[E1] Telegram millorat
               ↓
-[DEPLOY] Servidor 24/7 · Dashboard complet
+[F1] Migrar a servidor
+              ↓
+[F2] Demo 24/7 — 3-6 mesos
 ```
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.1*
+*Última actualització: Març 2026 · Versió 1.2*

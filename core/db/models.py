@@ -1,6 +1,6 @@
 # core/db/models.py
 from datetime import datetime
-from sqlalchemy import String, Float, DateTime, Integer, JSON, ForeignKey, Enum as SAEnum
+from sqlalchemy import String, Float, DateTime, Integer, JSON, ForeignKey, UniqueConstraint, Enum as SAEnum
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from core.models import Action, OrderStatus, OrderSide
 
@@ -96,3 +96,57 @@ class DemoTradeDB(Base):
     fees: Mapped[float] = mapped_column(Float, nullable=False)
     portfolio_value: Mapped[float] = mapped_column(Float, nullable=False)
     reason: Mapped[str] = mapped_column(String(500), nullable=False)
+
+
+class FearGreedDB(Base):
+    """Fear & Greed Index diari d'alternative.me."""
+    __tablename__ = "fear_greed"
+    __table_args__ = (UniqueConstraint("timestamp", name="uq_fear_greed_timestamp"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    value: Mapped[int] = mapped_column(Integer, nullable=False)
+    classification: Mapped[str] = mapped_column(String(50), nullable=False)
+
+
+# --- Dades on-chain ---
+
+class FundingRateDB(Base):
+    """Funding rate cada 8h del contracte BTC/USDT:USDT de Binance USDT-M."""
+    __tablename__ = "funding_rates"
+    __table_args__ = (
+        UniqueConstraint("symbol", "timestamp", name="uq_funding_rate_symbol_ts"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(30), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    rate: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class OpenInterestDB(Base):
+    """Open interest del contracte BTC/USDT:USDT de Binance a la granularitat indicada."""
+    __tablename__ = "open_interest"
+    __table_args__ = (
+        UniqueConstraint("symbol", "timeframe", "timestamp", name="uq_open_interest_symbol_tf_ts"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(30), nullable=False)
+    timeframe: Mapped[str] = mapped_column(String(10), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    open_interest_btc: Mapped[float] = mapped_column(Float, nullable=False)
+    open_interest_usdt: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class BlockchainMetricDB(Base):
+    """Mètriques diàries de la xarxa Bitcoin via Blockchain.com Charts API."""
+    __tablename__ = "blockchain_metrics"
+    __table_args__ = (
+        UniqueConstraint("metric", "timestamp", name="uq_blockchain_metric_ts"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    metric: Mapped[str] = mapped_column(String(50), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    value: Mapped[float] = mapped_column(Float, nullable=False)

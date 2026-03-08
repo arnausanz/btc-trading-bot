@@ -1,0 +1,28 @@
+data:
+  symbol: BTC/USDT
+  timeframe: 1h
+  train_pct: 0.8
+environment:
+  fee_rate: 0.001
+  initial_capital: 10000.0
+  lookback: 96
+  reward_scaling: 100.0
+  reward_type: sortino
+experiment_name: sac_optimized
+model:
+  batch_size: 128
+  buffer_size: 100000
+  gamma: 0.9649078699050173
+  gradient_steps: 1
+  learning_rate: 0.0006798962421591129
+  learning_starts: 1000
+  net_arch:
+  - 256
+  - 256
+  policy: MlpPolicy
+  tau: 0.010970372201012518
+  total_timesteps: 500000
+  train_freq: 1
+model_type: sac
+output:
+  model_path: models/sac_btc_v1

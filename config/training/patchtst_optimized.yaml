@@ -1,0 +1,22 @@
+data:
+  forward_window: 24
+  symbol: BTC/USDT
+  threshold_pct: 0.005
+  timeframes:
+  - 1h
+experiment_name: patchtst_optimized
+model:
+  batch_size: 32
+  d_model: 128
+  dropout: 0.24274179498864024
+  epochs: 50
+  learning_rate: 0.0006901506581791928
+  n_heads: 8
+  n_layers: 2
+  patch_len: 24
+  patience: 10
+  seq_len: 72
+  stride: 12
+model_type: patchtst
+output:
+  model_path: models/patchtst_v1_optimized.pt
