@@ -1,0 +1,94 @@
+bot:
+  bot_id: rl_sac_onchain_v1
+  trade_size: 0.5
+category: RL
+features:
+  external:
+    blockchain:
+    - hash-rate
+    fear_greed: true
+    funding_rate: true
+    funding_rate_symbol: BTC/USDT:USDT
+    open_interest:
+    - symbol: BTC/USDT:USDT
+      timeframe: 1h
+  lookback: 30
+  select:
+  - close
+  - rsi_14
+  - macd
+  - macd_signal
+  - macd_hist
+  - atr_14
+  - bb_upper_20
+  - bb_lower_20
+  - bb_middle_20
+  - fear_greed_value
+  - fear_greed_class
+  - funding_rate
+  - oi_btc_1h
+  - hash_rate
+model_type: sac
+optimization:
+  direction: maximize
+  metric: val_return_pct
+  n_trials: 15
+  probe_timesteps: 20000
+  search_space:
+    batch_size:
+      choices:
+      - 128
+      - 256
+      - 512
+      type: categorical
+    gamma:
+      high: 0.999
+      low: 0.95
+      type: float
+    learning_rate:
+      high: 0.001
+      log: true
+      low: 0.0001
+      type: float
+    lookback:
+      choices:
+      - 30
+      - 50
+      - 96
+      type: categorical
+    reward_type:
+      choices:
+      - simple
+      - sharpe
+      - sortino
+      type: categorical
+    tau:
+      high: 0.02
+      low: 0.001
+      type: float
+symbol: BTC/USDT
+timeframe: 1h
+training:
+  environment:
+    fee_rate: 0.001
+    initial_capital: 10000.0
+    lookback: 30
+    reward_scaling: 100.0
+    reward_type: sharpe
+  experiment_name: sac_optimized
+  model:
+    batch_size: 128
+    buffer_size: 100000
+    gamma: 0.9711877225159714
+    gradient_steps: 1
+    learning_rate: 0.00013932231105945068
+    learning_starts: 1000
+    net_arch:
+    - 256
+    - 256
+    policy: MlpPolicy
+    tau: 0.001242148100054576
+    total_timesteps: 500000
+    train_freq: 1
+  model_path: models/sac_onchain_v1
+  train_pct: 0.8
