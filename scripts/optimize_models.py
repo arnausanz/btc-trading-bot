@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
         results.append({
             "type": "RL",
-            "model": model_type,
+            "model": key,
             "metric": optimizer.metric,
             "best_value": study.best_value,
             "best_params": study.best_params,
