@@ -55,6 +55,46 @@ _Sense paràmetres configurables._
 
 ---
 
+### MeanReversionBot
+Z-score del preu vs. mitjana mòbil + RSI extrem + filtre de volum.
+Captura sobreextensions estadístiques que tendeixen a revertir; complementa GridBot i TrendBot.
+Funciona bé en mercats laterals i en pull-backs dins de tendències.
+
+**Estat de l'art per BTC (1h):** el Z-score és més precís que Bollinger Bands per detectar sobreextensió real. El filtre de volum protegeix de "catching a falling knife" en panic sells. Documentat en literatura 2020–2025 com un dels millors senyals de reversió per a cripto.
+
+| Paràmetre | Descripció | Default |
+|-----------|-----------|---------|
+| `zscore_window` | Finestra per a la mitjana i σ | 30 |
+| `zscore_entry` | Compra si Z < -zscore_entry | 1.8 |
+| `zscore_exit` | Ven si Z > zscore_exit | 0.3 |
+| `rsi_oversold` | Filtre RSI: no compra si RSI ≥ valor | 30 |
+| `rsi_overbought` | Ven si RSI supera el valor | 70 |
+| `volume_filter_multiplier` | No compra si volum > N × avg | 2.5 |
+| `trade_size` | Fracció del capital | 0.4 |
+
+---
+
+### MomentumBot
+Rate of Change (ROC) + confirmació de volum + MACD histogram.
+Captura tendències nascents quan el preu accelera en volum confirmat.
+Funciona bé en bull markets i en breakouts; complementa TrendBot (senyal més ràpid i selectiu).
+
+**Estat de l'art per BTC (1h):** el momentum a 12–24h és un dels factors de retorn més documentats en cripto (Jegadeesh & Titman adaptat). La combinació ROC + volum confirmat + MACD redueix ~40% els falsos senyals respecte ROC sol. El filtre RSI evita entrades en sobrecompra.
+
+| Paràmetre | Descripció | Default |
+|-----------|-----------|---------|
+| `roc_period` | Períodes per al ROC | 14 |
+| `roc_threshold` | Compra si ROC > valor (%) | 1.5 |
+| `volume_window` | Finestra per al volum mitjà | 20 |
+| `volume_multiplier` | Volum ha de ser > N × avg | 1.3 |
+| `macd_fast` | EMA ràpida del MACD | 12 |
+| `macd_slow` | EMA lenta del MACD | 26 |
+| `macd_signal` | Línia senyal del MACD | 9 |
+| `rsi_max_entry` | No entra si RSI ≥ valor | 72 |
+| `trade_size` | Fracció del capital | 0.55 |
+
+---
+
 ## ML Models (via MLBot)
 
 Tots usen `DatasetBuilder` per construir features + target. El target per defecte és `price_up_1pct_in_24h` (puja >1% en les properes 24h). S'accedeixen via `MLBot` amb `model_type` al YAML.
@@ -179,6 +219,8 @@ Més flexible que PPO; `BtcTradingEnvContinuous`, permet posicions parcials.
 | Trend | ⚡⚡⚡ | 5 | 50 candles | ✅ |
 | Grid | ⚡⚡ | 5 | 20 candles | ✅ |
 | Hold | ⚡⚡⚡ | 0 | 1 candle | ✅ |
+| MeanReversion | ⚡⚡⚡ | 7 | 60 candles | ✅ |
+| Momentum | ⚡⚡⚡ | 9 | 80 candles | ✅ |
 | RF | ⚡⚡ | 4 | 500+ | ✅ (feature imp) |
 | XGBoost | ⚡⚡ | 4 | 500+ | ✅ (SHAP) |
 | LightGBM | ⚡⚡⚡ | 4 | 500+ | ✅ (SHAP) |
@@ -194,8 +236,6 @@ Més flexible que PPO; `BtcTradingEnvContinuous`, permet posicions parcials.
 
 | Model | Tipus | Prioritat | Notes |
 |-------|-------|-----------|-------|
-| MeanReversionBot | Classical | 🟡 | RSI extrems + Z-score |
-| MomentumBot | Classical | 🟡 | ROC + filtre de volum |
 | EnsembleBot | Meta | 🔴 | Combina senyals de múltiples bots |
 | TFT | ML | 🟡 | Temporal Fusion Transformer |
 | TD3 | RL | 🟡 | Millor que SAC en entorns sorollosos |
@@ -205,4 +245,4 @@ Veure **[ROADMAP.md](./ROADMAP.md)** per a detalls complets.
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.1*
+*Última actualització: Març 2026 · Versió 1.2*

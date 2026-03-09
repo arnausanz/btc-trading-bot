@@ -12,7 +12,7 @@ Usage:
   python scripts/run_comparison.py --no-rl                  # all except RL (if not trained)
 
 Available bots:
-  Classic: hold, dca, trend, grid
+  Classic: hold, dca, trend, grid, mean_reversion, momentum
   ML     : rf, xgb, lgbm, catboost, gru, patchtst
   RL     : ppo, sac (require running train_rl.py)
 """
@@ -31,10 +31,12 @@ logger = logging.getLogger(__name__)
 # ── Registry de tots els bots: clau → YAML base ─────────────────────────────
 BOT_REGISTRY = {
     # Clàssics
-    "hold":     "config/models/hold.yaml",
-    "dca":      "config/models/dca.yaml",
-    "trend":    "config/models/trend.yaml",
-    "grid":     "config/models/grid.yaml",
+    "hold":           "config/models/hold.yaml",
+    "dca":            "config/models/dca.yaml",
+    "trend":          "config/models/trend.yaml",
+    "grid":           "config/models/grid.yaml",
+    "mean_reversion": "config/models/mean_reversion.yaml",
+    "momentum":       "config/models/momentum.yaml",
     # ML supervisat
     "rf":       "config/models/random_forest.yaml",
     "xgb":      "config/models/xgboost.yaml",
@@ -102,13 +104,17 @@ def _instantiate_bot(key: str):
         return MLBot(config_path=config_path)
 
     # Classic
-    from bots.classical.hold_bot  import HoldBot
-    from bots.classical.dca_bot   import DCABot
-    from bots.classical.trend_bot import TrendBot
-    from bots.classical.grid_bot  import GridBot
+    from bots.classical.hold_bot           import HoldBot
+    from bots.classical.dca_bot            import DCABot
+    from bots.classical.trend_bot          import TrendBot
+    from bots.classical.grid_bot           import GridBot
+    from bots.classical.mean_reversion_bot import MeanReversionBot
+    from bots.classical.momentum_bot       import MomentumBot
     _CLASSICAL = {
         "hold": HoldBot, "dca": DCABot,
         "trend": TrendBot, "grid": GridBot,
+        "mean_reversion": MeanReversionBot,
+        "momentum": MomentumBot,
     }
     model_type = cfg.get("model_type", key)
     if model_type not in _CLASSICAL:

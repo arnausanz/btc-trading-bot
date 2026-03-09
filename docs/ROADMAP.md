@@ -16,6 +16,8 @@
 | DCABot | ✅ Operatiu | Compra periòdica fixa |
 | GridBot | ✅ Operatiu | Bollinger Bands |
 | HoldBot | ✅ Operatiu | Benchmark buy & hold |
+| MeanReversionBot | ✅ Operatiu | Z-score + RSI extrem + filtre volum |
+| MomentumBot | ✅ Operatiu | ROC + volum confirmat + MACD |
 | MLBot (RF, XGB, LGBM, CB, GRU, PatchTST) | ✅ Operatiu | 6 backends |
 | RLBot (PPO, SAC) | ✅ Operatiu | Discret + continu |
 | BacktestEngine + MLflow | ✅ Operatiu | Registre automàtic |
@@ -30,7 +32,7 @@
 | Mètriques backtesting | ✅ Correctes | Sharpe/Calmar/WinRate correctament implementats |
 | Dashboard (Streamlit) | ⚠️ Bàsic | Només preus de la BD |
 | Tests d'integració | ⚠️ Esquelet | 5 tests, necessiten BD real |
-| Dades externes (Fear&Greed + on-chain) | ✅ Operatiu | fear_greed, funding_rates, open_interest, blockchain_metrics |
+| Dades externes (Fear&Greed + on-chain) | ✅ Operatiu | fear_greed, funding_rates, open_interest, blockchain_metrics — integrat a FeatureBuilder/DatasetBuilder/ObservationBuilder |
 | EnsembleBot | ❌ Pendent | Meta-capa de combinació |
 | Feature Store | ❌ Pendent | Placeholder reservat |
 | Risk Manager | ❌ Pendent | Placeholder reservat |
@@ -41,7 +43,7 @@
 
 ---
 
-### ✅ B — Dades externes (implementat)
+### ✅ B — Dades externes (completament implementat)
 
 Fonts implementades i operatives. Scripts de descàrrega inicial + update incremental per a cron.
 
@@ -57,7 +59,7 @@ Fonts implementades i operatives. Scripts de descàrrega inicial + update increm
 
 **Comprovació de completesa:** `python scripts/check_data_completeness.py`
 
-**Pendent d'aquesta fase:** integrar les noves features al `DatasetBuilder` i `ObservationBuilder` per que els models les puguin usar en entrenament.
+✅ **Integració al pipeline:** `FeatureBuilder`, `DatasetBuilder` i `ObservationBuilder` ja suporten totes les fonts externes via config YAML. No cal tocar codi — s'activen amb `features.external` al YAML del model. Config de referència: `config/models/ppo_onchain.yaml`.
 
 ---
 
@@ -98,12 +100,23 @@ CREATE TABLE external_signals (
 
 Cada bot nou segueix el cicle complet: recerca → implementació → configuració → optimització Optuna → backtest → (si supera HoldBot) → demo.
 
-#### C1. Bots clàssics pendents
+#### ✅ C1. Bots clàssics (implementats)
+
+MeanReversionBot i MomentumBot implementats seguint estat de l'art per BTC.
+**Pas següent:** executar backtest, optimitzar amb Optuna i, si superen HoldBot, activar al demo.
+
+```bash
+# Optimitzar:
+python scripts/optimize_bots.py --bots mean_reversion momentum
+
+# Comparar amb la resta de bots:
+python scripts/run_comparison.py --bots hold mean_reversion momentum trend grid
+```
 
 | Bot | Lògica | Estat |
 |-----|--------|-------|
-| MeanReversionBot | RSI extrems (<20/>80) + Z-score del preu vs. mitjana | ❌ Pendent |
-| MomentumBot | Rate of Change (ROC) + confirmació de volum | ❌ Pendent |
+| MeanReversionBot | Z-score del preu + RSI extrem + filtre de volum | ✅ Implementat — pendent backtest + Optuna |
+| MomentumBot | Rate of Change (ROC) + volum confirmat + MACD | ✅ Implementat — pendent backtest + Optuna |
 | BreakoutBot | Suports/resistències (pivot points) + ATR per confirmar | ❌ Pendent |
 
 ---
@@ -241,11 +254,9 @@ L'objectiu final d'aquesta fase del projecte:
 ## Seqüència recomanada
 
 ```
-[B ✅] Fear & Greed + on-chain (dades a la BD, scripts operatius)
+[B ✅] Fear & Greed + on-chain (dades, scripts, FeatureBuilder/DatasetBuilder/ObservationBuilder)
               ↓
-[B_pendent] Integrar features al DatasetBuilder + re-entrenar models
-              ↓
-[C1] MeanReversionBot + MomentumBot ← clàssics, ràpids
+[C1 ✅] MeanReversionBot + MomentumBot ← implementats, pendent backtest + Optuna
               ↓
 [C3] Investigació RL professional → nova política → TD3 / Curriculum
               ↓
@@ -264,4 +275,4 @@ L'objectiu final d'aquesta fase del projecte:
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.2*
+*Última actualització: Març 2026 · Versió 1.3*

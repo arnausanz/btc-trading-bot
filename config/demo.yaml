@@ -21,6 +21,11 @@ bots:
   - config_path: config/models/grid.yaml
     enabled: false
 
+  - config_path: config/models/mean_reversion.yaml
+    enabled: false   # activar després de fer backtest i superar HoldBot
+  - config_path: config/models/momentum.yaml
+    enabled: false   # activar després de fer backtest i superar HoldBot
+
   # ML supervisat
   - config_path: config/models/random_forest.yaml
     enabled: true

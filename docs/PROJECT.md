@@ -96,10 +96,12 @@ TEST_FROM   = "2025-01-01"   # primera data del backtest de validació
 
 | Família | Bot | Tipus de senyal | Config (unificat) |
 |---------|-----|----------------|--------|
+| classic | HoldBot | Discret (BUY/HOLD) — benchmark | `config/models/hold.yaml` |
 | classic | DCABot | Discret (BUY/HOLD) | `config/models/dca.yaml` |
 | classic | TrendBot | Discret (BUY/SELL/HOLD) | `config/models/trend.yaml` |
 | classic | GridBot | Discret (BUY/SELL/HOLD) | `config/models/grid.yaml` |
-| classic | HoldBot | Discret (BUY/HOLD) — benchmark | `config/models/hold.yaml` |
+| classic | MeanReversionBot | Discret (BUY/SELL/HOLD) | `config/models/mean_reversion.yaml` |
+| classic | MomentumBot | Discret (BUY/SELL/HOLD) | `config/models/momentum.yaml` |
 | ML | MLBot (Random Forest) | Discret | `config/models/random_forest.yaml` |
 | ML | MLBot (XGBoost) | Discret | `config/models/xgboost.yaml` |
 | ML | MLBot (LightGBM) | Discret | `config/models/lightgbm.yaml` |
@@ -132,7 +134,7 @@ Veure **[MODELS.md](./MODELS.md)** per a descripció detallada de cada model.
 ```
 btc-trading-bot/
 ├── bots/
-│   ├── classical/       DCABot, TrendBot, GridBot, HoldBot
+│   ├── classical/       DCABot, TrendBot, GridBot, HoldBot, MeanReversionBot, MomentumBot
 │   ├── ml/              MLBot + Random Forest, XGBoost, LightGBM, CatBoost, GRU, PatchTST
 │   └── rl/              RLBot + PPO (discret), SAC (continu), entorn Gym
 ├── config/
@@ -231,4 +233,4 @@ pytest tests/integration/ -m integration # necessita PostgreSQL
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.1*
+*Última actualització: Març 2026 · Versió 1.2*

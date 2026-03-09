@@ -87,7 +87,7 @@ telegram:
 
 | `category` | Exemples | Descripció |
 |------------|----------|------------|
-| `classic`  | hold, dca, trend, grid | Bots basats en regles, sense ML |
+| `classic`  | hold, dca, trend, grid, mean_reversion, momentum | Bots basats en regles, sense ML |
 | `ML`       | xgboost, gru, patchtst | Models supervisats (predicció de preu) |
 | `RL`       | ppo, sac | Agents de reinforcement learning |
 
@@ -97,7 +97,7 @@ telegram:
 
 ```yaml
 category: classic
-model_type: dca           # Identifica la classe de bot (dca/trend/grid/hold)
+model_type: dca           # Identifica la classe de bot (dca/trend/grid/hold/mean_reversion/momentum)
 bot_id: dca_v1
 symbol: BTC/USDT
 timeframe: 1h
@@ -301,7 +301,7 @@ Veure `ppo_onchain.yaml` com a exemple complet.
 --no-rl                            # Exclou agents RL
 ```
 
-**Noms de bots disponibles:** `hold`, `dca`, `trend`, `grid`, `rf`, `xgb`, `lgbm`, `catboost`, `gru`, `patchtst`, `ppo`, `sac`
+**Noms de bots disponibles:** `hold`, `dca`, `trend`, `grid`, `mean_reversion`, `momentum`, `rf`, `xgb`, `lgbm`, `catboost`, `gru`, `patchtst`, `ppo`, `sac`
 
 ### `run_demo.py`
 ```

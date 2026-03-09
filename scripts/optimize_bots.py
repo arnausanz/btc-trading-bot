@@ -19,9 +19,11 @@ import yaml
 
 sys.path.append(".")
 
-from bots.classical.dca_bot   import DCABot
-from bots.classical.trend_bot import TrendBot
-from bots.classical.grid_bot  import GridBot
+from bots.classical.dca_bot            import DCABot
+from bots.classical.trend_bot          import TrendBot
+from bots.classical.grid_bot           import GridBot
+from bots.classical.mean_reversion_bot import MeanReversionBot
+from bots.classical.momentum_bot       import MomentumBot
 from core.backtesting.optimizer import BotOptimizer
 from core.config import TRAIN_UNTIL
 
@@ -32,9 +34,11 @@ logger = logging.getLogger(__name__)
 # El search space s'obté del YAML (secció optimization.search_space)
 # en lloc d'estar hardcoded aquí. Afegir un nou bot = 1 línia.
 ALL_BOTS = {
-    "dca":   {"class": DCABot,  "config": "config/models/dca.yaml"},
-    "trend": {"class": TrendBot, "config": "config/models/trend.yaml"},
-    "grid":  {"class": GridBot,  "config": "config/models/grid.yaml"},
+    "dca":            {"class": DCABot,           "config": "config/models/dca.yaml"},
+    "trend":          {"class": TrendBot,          "config": "config/models/trend.yaml"},
+    "grid":           {"class": GridBot,           "config": "config/models/grid.yaml"},
+    "mean_reversion": {"class": MeanReversionBot,  "config": "config/models/mean_reversion.yaml"},
+    "momentum":       {"class": MomentumBot,       "config": "config/models/momentum.yaml"},
 }
 
 if __name__ == "__main__":

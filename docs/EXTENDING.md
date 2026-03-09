@@ -78,9 +78,11 @@ optimization:
 from bots.classical.my_bot import MyBot
 
 ALL_BOTS = {
-    "dca":    {"class": DCABot,  "config": "config/models/dca.yaml"},
-    "trend":  {"class": TrendBot, "config": "config/models/trend.yaml"},
-    "my_bot": {"class": MyBot,   "config": "config/models/my_bot.yaml"},  # ← nou
+    "dca":            {"class": DCABot,           "config": "config/models/dca.yaml"},
+    "trend":          {"class": TrendBot,          "config": "config/models/trend.yaml"},
+    "mean_reversion": {"class": MeanReversionBot,  "config": "config/models/mean_reversion.yaml"},
+    "momentum":       {"class": MomentumBot,       "config": "config/models/momentum.yaml"},
+    "my_bot":         {"class": MyBot,             "config": "config/models/my_bot.yaml"},  # ← nou
 }
 ```
 
@@ -95,6 +97,8 @@ BOT_REGISTRY = {
 _CLASSICAL = {
     "hold": HoldBot, "dca": DCABot,
     "trend": TrendBot, "grid": GridBot,
+    "mean_reversion": MeanReversionBot,
+    "momentum": MomentumBot,
     "my_bot": MyBot,                         # ← nou
 }
 ```

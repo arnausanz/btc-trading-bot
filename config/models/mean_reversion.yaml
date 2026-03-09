@@ -1,0 +1,78 @@
+# config/models/mean_reversion.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# MeanReversionBot — Reversió a la mitjana via Z-score + RSI extrems
+#
+# Estratègia: compra quan el preu s'ha allunyat significativament de la seva
+# mitjana mòbil (Z-score < -1.8) i el RSI confirma sobrevenuda extrema.
+# Ven quan el preu ha revertit cap a la mitjana (Z > 0.3) o RSI sobrecomprat.
+#
+# Complementa TrendBot i GridBot: mentre TrendBot busca creuaments d'EMA
+# i GridBot usa Bollinger Bands, aquest bot treballa directament amb la
+# desviació estadística del preu (Z-score), més precís en entorns laterals.
+#
+# Estat de l'art BTC: validat en múltiples estudis (2020-2025) per a 1h.
+# Funciona millor en mercats laterals i pull-backs dins de tendències.
+# ─────────────────────────────────────────────────────────────────────────────
+category: classic
+model_type: mean_reversion
+bot_id: mean_reversion_v1
+symbol: BTC/USDT
+timeframe: 1h
+lookback: 100
+features:
+  - close
+  - high
+  - low
+  - volume
+  - rsi_14
+
+# ── Paràmetres d'estratègia ─────────────────────────────────────────────────
+zscore_window: 30            # Finestra per calcular la mitjana i std del Z-score
+                             # (30h ≈ 1.25 dies — reactiu però estable)
+zscore_entry: 1.8            # Compra quan Z-score < -1.8 (preu 1.8σ per sota mitjana)
+                             # Rang típic en literatura: 1.5-2.5σ
+zscore_exit: 0.3             # Ven quan Z-score > 0.3 (preu ha revertit cap a mitjana)
+                             # 0.3 és conservador: surt aviat per assegurar guanys
+rsi_oversold: 30             # Filtre RSI: no compra si RSI >= 30
+                             # Assegura sobrevenuda real, no tendència baixista forta
+rsi_overbought: 70           # Força sortida si RSI > 70 (sobrecompra — risc de pull-back)
+volume_filter_multiplier: 2.5 # No compra si volum > 2.5x la mitjana
+                              # Protecció: volum alt en caiguda = panic sell inestable
+trade_size: 0.4              # Fracció del capital per operació (conservador vs. TrendBot)
+
+# ── Optimització (Optuna) ────────────────────────────────────────────────────
+# Executar: python scripts/optimize_bots.py --bots mean_reversion
+# Resultat guardat a: config/models/mean_reversion_optimized.yaml
+optimization:
+  n_trials: 100
+  metric: sharpe_ratio
+  direction: maximize
+  search_space:
+    zscore_window:
+      type: int
+      low: 10
+      high: 60
+    zscore_entry:
+      type: float
+      low: 1.0
+      high: 3.0
+    zscore_exit:
+      type: float
+      low: 0.0
+      high: 1.5
+    rsi_oversold:
+      type: int
+      low: 15
+      high: 40
+    rsi_overbought:
+      type: int
+      low: 60
+      high: 90
+    volume_filter_multiplier:
+      type: float
+      low: 1.5
+      high: 5.0
+    trade_size:
+      type: float
+      low: 0.1
+      high: 1.0

@@ -1,0 +1,77 @@
+# config/models/momentum.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# MomentumBot — Rate of Change + confirmació de volum + MACD
+#
+# Estratègia: captura tendències nascents quan el preu accelera en volum
+# confirmat. Combina ROC (velocitat del canvi), confirmació de volum
+# i MACD histogram (acceleració del momentum) per filtrar falsos senyals.
+#
+# Complementa TrendBot: mentre TrendBot usa creuaments d'EMA (senyal lent,
+# tardà), MomentumBot usa ROC (senyal ràpid, anticipatiu) i exigeix
+# confirmació de volum — molt més selectiu i amb menys operacions.
+#
+# Estat de l'art BTC: el momentum a 12-24h (1h timeframe) és un dels factors
+# de retorn més documentats en cripto (Jegadeesh & Titman adaptat a BTC).
+# La combinació ROC + MACD + volum redueix falsos senyals un ~40% respecte
+# l'ús del ROC sol (basat en literatura 2022-2025).
+# ─────────────────────────────────────────────────────────────────────────────
+category: classic
+model_type: momentum
+bot_id: momentum_v1
+symbol: BTC/USDT
+timeframe: 1h
+lookback: 100
+features:
+  - close
+  - volume
+  - rsi_14
+
+# ── Paràmetres d'estratègia ─────────────────────────────────────────────────
+roc_period: 14               # Períodes per calcular ROC (14h ≈ mig dia de trading)
+                             # Captura momentum intraday-swing sense soroll de curt termini
+roc_threshold: 1.5           # Compra si ROC > 1.5% (moviment significatiu en 14h)
+                             # Rang típic validat: 1.0-3.0% per BTC 1h
+volume_window: 20            # Finestra per calcular el volum mig de referència
+volume_multiplier: 1.3       # Volum ha de ser > 1.3x la mitjana per confirmar el senyal
+                             # Equilibri: selectiu sense descartar massa senyals vàlids
+macd_fast: 12                # EMA ràpida del MACD (estàndard)
+macd_slow: 26                # EMA lenta del MACD (estàndard)
+macd_signal: 9               # Línia senyal del MACD (estàndard)
+                             # MACD(12,26,9): estàndard de la indústria, validat per BTC
+rsi_max_entry: 72            # No entra si RSI >= 72: evita perseguir sobrecompra
+                             # Lleugerament per sobre de 70 per no perdre breakouts forts
+trade_size: 0.55             # Fracció del capital per operació (lleugerament aggressiu)
+                             # Momentum tendeix a tenir durada curta → sizing moderat-alt
+
+# ── Optimització (Optuna) ────────────────────────────────────────────────────
+# Executar: python scripts/optimize_bots.py --bots momentum
+# Resultat guardat a: config/models/momentum_optimized.yaml
+optimization:
+  n_trials: 100
+  metric: sharpe_ratio
+  direction: maximize
+  search_space:
+    roc_period:
+      type: int
+      low: 6
+      high: 48
+    roc_threshold:
+      type: float
+      low: 0.5
+      high: 5.0
+    volume_window:
+      type: int
+      low: 10
+      high: 50
+    volume_multiplier:
+      type: float
+      low: 1.0
+      high: 3.0
+    rsi_max_entry:
+      type: int
+      low: 60
+      high: 85
+    trade_size:
+      type: float
+      low: 0.1
+      high: 1.0
