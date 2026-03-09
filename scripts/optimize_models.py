@@ -7,12 +7,13 @@ it with walk-forward cross-validation (ML) or short probe runs (RL).
 Outputs the best config as a ready-to-train YAML in config/training/.
 
 Usage:
-  python scripts/optimize_models.py                          # all ML + all RL
-  python scripts/optimize_models.py --models rf xgb lgbm    # ML only, specific
-  python scripts/optimize_models.py --agents sac ppo        # RL only
-  python scripts/optimize_models.py --models rf --trials 20 # override n_trials
-  python scripts/optimize_models.py --no-rl                 # skip RL agents
-  python scripts/optimize_models.py --no-ml                 # skip ML models
+  python scripts/optimize_models.py                               # all ML + all RL
+  python scripts/optimize_models.py --models rf xgb lgbm         # ML only, specific
+  python scripts/optimize_models.py --agents sac ppo             # RL baseline only
+  python scripts/optimize_models.py --agents ppo_onchain sac_onchain  # RL on-chain
+  python scripts/optimize_models.py --models rf --trials 20      # override n_trials
+  python scripts/optimize_models.py --no-rl                      # skip RL agents
+  python scripts/optimize_models.py --no-ml                      # skip ML models
 """
 import argparse
 import logging
@@ -50,8 +51,11 @@ ALL_ML_CONFIGS = {
 }
 
 ALL_RL_CONFIGS = {
-    "sac": "config/models/sac.yaml",
-    "ppo": "config/models/ppo.yaml",
+    "sac":         "config/models/sac.yaml",
+    "ppo":         "config/models/ppo.yaml",
+    # On-chain: tècnics + Fear&Greed + funding rate + OI + hash-rate
+    "ppo_onchain": "config/models/ppo_onchain.yaml",
+    "sac_onchain": "config/models/sac_onchain.yaml",
 }
 
 if __name__ == "__main__":
@@ -87,16 +91,18 @@ if __name__ == "__main__":
     from core.backtesting.ml_optimizer import MLOptimizer
     from core.backtesting.rl_optimizer import RLOptimizer
 
-    # Resolve which ML models to optimize
-    if args.no_ml:
+    # Resolve which ML models to optimize.
+    # Si s'especifica --agents sense --models, saltar ML automàticament.
+    if args.no_ml or (args.agents and not args.models):
         ml_selection = {}
     elif args.models:
         ml_selection = {k: ALL_ML_CONFIGS[k] for k in args.models}
     else:
         ml_selection = ALL_ML_CONFIGS
 
-    # Resolve which RL agents to optimize
-    if args.no_rl:
+    # Resolve which RL agents to optimize.
+    # Si s'especifica --models sense --agents, saltar RL automàticament.
+    if args.no_rl or (args.models and not args.agents):
         rl_selection = {}
     elif args.agents:
         rl_selection = {k: ALL_RL_CONFIGS[k] for k in args.agents}
@@ -140,9 +146,10 @@ if __name__ == "__main__":
             optimizer.n_trials = args.trials
         study = optimizer.run()
 
-        model_type = optimizer.model_type
-        # Resultat guardat al YAML unificat: config/models/{model_type}_optimized.yaml
-        out_path = f"config/models/{model_type}_optimized.yaml"
+        # Use registry key (e.g. "ppo_onchain") — NOT model_type ("ppo") —
+        # so on-chain variants don't overwrite baseline optimized configs.
+        # train_rl.py looks for config/models/{agent_key}_optimized.yaml.
+        out_path = f"config/models/{key}_optimized.yaml"
         optimizer.save_best_config(study, out_path)
 
         results.append({

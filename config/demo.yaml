@@ -45,6 +45,12 @@ bots:
     enabled: false
   - config_path: config/models/sac.yaml
     enabled: false
+  # RL on-chain - requereix dades externes a la BD + entrenament explícit
+  # python scripts/train_rl.py --agents ppo_onchain sac_onchain
+  - config_path: config/models/ppo_onchain.yaml
+    enabled: false
+  - config_path: config/models/sac_onchain.yaml
+    enabled: false
 
 exchange:
   config_path: config/exchanges/paper.yaml

@@ -1,0 +1,116 @@
+# config/models/sac_onchain.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# SAC amb features on-chain + sentiment — versió avançada
+# Afegeix Fear & Greed, Funding Rate, Open Interest i Hash-Rate de blockchain
+# a les features tècniques bàsiques.
+#
+# Paral·lel a ppo_onchain.yaml però amb SAC (accions contínues [0,1]):
+# - SAC aprèn sizing dinàmic (fracció del portfolio en BTC)
+# - Permet sortides parcials i entrades graduals
+# - Off-policy + entropy maximization = exploració robusta
+#
+# REGLA CRÍTICA d'obs_shape:
+#   obs_shape = len(features.select) × features.lookback = 14 × 96 = 1344
+#   Idèntic a ppo_onchain — mateixos features, diferent algorisme
+#
+# PRE-REQUISIT: dades externes han d'estar a la BD:
+#   python scripts/download_fear_greed.py
+#   python scripts/download_blockchain.py
+#   python scripts/update_futures.py
+# ─────────────────────────────────────────────────────────────────────────────
+category: RL
+model_type: sac
+symbol: BTC/USDT
+timeframe: 1h
+
+# ── Features ─────────────────────────────────────────────────────────────────
+# CRÍTIC: select + lookback determinen obs_shape. Han de coincidir entre
+# entrenament i desplegament. NO canviar sense re-entrenar el model.
+features:
+  lookback: 96              # MUST match training.environment.lookback
+  select:
+    - close
+    - rsi_14
+    - macd
+    - macd_signal
+    - macd_hist
+    - atr_14
+    - bb_upper_20
+    - bb_lower_20
+    - bb_middle_20
+    - fear_greed_value
+    - fear_greed_class
+    - funding_rate
+    - oi_btc_1h
+    - hash_rate
+  external:
+    fear_greed: true
+    funding_rate: true
+    funding_rate_symbol: BTC/USDT:USDT
+    open_interest:
+      - symbol: BTC/USDT:USDT
+        timeframe: 1h
+    blockchain:
+      - hash-rate
+
+# ── Entrenament ──────────────────────────────────────────────────────────────
+training:
+  experiment_name: sac_onchain_v1
+  train_pct: 0.8
+  model_path: models/sac_onchain_v1
+  environment:
+    initial_capital: 10000.0
+    fee_rate: 0.001
+    reward_scaling: 100.0
+    reward_type: sortino    # sortino és el millor per SAC (premia retorns ajustats pel risc de baixada)
+  model:
+    total_timesteps: 500000
+    learning_rate: 0.0006798962421591129   # optimitzat del sac baseline (bon punt de partida)
+    batch_size: 128
+    buffer_size: 100000
+    learning_starts: 1000
+    gamma: 0.9649078699050173
+    tau: 0.010970372201012518
+    train_freq: 1
+    gradient_steps: 1
+    policy: MlpPolicy
+    net_arch:
+      - 256
+      - 256
+
+# ── Optimització (Optuna) ────────────────────────────────────────────────────
+# Executar: python scripts/optimize_models.py --agents sac_onchain
+# Resultat guardat a: config/models/sac_onchain_optimized.yaml
+optimization:
+  n_trials: 15
+  probe_timesteps: 20000
+  metric: val_return_pct
+  direction: maximize
+  search_space:
+    learning_rate:
+      type: float
+      low: 0.0001
+      high: 0.001
+      log: true
+    batch_size:
+      type: categorical
+      choices: [128, 256, 512]
+    gamma:
+      type: float
+      low: 0.95
+      high: 0.999
+    tau:
+      type: float
+      low: 0.001
+      high: 0.02
+    reward_type:
+      type: categorical
+      choices: [simple, sharpe, sortino]
+    lookback:
+      type: categorical
+      choices: [30, 50, 96]
+
+# ── Desplegament (bot) ───────────────────────────────────────────────────────
+bot:
+  bot_id: rl_sac_onchain_v1
+  trade_size: 0.5

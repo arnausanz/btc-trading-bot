@@ -20,6 +20,7 @@
 | MomentumBot | ✅ Operatiu | ROC + volum confirmat + MACD |
 | MLBot (RF, XGB, LGBM, CB, GRU, PatchTST) | ✅ Operatiu | 6 backends |
 | RLBot (PPO, SAC) | ✅ Operatiu | Discret + continu |
+| RLBot on-chain (PPO, SAC) | ⚠️ Pendent entrenament | Configs creades, requereix BD externa + `train_rl.py --agents ppo_onchain sac_onchain` |
 | BacktestEngine + MLflow | ✅ Operatiu | Registre automàtic |
 | BotComparator | ✅ Operatiu | Ranking per Sharpe |
 | DemoRunner (multi-bot) | ✅ Operatiu | Persistència + Telegram |
@@ -130,6 +131,30 @@ Cada model nou necessita: implementació `BaseMLModel`, entrada al `_MODEL_REGIS
 | Temporal Fusion Transformer (TFT) | Deep Learning | Estat de l'art per séries temporals financeres amb covarites externes; ideal per incorporar dades de B1/B2/B3 |
 | N-BEATS / N-HiTS | Deep Learning | Arquitectures pures sense RNN; molt eficients |
 | TabNet | Tabular | Competitiu amb XGBoost, interpretable via atenció |
+
+---
+
+#### ✅ C_onchain. PPO + SAC amb features on-chain (implementat, pendent entrenament)
+
+Variants on-chain dels agents RL baseline. Mateixa política i reward que els baseline, però amb 5 features addicionals: Fear & Greed, funding rate, Open Interest (1h) i hash rate.
+
+| Agent | Config | obs_shape | Estat |
+|-------|--------|-----------|-------|
+| PPO on-chain | `config/models/ppo_onchain.yaml` | 14×96=1344 | ✅ Config validada — pendent entrenament |
+| SAC on-chain | `config/models/sac_onchain.yaml` | 14×96=1344 | ✅ Config creada — pendent entrenament |
+
+```bash
+# Entrenar (30-90 min per agent):
+python scripts/train_rl.py --agents ppo_onchain sac_onchain
+
+# Optimitzar primer (opcional, ~3h):
+python scripts/optimize_models.py --agents ppo_onchain sac_onchain
+
+# Comparar amb baseline:
+python scripts/run_comparison.py --bots hold ppo sac ppo_onchain sac_onchain
+```
+
+**Pre-requisit:** dades externes a la BD (`python scripts/download_fear_greed.py`, `download_blockchain.py`, `update_futures.py`).
 
 ---
 
@@ -258,6 +283,8 @@ L'objectiu final d'aquesta fase del projecte:
               ↓
 [C1 ✅] MeanReversionBot + MomentumBot ← implementats, pendent backtest + Optuna
               ↓
+[C_onchain ✅] PPO/SAC on-chain ← configs creades i validades, PENDENT ENTRENAMENT
+              ↓
 [C3] Investigació RL professional → nova política → TD3 / Curriculum
               ↓
 [B_pendent/NLP] NLP sentiment ← quan els models ML ja consumeixin les noves features
@@ -275,4 +302,4 @@ L'objectiu final d'aquesta fase del projecte:
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.3*
+*Última actualització: Març 2026 · Versió 1.4*

@@ -44,9 +44,12 @@ BOT_REGISTRY = {
     "catboost": "config/models/catboost.yaml",
     "gru":      "config/models/gru.yaml",
     "patchtst": "config/models/patchtst.yaml",
-    # RL
-    "ppo":      "config/models/ppo.yaml",
-    "sac":      "config/models/sac.yaml",
+    # RL baseline
+    "ppo":         "config/models/ppo.yaml",
+    "sac":         "config/models/sac.yaml",
+    # RL on-chain (require training: python scripts/train_rl.py --agents ppo_onchain sac_onchain)
+    "ppo_onchain": "config/models/ppo_onchain.yaml",
+    "sac_onchain": "config/models/sac_onchain.yaml",
 }
 
 # Mapeig clau → classe de bot clàssic (per a instanciació)
@@ -122,9 +125,10 @@ def _instantiate_bot(key: str):
     return _CLASSICAL[model_type](config_path=config_path)
 
 
-# Bots per defecte: tots excepte RL
+# Bots per defecte: tots excepte RL (requereixen model entrenat)
 BOT_CONFIGS = BOT_REGISTRY  # alias per compatibilitat
-DEFAULT_BOTS = [k for k in BOT_REGISTRY if k not in ("ppo", "sac")]
+_RL_KEYS = {"ppo", "sac", "ppo_onchain", "sac_onchain"}
+DEFAULT_BOTS = [k for k in BOT_REGISTRY if k not in _RL_KEYS]
 
 
 if __name__ == "__main__":
@@ -145,7 +149,7 @@ if __name__ == "__main__":
     elif args.all:
         selected_keys = list(BOT_REGISTRY.keys())
     elif args.no_rl:
-        selected_keys = [k for k in BOT_REGISTRY if k not in ("ppo", "sac")]
+        selected_keys = [k for k in BOT_REGISTRY if k not in _RL_KEYS]
     else:
         selected_keys = DEFAULT_BOTS  # all except RL
 
