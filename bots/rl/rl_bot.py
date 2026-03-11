@@ -82,15 +82,30 @@ class RLBot(BaseBot):
         obs = (obs - obs.mean(axis=0)) / col_std
         obs_flat = obs.flatten()
 
-        # Act: acció discreta (0=hold, 1=buy, 2=sell)
-        action = int(self._agent.act(obs_flat, deterministic=True))
+        # Act: PPO → acció discreta (int 0/1/2); SAC → fracció contínua [0,1]
+        raw_action = self._agent.act(obs_flat, deterministic=True)
+        agent_type = self.config["model_type"]
+
+        if agent_type == "sac":
+            # Continuous: fracció desitjada de portfolio en BTC
+            fraction = float(np.squeeze(raw_action))
+            if fraction > 0.6:
+                action, trade_size = 1, fraction      # BUY proporcional
+            elif fraction < 0.4:
+                action, trade_size = 2, 1.0           # SELL total
+            else:
+                action, trade_size = 0, 0.0           # HOLD
+        else:
+            # Discrete (PPO): 0=HOLD, 1=BUY, 2=SELL
+            action = int(np.squeeze(raw_action))
+            trade_size = self.config["trade_size"]
 
         if action == 1:
             return Signal(
                 bot_id=self.bot_id,
                 timestamp=datetime.now(timezone.utc),
                 action=Action.BUY,
-                size=self.config["trade_size"],
+                size=trade_size,
                 confidence=1.0,
                 reason="RL agent: BUY",
             )
