@@ -6,15 +6,21 @@ Llegeix configs unificades de config/models/*.yaml.
 El camp 'category' del YAML determina el tipus de bot (classic/ML/RL).
 
 Usage:
-  python scripts/run_comparison.py                          # all available bots
-  python scripts/run_comparison.py --bots hold trend dca    # selection
+  python scripts/run_comparison.py                                           # all available bots
+  python scripts/run_comparison.py --bots hold trend dca                     # selection
   python scripts/run_comparison.py --bots rf xgb ppo
-  python scripts/run_comparison.py --no-rl                  # all except RL (if not trained)
+  python scripts/run_comparison.py --bots ppo_professional sac_professional  # professional RL
+  python scripts/run_comparison.py --bots td3_professional td3_multiframe    # C3 TD3
+  python scripts/run_comparison.py --no-rl                                   # all except RL
 
 Available bots:
-  Classic: hold, dca, trend, grid, mean_reversion, momentum
-  ML     : rf, xgb, lgbm, catboost, gru, patchtst
-  RL     : ppo, sac (require running train_rl.py)
+  Classic     : hold, dca, trend, grid, mean_reversion, momentum
+  ML          : rf, xgb, lgbm, catboost, gru, patchtst
+  RL baseline : ppo, sac (require: python scripts/train_rl.py)
+  RL on-chain : ppo_onchain, sac_onchain (require external DB data)
+  RL pro      : ppo_professional, sac_professional
+  RL C3 TD3   : td3_professional, td3_multiframe
+                (require: python scripts/train_rl.py --agents td3_professional td3_multiframe)
 """
 import argparse
 import logging
@@ -28,16 +34,16 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger(__name__)
 
 
-# ── Registry de tots els bots: clau → YAML base ─────────────────────────────
+# Registry: key -> base YAML path
 BOT_REGISTRY = {
-    # Clàssics
+    # Classic
     "hold":           "config/models/hold.yaml",
     "dca":            "config/models/dca.yaml",
     "trend":          "config/models/trend.yaml",
     "grid":           "config/models/grid.yaml",
     "mean_reversion": "config/models/mean_reversion.yaml",
     "momentum":       "config/models/momentum.yaml",
-    # ML supervisat
+    # ML supervised
     "rf":       "config/models/random_forest.yaml",
     "xgb":      "config/models/xgboost.yaml",
     "lgbm":     "config/models/lightgbm.yaml",
@@ -45,31 +51,24 @@ BOT_REGISTRY = {
     "gru":      "config/models/gru.yaml",
     "patchtst": "config/models/patchtst.yaml",
     # RL baseline
-    "ppo":         "config/models/ppo.yaml",
-    "sac":         "config/models/sac.yaml",
-    # RL on-chain (require training: python scripts/train_rl.py --agents ppo_onchain sac_onchain)
+    "ppo": "config/models/ppo.yaml",
+    "sac": "config/models/sac.yaml",
+    # RL on-chain
     "ppo_onchain": "config/models/ppo_onchain.yaml",
     "sac_onchain": "config/models/sac_onchain.yaml",
-}
-
-# Mapeig clau → classe de bot clàssic (per a instanciació)
-_CLASSICAL_CLASSES = {
-    "hold": None,   # s'omple lazy a _instantiate_bot
-    "dca":  None,
-    "trend": None,
-    "grid":  None,
+    # RL professional (12H swing + regime + on-chain + position state)
+    # Training: python scripts/train_rl.py --agents ppo_professional sac_professional
+    "ppo_professional": "config/models/ppo_professional.yaml",
+    "sac_professional": "config/models/sac_professional.yaml",
+    # C3: TD3 advanced (TD3 + sentiment / multi-timeframe)
+    # Training: python scripts/train_rl.py --agents td3_professional td3_multiframe
+    "td3_professional": "config/models/td3_professional.yaml",
+    "td3_multiframe":   "config/models/td3_multiframe.yaml",
 }
 
 
 def get_best_config_path(bot_key: str) -> str:
-    """
-    Retorna el millor config disponible per a un bot.
-
-    Prefereix {bot_key}_optimized.yaml si existeix (generat per Optuna),
-    sinó usa el YAML base del registry.
-    """
     default = BOT_REGISTRY[bot_key]
-    # Construïm el nom _optimized a partir del YAML base
     optimized = default.replace(".yaml", "_optimized.yaml")
     if os.path.exists(optimized):
         logger.info(f"Using optimized config: {optimized}")
@@ -80,8 +79,8 @@ def get_best_config_path(bot_key: str) -> str:
 
 def _instantiate_bot(key: str):
     """
-    Instancia el bot corresponent llegint el camp 'category' del YAML.
-    Retorna None si el model RL no existeix (no entrenat).
+    Instantiates the bot by reading the 'category' field from the YAML.
+    Returns None if the RL model has not been trained yet.
     """
     config_path = get_best_config_path(key)
 
@@ -91,12 +90,12 @@ def _instantiate_bot(key: str):
     category = cfg.get("category", "classic")
 
     if category == "RL":
-        # Comprova que el model entrenat existeix
         model_path = cfg["training"]["model_path"]
         if not (os.path.exists(model_path) or os.path.exists(model_path + ".zip")):
+            agent_key = cfg["model_type"]
             logger.warning(
-                f"RL model not found: {model_path} — skipping '{key}'. "
-                f"Run: python scripts/train_rl.py --agents {cfg['model_type']}"
+                f"RL model not found: {model_path} -- skipping '{key}'. "
+                f"Run: python scripts/train_rl.py --agents {agent_key}"
             )
             return None
         from bots.rl.rl_bot import RLBot
@@ -125,9 +124,13 @@ def _instantiate_bot(key: str):
     return _CLASSICAL[model_type](config_path=config_path)
 
 
-# Bots per defecte: tots excepte RL (requereixen model entrenat)
-BOT_CONFIGS = BOT_REGISTRY  # alias per compatibilitat
-_RL_KEYS = {"ppo", "sac", "ppo_onchain", "sac_onchain"}
+# RL keys excluded from default "train all" run
+_RL_KEYS = {
+    "ppo", "sac", "ppo_onchain", "sac_onchain",
+    "ppo_professional", "sac_professional",
+    "td3_professional", "td3_multiframe",
+}
+BOT_CONFIGS = BOT_REGISTRY  # alias for compatibility
 DEFAULT_BOTS = [k for k in BOT_REGISTRY if k not in _RL_KEYS]
 
 
@@ -139,11 +142,10 @@ if __name__ == "__main__":
         metavar="BOT",
         help=f"Bots to compare (default: all except RL). Options: {list(BOT_REGISTRY.keys())}",
     )
-    parser.add_argument("--no-rl", action="store_true", help="Exclude RL agents (useful if not trained)")
+    parser.add_argument("--no-rl", action="store_true", help="Exclude RL agents")
     parser.add_argument("--all",   action="store_true", help="Include RL if models exist")
     args = parser.parse_args()
 
-    # Determine list of bots
     if args.bots:
         selected_keys = args.bots
     elif args.all:
@@ -151,7 +153,7 @@ if __name__ == "__main__":
     elif args.no_rl:
         selected_keys = [k for k in BOT_REGISTRY if k not in _RL_KEYS]
     else:
-        selected_keys = DEFAULT_BOTS  # all except RL
+        selected_keys = DEFAULT_BOTS
 
     logger.info(f"Selected bots: {selected_keys}")
 

@@ -1,9 +1,0 @@
-# config/bots/hold.yaml
-bot_id: hold_v1
-symbol: BTC/USDT
-timeframe: 1h
-lookback: 50
-features:
-  - close
-  - rsi_14
-  - ema_20

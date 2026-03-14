@@ -267,14 +267,30 @@ class MyAgent(BaseRLAgent):
         self.model = A2C.load(path)
 ```
 
-**3.2** Afegeix al registry de `bots/rl/rl_bot.py`:
+**3.2** Afegeix als registries de `bots/rl/trainer.py` i `bots/rl/rl_bot.py`:
 ```python
+# bots/rl/trainer.py
 from bots.rl.agents.my_agent import MyAgent
 
 _AGENT_REGISTRY = {
     "ppo":      PPOAgent,
     "sac":      SACAgent,
-    "my_agent": MyAgent,   # ← nou
+    "ppo_professional": PPOAgent,    # els agents professional reutilitzen SB3
+    "sac_professional": SACAgent,
+    "my_agent": MyAgent,             # ← nou
+}
+_ENV_REGISTRY = {
+    "ppo":              BtcTradingEnvDiscrete,
+    "sac":              BtcTradingEnvContinuous,
+    "ppo_professional": BtcTradingEnvProfessionalDiscrete,
+    "sac_professional": BtcTradingEnvProfessionalContinuous,
+    "my_agent":         BtcTradingEnvDiscrete,   # ← nou (o el teu entorn custom)
+}
+
+# bots/rl/rl_bot.py — mateix patró per a la inferència
+_AGENT_REGISTRY = {
+    ...
+    "my_agent": MyAgent,
 }
 ```
 
@@ -341,6 +357,10 @@ BOT_REGISTRY = {
 ```
 
 ⚠️ **Regla crítica `obs_shape`:** si canvies `features.select` o `features.lookback` al YAML, has de re-entrenar el model. Mai canviar-los sense re-entrenar — causaria `ValueError: Unexpected observation shape`.
+
+> **Entorn professional vs. baseline:** si el teu agent hereta de `_ProfessionalBase` (com `ppo_professional` i `sac_professional`), l'entorn afegeix automàticament 4 dimensions de position state a l'observació. `obs_shape = len(select) × lookback + 4`. El YAML ha de reflectir-ho als comentaris però **no** cal afegir les 4 dims a `features.select` — les gestiona l'entorn internament. L'entorn professional també accepta `stop_atr_multiplier` a `training.environment`.
+
+> **Dades mínimes:** el `RLTrainer` valida que `len(df_train) ≥ lookback + 10` i lança `ValueError` amb instruccions si no es compleix. Causa típica: una font externa amb historial limitat (p. ex. `open_interest` 1h = darrers 30 dies) que provoca un `dropna()` massiu. Solució: elimina la font del `select` o usa la versió Vision (5m, des de 2021) que té historial llarg.
 
 ---
 
@@ -518,4 +538,4 @@ class EnsembleBot(BaseBot):
 
 ---
 
-*Última actualització: Març 2026 · Versió 2.0*
+*Última actualització: Març 2026 · Versió 2.1*

@@ -56,6 +56,9 @@ ALL_RL_CONFIGS = {
     # On-chain: tècnics + Fear&Greed + funding rate + OI + hash-rate
     "ppo_onchain": "config/models/ppo_onchain.yaml",
     "sac_onchain": "config/models/sac_onchain.yaml",
+    # Professional: 12h swing + règim + on-chain + position state
+    "ppo_professional": "config/models/ppo_professional.yaml",
+    "sac_professional": "config/models/sac_professional.yaml",
 }
 
 if __name__ == "__main__":

@@ -44,7 +44,7 @@ exchanges:
 
 data:
   default_symbol: BTC/USDT
-  default_timeframes: [1h, 4h, 1d]
+  default_timeframes: [1h, 4h, 12h, 1d]
   historical_since: "2019-01-01"
 
 backtesting:
@@ -89,7 +89,7 @@ telegram:
 |------------|----------|------------|
 | `classic`  | hold, dca, trend, grid, mean_reversion, momentum | Bots basats en regles, sense ML |
 | `ML`       | xgboost, gru, patchtst | Models supervisats (predicció de preu) |
-| `RL`       | ppo, sac | Agents de reinforcement learning |
+| `RL`       | ppo, sac, ppo_professional, sac_professional | Agents de reinforcement learning |
 
 ---
 
@@ -205,7 +205,8 @@ training:
     initial_capital: 10000.0
     fee_rate: 0.001
     reward_scaling: 100.0
-    reward_type: sharpe    # simple | sharpe | sortino | penalize_inaction
+    reward_type: sharpe    # simple | sharpe | sortino | penalize_inaction | professional
+    # stop_atr_multiplier: 2.0   # ← només per a ppo_professional / sac_professional
   model:
     total_timesteps: 500000
     learning_rate: 0.00012
@@ -238,12 +239,20 @@ bot:
 ## Regla crítica: `obs_shape` per a RL
 
 ```
+# Agents baseline (ppo, sac):
 obs_shape = len(features.select) × features.lookback
+
+# Agents professional (ppo_professional, sac_professional):
+obs_shape = len(features.select) × features.lookback + 4
+#                                                       ↑
+#                           position state afegit per l'entorn:
+#                           [pnl_pct, position_fraction, steps_norm, drawdown_pct]
 ```
 
 - `features.select` ha de ser **idèntic** al que s'ha usat per entrenar
 - `features.lookback` ha de ser **idèntic** a `training.environment.lookback`
 - **Mai canviar sense re-entrenar el model** — causaria `ValueError: Unexpected observation shape`
+- **Dades mínimes requerides:** el trainer valida que `len(df_train) ≥ lookback + 10` i llança `ValueError` amb instruccions de fix si no es compleix (causa típica: font externa amb historial limitat)
 
 ---
 
@@ -263,7 +272,9 @@ features:
       - n-unique-addresses              # afegeix: n_unique_addresses
 ```
 
-Veure `ppo_onchain.yaml` com a exemple complet.
+Veure `ppo_onchain.yaml` o `ppo_professional.yaml` com a exemples complets.
+
+⚠️ **Atenció amb `open_interest`:** les dades REST de Binance (1h) cobreixen només els últims 30 dies. Si l'inclous a `select`, `FeatureBuilder.build()` farà `dropna()` i eliminarà quasi totes les files, deixant el dataset massa petit per entrenar. Usa `open_interest` de Vision (5m, des de 2021) o prescindeix-ne si no tens historial suficient.
 
 ---
 
@@ -291,7 +302,8 @@ Veure `ppo_onchain.yaml` com a exemple complet.
 
 ### `train_rl.py`
 ```
---agents    sac ppo                # Agents a entrenar (default: tots)
+--agents    sac ppo ppo_professional sac_professional   # Agents a entrenar (default: tots)
+--smoke                                                  # 50k steps per validar pipeline
 ```
 
 ### `run_comparison.py`
@@ -301,7 +313,7 @@ Veure `ppo_onchain.yaml` com a exemple complet.
 --no-rl                            # Exclou agents RL
 ```
 
-**Noms de bots disponibles:** `hold`, `dca`, `trend`, `grid`, `mean_reversion`, `momentum`, `rf`, `xgb`, `lgbm`, `catboost`, `gru`, `patchtst`, `ppo`, `sac`
+**Noms de bots disponibles:** `hold`, `dca`, `trend`, `grid`, `mean_reversion`, `momentum`, `rf`, `xgb`, `lgbm`, `catboost`, `gru`, `patchtst`, `ppo`, `sac`, `ppo_onchain`, `sac_onchain`, `ppo_professional`, `sac_professional`
 
 ### `run_demo.py`
 ```
@@ -349,4 +361,4 @@ Cada experiment registra: `model_type`, `params`, `sharpe`, `drawdown`, `win_rat
 
 ---
 
-*Última actualització: Març 2026 · Versió 2.0*
+*Última actualització: Març 2026 · Versió 2.1*

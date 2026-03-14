@@ -1,8 +1,0 @@
-bot_id: dca_v1
-buy_every_n_ticks: 168
-buy_size: 0.4042297771469194
-features:
-- close
-lookback: 50
-symbol: BTC/USDT
-timeframe: 1h

@@ -1,0 +1,105 @@
+# config/models/sac_professional.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# SAC Professional — swing trading sense apalancament, accions contínues
+#
+# Diferències clau vs sac.yaml:
+#   - Timeframe 12h (no 1h)
+#   - 23 features (+ règim + on-chain + position state)
+#   - Entorn BtcTradingEnvProfessionalContinuous (Continuous + deadband + stop ATR)
+#   - Reward professional_risk_adjusted
+#   - SAC off-policy: aprofita el replay buffer per aprendre el sizing fi
+#
+# Hipòtesi: SAC aprèn el sizing òptim continu (p.ex. 37 % en BTC)
+#           mentre PPO aprèn decisions discretes més llegibles.
+#
+# PRE-REQUISIT dades: igual que ppo_professional.yaml
+#
+# obs_shape = (18 features × 90 lookback) + 4 position state = 1.624
+# ─────────────────────────────────────────────────────────────────────────────
+category: RL
+model_type: sac_professional
+symbol: BTC/USDT
+timeframe: 12h
+
+# ── Features ────────────────────────────────────────────────────────────────
+features:
+  lookback: 90
+  select:
+    - close
+    - rsi_14
+    - macd
+    - macd_signal
+    - macd_hist
+    - atr_14
+    - bb_upper_20
+    - bb_lower_20
+    - bb_middle_20
+    - ema_20
+    - ema_50
+    - volume
+    - volume_norm_20
+    - adx_14
+    - atr_5
+    - vol_ratio
+    - fear_greed_value
+    - funding_rate
+  external:
+    fear_greed: true
+    funding_rate: true
+    funding_rate_symbol: BTC/USDT:USDT
+
+# ── Entrenament ─────────────────────────────────────────────────────────────
+training:
+  experiment_name: sac_professional_v1
+  train_pct: 0.8
+  model_path: models/sac_professional_v1
+  environment:
+    initial_capital: 10000.0
+    fee_rate: 0.001
+    reward_scaling: 100.0
+    reward_type: professional
+    stop_atr_multiplier: 2.0
+  model:
+    total_timesteps: 500000
+    learning_rate: 0.0003
+    batch_size: 256
+    buffer_size: 100000
+    learning_starts: 1000
+    gamma: 0.99
+    tau: 0.005
+    train_freq: 1
+    gradient_steps: 1
+    policy: MlpPolicy
+    net_arch: [256, 256]
+
+# ── Optimització (Optuna) ────────────────────────────────────────────────────
+optimization:
+  n_trials: 15
+  probe_timesteps: 25000
+  metric: val_return_pct
+  direction: maximize
+  search_space:
+    learning_rate:
+      type: float
+      low: 0.0001
+      high: 0.001
+      log: true
+    batch_size:
+      type: categorical
+      choices: [128, 256, 512]
+    gamma:
+      type: float
+      low: 0.95
+      high: 0.999
+    stop_atr_multiplier:
+      type: float
+      low: 1.5
+      high: 3.0
+    lookback:
+      type: categorical
+      choices: [60, 90]
+
+# ── Desplegament (bot) ──────────────────────────────────────────────────────
+bot:
+  bot_id: rl_sac_professional_v1
+  trade_size: 1.0

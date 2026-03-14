@@ -1,0 +1,143 @@
+# config/models/td3_multiframe.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# TD3 Multi-Timeframe — 1H base + 4H context, entorn professional continu
+#
+# DISSENY: Observació multi-escala
+# ──────────────────────────────────────────────────────────────────────────────
+# L'agent veu SIMULTÀNIAMENT:
+#   [1H features × lookback 60]  Senyal d'entrada immediat (3 dies de context)
+#   [4H features → _4h suffix]   Context de tendència (240 candles = 40 dies 4H)
+#   [Sentiment extern]           Fear & Greed + Funding Rate (sentiment de mercat)
+#   [Position state +4]          PnL no realitzat, fracció, durada, drawdown
+#
+# Per què 1H+4H és millor que 12H sol:
+#   - 1H capta entrades precises (breakouts, retracements)
+#   - 4H confirma la tendència macro (evita contra-trend trades)
+#   - Combinació → menys falsos senyals que qualsevol TF individual
+#
+# Per què TD3 per multi-frame:
+#   - L'espai d'observació és més gran (16+10+sentiment = ~26 features × 60)
+#   - TD3 twin critics estabilitzen l'aprenentatge en espais d'obs gran
+#   - regime_adaptive reward exploita les dades ADX del 4H per detectar règim
+#
+# Construcció del DataFrame: MultiFrameFeatureBuilder
+#   - Carrega 1H → computa indicadors → dropna
+#   - Carrega 4H → computa indicadors → rename _4h → dropna
+#   - merge_asof(1H, 4H, backward) → cada 1H hereta últim valor 4H
+#   - Aplica external (fear_greed, funding_rate) a la base 1H
+#
+# obs_shape = (25 features × 60 lookback) + 4 position state = 1.504
+#
+# PRE-REQUISIT dades:
+#   python scripts/download_data.py         (timeframes 1h + 4h)
+#   python scripts/download_fear_greed.py
+#   python scripts/update_futures.py
+# ─────────────────────────────────────────────────────────────────────────────
+category: RL
+model_type: td3_multiframe
+symbol: BTC/USDT
+timeframe: 1h               # BASE timeframe (environment steps)
+aux_timeframes: [4h]        # AUXILIARY timeframes merged via MultiFrameFeatureBuilder
+
+# ── Features ────────────────────────────────────────────────────────────────
+features:
+  lookback: 60              # 60 × 1H = 2.5 dies de context immediat
+  select:
+    # ── 1H features (senyal immediat) ────────────────────────────────
+    - close
+    - rsi_14
+    - macd
+    - macd_signal
+    - macd_hist
+    - atr_14
+    - atr_5
+    - vol_ratio             # atr_5/atr_14 — intensitat de volatilitat
+    - bb_upper_20
+    - bb_lower_20
+    - adx_14               # força de tendència 1H
+    - volume_norm_20
+    # ── Sentiment extern (base 1H) ────────────────────────────────────
+    - fear_greed_value      # 0–100 de alternative.me (diari)
+    - funding_rate          # 8H perpetual funding rate de Binance
+    # ── 4H features (context de tendència) ───────────────────────────
+    - close_4h
+    - rsi_14_4h             # RSI en timeframe 4H (més suau, menys soroll)
+    - ema_20_4h             # EMA ràpida 4H — direcció a curt/mig termini
+    - ema_50_4h             # EMA lenta 4H — tendència intermèdia
+    - atr_14_4h             # Volatilitat 4H (rang esperat de la jornada)
+    - adx_14_4h             # Força de tendència 4H (> 25 = tendència clara)
+    - vol_ratio_4h          # Règim de volatilitat 4H (atr_5/atr_14 del 4H)
+    - macd_4h               # MACD histograma 4H
+    - macd_signal_4h
+    - bb_upper_20_4h        # Banda superior Bollinger 4H
+    - bb_lower_20_4h        # Banda inferior Bollinger 4H
+  external:
+    fear_greed: true
+    funding_rate: true
+    funding_rate_symbol: BTC/USDT:USDT
+
+# ── Entrenament ─────────────────────────────────────────────────────────────
+training:
+  experiment_name: td3_multiframe_v1
+  train_pct: 0.8
+  model_path: models/td3_multiframe_v1
+  environment:
+    initial_capital: 10000.0
+    fee_rate: 0.001
+    reward_scaling: 100.0
+    reward_type: regime_adaptive    # exploits adx_14 for regime detection
+    stop_atr_multiplier: 2.0
+  model:
+    total_timesteps: 600000         # lleugerament més llarg per obs_space gran
+    learning_rate: 0.001
+    batch_size: 256
+    buffer_size: 200000
+    learning_starts: 2000           # wait longer before training (larger obs)
+    gamma: 0.99
+    tau: 0.005
+    train_freq: 1
+    gradient_steps: 1
+    policy_delay: 2
+    target_policy_noise: 0.2
+    target_noise_clip: 0.5
+    action_noise_sigma: 0.1
+    policy: MlpPolicy
+    net_arch: [400, 300]            # wider net for larger obs_space
+
+# ── Optimització (Optuna) ────────────────────────────────────────────────────
+optimization:
+  n_trials: 15
+  probe_timesteps: 30000            # slightly more than 12H agents
+  metric: val_return_pct
+  direction: maximize
+  search_space:
+    learning_rate:
+      type: float
+      low: 0.0003
+      high: 0.003
+      log: true
+    batch_size:
+      type: categorical
+      choices: [128, 256, 512]
+    gamma:
+      type: float
+      low: 0.95
+      high: 0.999
+    stop_atr_multiplier:
+      type: float
+      low: 1.5
+      high: 3.0
+    policy_delay:
+      type: categorical
+      choices: [1, 2, 3]
+    lookback:
+      type: categorical
+      choices: [40, 60, 90]
+    reward_type:
+      type: categorical
+      choices: [professional, regime_adaptive]
+
+# ── Desplegament (bot) ──────────────────────────────────────────────────────
+bot:
+  bot_id: rl_td3_multiframe_v1
+  trade_size: 1.0

@@ -211,6 +211,53 @@ Més flexible que PPO; `BtcTradingEnvContinuous`, permet posicions parcials.
 
 ---
 
+### PPO Professional
+Agent PPO de swing trading sense apalancament. **Dissenyat per aguantar posicions de 5–7 dies** aprofitant els cicles de BTC. Timeframe 12H per minimitzar l'impacte de les comissions.
+
+Extensions sobre PPO baseline: acció `Discrete(5)` (HOLD / BUY_FULL / BUY_PARTIAL / SELL_PARTIAL / SELL_FULL), stop loss ATR dur (forçat per l'entorn, l'agent no el pot moure), position state a l'observació (PnL%, fracció, steps, drawdown), reward `professional_risk_adjusted` amb escalat ATR i penalitzacions de drawdown progressives.
+
+**Features (18):** indicadors tècnics + règim (ADX-14, vol_ratio) + sentiment (Fear & Greed, funding rate). `obs_shape = 18 × 90 + 4 = 1.624`.
+
+Pre-requisit de dades:
+```bash
+python scripts/download_data.py       # candles 12h
+python scripts/download_fear_greed.py
+python scripts/update_futures.py      # funding rate
+```
+
+Entrenament: `python scripts/train_rl.py --agents ppo_professional`
+
+| Paràmetre | Valor / Rang Optuna |
+|-----------|-------------------|
+| `learning_rate` | 1e-4–1e-3 |
+| `n_steps` | 1024–4096 |
+| `batch_size` | 64–256 |
+| `gamma` | 0.95–0.999 |
+| `stop_atr_multiplier` | 1.5–3.0 |
+| `lookback` | 60 o 90 |
+
+---
+
+### SAC Professional
+Agent SAC de swing trading sense apalancament. Equivalent professional de `ppo_professional` però amb política contínua: l'agent decideix exactament quina fracció del capital posar en BTC en cada step de 12H.
+
+Diferències clau: `action_space = Box([0,1])`, deadband ±0.05 (evita micro-rebalanceigs), replay buffer off-policy (aprèn de transicions passades). Hipòtesi: SAC pot aprendre sizing òptim fi (p. ex. 37% en BTC) mentre PPO pren decisions discretes més llegibles.
+
+Mateixos features i pre-requisits que `ppo_professional`. `obs_shape = 18 × 90 + 4 = 1.624`.
+
+Entrenament: `python scripts/train_rl.py --agents sac_professional`
+
+| Paràmetre | Valor / Rang Optuna |
+|-----------|-------------------|
+| `learning_rate` | 1e-4–1e-3 |
+| `batch_size` | 128–512 |
+| `gamma` | 0.95–0.999 |
+| `stop_atr_multiplier` | 1.5–3.0 |
+| `lookback` | 60 o 90 |
+| `buffer_size` | 100k (fix) |
+
+---
+
 ## Comparativa ràpida
 
 | Model | Velocitat | Paràmetres | Dades mínimes | Interpretable |
@@ -229,6 +276,8 @@ Més flexible que PPO; `BtcTradingEnvContinuous`, permet posicions parcials.
 | PatchTST | 🐢🐢 | 5 | 2000+ | ❌ |
 | PPO | 🐢🐢 | 5 | 500k steps | ❌ |
 | SAC | 🐢🐢 | 5 | 500k steps | ❌ |
+| PPO Professional | 🐢🐢 | 6 | 500k steps · dades 12H | ❌ |
+| SAC Professional | 🐢🐢 | 6 | 500k steps · dades 12H | ❌ |
 
 ---
 
@@ -245,4 +294,4 @@ Veure **[ROADMAP.md](./ROADMAP.md)** per a detalls complets.
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.2*
+*Última actualització: Març 2026 · Versió 1.3*

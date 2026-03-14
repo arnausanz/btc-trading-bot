@@ -1,0 +1,87 @@
+bot:
+  bot_id: rl_sac_professional_v1
+  trade_size: 1.0
+category: RL
+features:
+  external:
+    fear_greed: true
+    funding_rate: true
+    funding_rate_symbol: BTC/USDT:USDT
+  lookback: 60
+  select:
+  - close
+  - rsi_14
+  - macd
+  - macd_signal
+  - macd_hist
+  - atr_14
+  - bb_upper_20
+  - bb_lower_20
+  - bb_middle_20
+  - ema_20
+  - ema_50
+  - volume
+  - volume_norm_20
+  - adx_14
+  - atr_5
+  - vol_ratio
+  - fear_greed_value
+  - funding_rate
+model_type: sac_professional
+optimization:
+  direction: maximize
+  metric: val_return_pct
+  n_trials: 15
+  probe_timesteps: 25000
+  search_space:
+    batch_size:
+      choices:
+      - 128
+      - 256
+      - 512
+      type: categorical
+    gamma:
+      high: 0.999
+      low: 0.95
+      type: float
+    learning_rate:
+      high: 0.001
+      log: true
+      low: 0.0001
+      type: float
+    lookback:
+      choices:
+      - 60
+      - 90
+      type: categorical
+    stop_atr_multiplier:
+      high: 3.0
+      low: 1.5
+      type: float
+symbol: BTC/USDT
+timeframe: 12h
+training:
+  environment:
+    fee_rate: 0.001
+    initial_capital: 10000.0
+    lookback: 60
+    reward_scaling: 100.0
+    reward_type: professional
+    stop_atr_multiplier: 1.6465081710095757
+  experiment_name: sac_professional_optimized
+  model:
+    batch_size: 256
+    buffer_size: 100000
+    gamma: 0.9649260746894951
+    gradient_steps: 1
+    learning_rate: 0.00011615865989246468
+    learning_starts: 1000
+    net_arch:
+    - 256
+    - 256
+    policy: MlpPolicy
+    tau: 0.005
+    total_timesteps: 500000
+    train_freq: 1
+  model_path: models/sac_professional_v1
+  train_pct: 0.8

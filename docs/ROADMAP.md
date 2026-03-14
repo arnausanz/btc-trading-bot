@@ -10,7 +10,7 @@
 | Component | Estat | Notes |
 |-----------|-------|-------|
 | PaperExchange | ✅ Operatiu | Fees 0.1% + slippage 0.01% |
-| OHLCVFetcher (Binance/ccxt) | ✅ Operatiu | 1h, 4h, 1d des de 2019 |
+| OHLCVFetcher (Binance/ccxt) | ✅ Operatiu | 1h, 4h, 12h, 1d des de 2019 |
 | ObservationBuilder | ✅ Operatiu | Cache en memòria per tick |
 | TrendBot | ✅ Operatiu | EMA crossover + RSI |
 | DCABot | ✅ Operatiu | Compra periòdica fixa |
@@ -21,6 +21,7 @@
 | MLBot (RF, XGB, LGBM, CB, GRU, PatchTST) | ✅ Operatiu | 6 backends |
 | RLBot (PPO, SAC) | ✅ Operatiu | Discret + continu |
 | RLBot on-chain (PPO, SAC) | ⚠️ Pendent entrenament | Configs creades, requereix BD externa + `train_rl.py --agents ppo_onchain sac_onchain` |
+| RLBot Professional (PPO, SAC) | ⚠️ Pendent entrenament complet | Política professional implementada (12H, Discrete-5/Continuous, ATR stop, position state, reward professional). Smoke OK. Training complet + Optuna pendent. |
 | BacktestEngine + MLflow | ✅ Operatiu | Registre automàtic |
 | BotComparator | ✅ Operatiu | Ranking per Sharpe |
 | DemoRunner (multi-bot) | ✅ Operatiu | Persistència + Telegram |
@@ -158,31 +159,37 @@ python scripts/run_comparison.py --bots hold ppo sac ppo_onchain sac_onchain
 
 ---
 
-#### C3. Nous agents RL — investigació profunda
+#### ✅ C3. Investigació RL professional + nova política (implementat, pendent entrenament complet)
 
-**El problema actual:** PPO i SAC s'han implementat ràpidament amb rewards simples (retorn directe). Però un trader professional no pren decisions basant-se únicament en el retorn instantani.
+**Investigació realitzada:** `docs/decisions/trading_policy_reference.md` — recerca profunda sobre gestió de risc professional, regime detection, position sizing, stop-loss i reward shaping per a BTC swing trading sense apalancament. Document de disseny final: `docs/nova_politica/DISSENY.md` (v2.0).
 
-**Objectiu d'aquesta fase:** fer una investigació profunda sobre com treballa un trader professional — quins factors considera, com gestiona el risc, quan entra i surt — i traduir aquesta mentalitat en una política RL ben definida.
+**Política implementada:** `ppo_professional` + `sac_professional` (timeframe 12H, cicles de 5–7 dies).
 
-**Preguntes a respondre durant la recerca:**
-- Com gestiona el risc un trader professional? (stop-loss, position sizing, correlació d'actius)
-- Quina és la diferència entre momentum trading, swing trading i scalping en termes de senyals d'entrada?
-- Com es defineix "una bona entrada"? (confirmació múltiple vs. senyal ràpid)
-- Com s'aplica el concepte de "regime detection" (tendència vs. rang vs. alta volatilitat)?
-- Quins indicadors usen els traders professionals vs. els que usen els bots? On hi ha divergència?
+| Element del pla | Implementació |
+|-----------------|--------------|
+| Reward shaping (drawdown + overtrading) | ✅ `professional_risk_adjusted` — quadràtic progressiu + penalització per trades prematurs |
+| Position sizing [0.0–1.0] | ✅ SAC continuous Box([0,1]) + deadband ±0.05; PPO Discrete-5 (HOLD/BUY_FULL/BUY_PARTIAL/SELL_PARTIAL/SELL_FULL) |
+| Regime detection | ✅ ADX-14 (força tendència) + vol_ratio = ATR-5/ATR-14 (expansió/compressió) en observació |
+| Portfolio state en observació | ✅ 4 dims afegides: pnl_pct, position_fraction, steps_in_position, drawdown_pct |
+| Stop-loss | ✅ Stop ATR dur forçat per l'entorn (agent no pot moure'l); `stop_atr_multiplier=2.0` |
+| Multi-timeframe obs | 🔄 Substituït per 12H × 90 lookback (45 dies) — menys soroll, millor per a swing |
 
-**Elements clau per a la política RL:**
+**Fitxers nous:** `bots/rl/environment_professional.py`, `bots/rl/rewards/professional.py`, `config/models/ppo_professional.yaml`, `config/models/sac_professional.yaml`.
 
-| Element | Descripció |
-|---------|-----------|
-| Reward shaping | Penalitzar drawdown (calmar-based), overtrading (cost per operació), inactivitat excessiva |
-| Position sizing | L'agent controla el sizing [0.0–1.0], no sempre tot el capital |
-| Regime detection | L'entorn informa l'agent del règim de mercat actual |
-| Multi-timeframe obs | L'observation inclou 1h + 4h + 1d simultàniament |
-| Portfolio state | USDT balance, BTC balance, PnL latent com a part de l'observation |
-| Stop-loss implícit | Reward molt negatiu per drawdowns superiors a X% |
+**Estat:** Smoke OK (-8.7% SAC, -39.7% PPO amb 50k steps aleatoris). Training complet (500k steps) + Optuna pendent.
 
-**Nous agents a investigar i implementar:**
+```bash
+# Optimitzar (en curs):
+python scripts/optimize_models.py --agents ppo_professional sac_professional
+
+# Entrenar amb millors hiperparàmetres:
+python scripts/train_rl.py --agents ppo_professional sac_professional
+
+# Comparar:
+python scripts/run_comparison.py --bots hold ppo sac ppo_professional sac_professional
+```
+
+**Extensions futures de C3 (pendent):**
 
 | Agent | Notes |
 |-------|-------|
@@ -285,7 +292,7 @@ L'objectiu final d'aquesta fase del projecte:
               ↓
 [C_onchain ✅] PPO/SAC on-chain ← configs creades i validades, PENDENT ENTRENAMENT
               ↓
-[C3] Investigació RL professional → nova política → TD3 / Curriculum
+[C3 ✅] RL professional → ppo_professional + sac_professional (12H, ATR stop, position state, reward professional) — pendent entrenament complet + Optuna
               ↓
 [B_pendent/NLP] NLP sentiment ← quan els models ML ja consumeixin les noves features
               ↓
@@ -302,4 +309,4 @@ L'objectiu final d'aquesta fase del projecte:
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.4*
+*Última actualització: Març 2026 · Versió 1.5*

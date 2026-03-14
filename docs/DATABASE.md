@@ -15,13 +15,15 @@ Dades OHLCV descarregades de Binance. Font principal de tot el sistema.
 | `id` | int PK | Autoincrement |
 | `exchange` | str(50) | Ex: `"binance"` |
 | `symbol` | str(20) | Ex: `"BTC/USDT"` |
-| `timeframe` | str(10) | `"1h"`, `"4h"`, `"1d"` |
+| `timeframe` | str(10) | `"1h"`, `"4h"`, `"12h"`, `"1d"` |
 | `timestamp` | datetime tz | UTC, inici de la candle |
 | `open` | float | Preu d'obertura |
 | `high` | float | Màxim |
 | `low` | float | Mínim |
 | `close` | float | Preu de tancament |
 | `volume` | float | Volum en BTC |
+
+**Timeframes disponibles:** `1h` (baseline), `4h`, `12h` (professional RL), `1d`. Tots descarregats des de 2019 amb `python scripts/download_data.py`.
 
 **Index recomanat:** `(symbol, timeframe, timestamp)` — és la consulta més freqüent.
 
@@ -150,11 +152,11 @@ WHERE bot_id = 'trend_bot_v1'
 ORDER BY timestamp;
 ```
 
-### Historial de preus BTC (últimes 200 candles d'1h)
+### Historial de preus BTC (últimes 200 candles d'1h o 12h)
 ```sql
 SELECT timestamp, open, high, low, close, volume
 FROM candles
-WHERE symbol = 'BTC/USDT' AND timeframe = '1h'
+WHERE symbol = 'BTC/USDT' AND timeframe = '12h'   -- o '1h'
 ORDER BY timestamp DESC
 LIMIT 200;
 ```
@@ -315,4 +317,4 @@ Reporta per a cada font: total de registres, rang de dates, cobertura estimada, 
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.2*
+*Última actualització: Març 2026 · Versió 1.3*

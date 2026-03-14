@@ -16,8 +16,8 @@ class RLOptimizer:
     Each trial = short training (probe_timesteps) + validation.
     Objective metric: val_return_pct | val_max_drawdown_pct.
 
-    Llegeix des del YAML unificat (config/models/*.yaml) — un sol fitxer conté
-    tota la informació: features, training, optimization search space i bot config.
+    Llegeix des del YAML unificat (config/models/*.yaml) -- un sol fitxer conte
+    tota la informacio: features, training, optimization search space i bot config.
 
     Uses probe_timesteps << total_timesteps to perform many trials quickly.
     The best config is re-trained afterward with full total_timesteps.
@@ -54,42 +54,60 @@ class RLOptimizer:
         return params
 
     def _build_config(self, params: dict) -> dict:
-        """Aplica paràmetres del trial al config unificat."""
+        """Aplica parametres del trial al config unificat."""
         config = copy.deepcopy(self.unified_cfg)
         for name, value in params.items():
-            # Paràmetres d'entorn → training.environment
-            if name in ("lookback", "reward_type", "reward_scaling"):
+            # Parametres d'entorn
+            if name in ("lookback", "reward_type", "reward_scaling", "stop_atr_multiplier"):
                 config["training"]["environment"][name] = value
-                # Sincronitzem lookback a features.lookback també
+                # Sincronitzem lookback a features.lookback tambe
                 if name == "lookback":
                     config["features"]["lookback"] = value
             else:
-                # Hiperparàmetres del model → training.model
+                # Hiperparametres del model
                 config["training"]["model"][name] = value
         return config
 
     def _objective(self, trial: optuna.Trial) -> float:
-        from bots.rl.agents import SACAgent, PPOAgent
+        from bots.rl.agents import SACAgent, PPOAgent, TD3Agent
         from bots.rl.environment import BtcTradingEnvDiscrete, BtcTradingEnvContinuous
-        from bots.rl.rewards import builtins  # noqa: registra builtins
+        from bots.rl.environment_professional import (
+            BtcTradingEnvProfessionalDiscrete,
+            BtcTradingEnvProfessionalContinuous,
+        )
+        from bots.rl.rewards import builtins, professional  # noqa: registers rewards
+        from bots.rl.rewards import advanced                # noqa: registers regime_adaptive
 
         _AGENT_REGISTRY: dict[str, type[BaseRLAgent]] = {
-            "sac": SACAgent,
-            "ppo": PPOAgent,
+            "sac":              SACAgent,
+            "ppo":              PPOAgent,
+            "ppo_professional": PPOAgent,
+            "sac_professional": SACAgent,
+            "td3_professional": TD3Agent,
+            "td3_multiframe":   TD3Agent,
         }
         _ENV_REGISTRY = {
-            "sac": BtcTradingEnvContinuous,
-            "ppo": BtcTradingEnvDiscrete,
+            "sac":              BtcTradingEnvContinuous,
+            "ppo":              BtcTradingEnvDiscrete,
+            "ppo_professional": BtcTradingEnvProfessionalDiscrete,
+            "sac_professional": BtcTradingEnvProfessionalContinuous,
+            "td3_professional": BtcTradingEnvProfessionalContinuous,
+            "td3_multiframe":   BtcTradingEnvProfessionalContinuous,
         }
+        _MULTIFRAME_TYPES = {"td3_multiframe"}
 
         params = self._sample_params(trial)
         config = self._build_config(params)
 
         try:
             mlflow.end_run()
-            from data.processing.feature_builder import FeatureBuilder
-            # FeatureBuilder.from_config llegeix des del top-level (symbol, timeframe, features)
-            df = FeatureBuilder.from_config(config).build()
+            if self.model_type in _MULTIFRAME_TYPES:
+                from data.processing.multiframe_builder import MultiFrameFeatureBuilder
+                df = MultiFrameFeatureBuilder.from_config(config).build()
+            else:
+                from data.processing.feature_builder import FeatureBuilder
+                df = FeatureBuilder.from_config(config).build()
+
             train_cfg = config["training"]
             split = int(len(df) * train_cfg["train_pct"])
             df_train = df.iloc[:split]
@@ -101,12 +119,11 @@ class RLOptimizer:
             train_env = env_class(df=df_train, **env_cfg)
             val_env = env_class(df=df_val, **env_cfg)
 
-            # L'agent rep la secció training (que té la clau "model") igual que en PPOAgent.from_config
             agent = _AGENT_REGISTRY[self.model_type].from_config(train_cfg)
             metrics = agent.train(
                 train_env=train_env,
                 val_env=val_env,
-                total_timesteps=self.probe_timesteps,  # ← short for quick optimization
+                total_timesteps=self.probe_timesteps,
             )
 
             score = metrics.get(self.metric, -999.0)
