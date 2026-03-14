@@ -28,6 +28,7 @@ class MLOptimizer:
         Args:
             config_path: ruta al YAML unificat (config/models/{model}.yaml)
         """
+        self.config_path = config_path
         with open(config_path) as f:
             self.unified_cfg = yaml.safe_load(f)
 
@@ -127,15 +128,27 @@ class MLOptimizer:
         """Returns the complete config with the best parameters."""
         return self._build_config(study.best_params)
 
-    def save_best_config(self, study: optuna.Study, output_path: str) -> None:
-        """Guarda el millor config unificat com a YAML llest per entrenar."""
-        best = self.best_config(study)
-        best["training"]["experiment_name"] = f"{self.model_type}_optimized"
-        orig_path = best["training"]["model_path"]
-        best["training"]["model_path"] = (
-            orig_path.replace(".pkl", "_optimized.pkl")
-                     .replace(".pt", "_optimized.pt")
+    def save_best_config(self, study: optuna.Study, config_path: str | None = None) -> None:
+        """
+        Guarda best_params dins el YAML base (in-place).
+
+        En lloc de crear un fitxer *_optimized.yaml separat, escriu la secció
+        ``best_params`` directament al YAML base.  Al moment d'entrenar,
+        ``apply_best_params`` aplica aquests valors automàticament.
+
+        Args:
+            config_path: ruta del YAML on escriure.  Per defecte: el YAML base
+                         passat al constructor (self.config_path).
+        """
+        target = config_path or self.config_path
+        with open(target) as f:
+            config = yaml.safe_load(f)
+
+        config["best_params"] = study.best_params
+
+        with open(target, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+
+        logger.info(
+            f"  best_params saved to {target}: {study.best_params}"
         )
-        with open(output_path, "w") as f:
-            yaml.dump(best, f, default_flow_style=False, allow_unicode=True)
-        logger.info(f"  Optimized config saved to {output_path}")

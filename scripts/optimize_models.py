@@ -59,6 +59,9 @@ ALL_RL_CONFIGS = {
     # Professional: 12h swing + règim + on-chain + position state
     "ppo_professional": "config/models/ppo_professional.yaml",
     "sac_professional": "config/models/sac_professional.yaml",
+    # C3 Advanced: TD3 variants
+    "td3_professional": "config/models/td3_professional.yaml",
+    "td3_multiframe":   "config/models/td3_multiframe.yaml",
 }
 
 if __name__ == "__main__":
@@ -127,18 +130,16 @@ if __name__ == "__main__":
             optimizer.n_trials = args.trials
         study = optimizer.run()
 
-        model_type = optimizer.model_type
-        # Resultat guardat al YAML unificat: config/models/{model_type}_optimized.yaml
-        out_path = f"config/models/{model_type}_optimized.yaml"
-        optimizer.save_best_config(study, out_path)
+        # best_params es guarden directament al YAML base (in-place)
+        optimizer.save_best_config(study)
 
         results.append({
             "type": "ML",
-            "model": model_type,
+            "model": optimizer.model_type,
             "metric": optimizer.metric,
             "best_value": study.best_value,
             "best_params": study.best_params,
-            "output_config": out_path,
+            "output_config": config_path,
         })
 
     # ── Optimize RL agents ────────────────────────────────────────────────
@@ -149,11 +150,8 @@ if __name__ == "__main__":
             optimizer.n_trials = args.trials
         study = optimizer.run()
 
-        # Use registry key (e.g. "ppo_onchain") — NOT model_type ("ppo") —
-        # so on-chain variants don't overwrite baseline optimized configs.
-        # train_rl.py looks for config/models/{agent_key}_optimized.yaml.
-        out_path = f"config/models/{key}_optimized.yaml"
-        optimizer.save_best_config(study, out_path)
+        # best_params es guarden directament al YAML base (in-place)
+        optimizer.save_best_config(study)
 
         results.append({
             "type": "RL",
@@ -161,7 +159,7 @@ if __name__ == "__main__":
             "metric": optimizer.metric,
             "best_value": study.best_value,
             "best_params": study.best_params,
-            "output_config": out_path,
+            "output_config": config_path,
         })
 
     # ── Final summary ─────────────────────────────────────────────────────
@@ -176,9 +174,9 @@ if __name__ == "__main__":
                 f"{r['type']:<5} {r['model']:<15} "
                 f"{r['metric']:<20} {r['best_value']:>12.4f}"
             )
-            logger.info(f"       Config saved to: {r['output_config']}")
+            logger.info(f"       best_params saved to: {r['output_config']}")
 
-        logger.info("\nOptimized configs saved to config/models/{model_type}_optimized.yaml")
+        logger.info("\nbest_params saved in-place to the base YAML (config/models/*.yaml)")
         logger.info("To train with the best parameters:")
-        logger.info("  python scripts/train_models.py   # uses *_optimized.yaml if present")
-        logger.info("  python scripts/train_rl.py       # uses *_optimized.yaml if present")
+        logger.info("  python scripts/train_models.py   # applies best_params automatically")
+        logger.info("  python scripts/train_rl.py       # applies best_params automatically")

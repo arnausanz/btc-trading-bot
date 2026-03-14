@@ -69,8 +69,9 @@ class RLTrainer:
     """
 
     def __init__(self, config_path: str):
+        from core.config_utils import apply_best_params
         with open(config_path) as f:
-            self.config = yaml.safe_load(f)
+            self.config = apply_best_params(yaml.safe_load(f))
 
     def run(self) -> dict:
         train_cfg = self.config["training"]

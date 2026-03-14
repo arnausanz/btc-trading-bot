@@ -32,10 +32,12 @@ class GridBot(BaseBot):
         features: pd.DataFrame = observation[timeframe]["features"].copy()
 
         close = features["close"]
-        middle = close.rolling(window=20).mean()
-        std = close.rolling(window=20).std()
-        bb_upper = middle + 2 * std
-        bb_lower = middle - 2 * std
+        bb_window = self.config.get("bb_window", 20)
+        bb_std = self.config.get("bb_std", 2.0)
+        middle = close.rolling(window=bb_window).mean()
+        std = close.rolling(window=bb_window).std()
+        bb_upper = middle + bb_std * std
+        bb_lower = middle - bb_std * std
 
         price = close.iloc[-1]
         rsi = features["rsi_14"].iloc[-1]

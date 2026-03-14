@@ -1,9 +1,3 @@
-# config/models/grid.yaml
-# ─────────────────────────────────────────────────────────────────────────────
-# GridBot — grid trading amb Bollinger Bands + filtre RSI
-# Compra prop de la banda inferior i ven prop de la superior.
-# Funciona millor en mercats laterals (rang definit).
-# ─────────────────────────────────────────────────────────────────────────────
 category: classic
 model_type: grid
 bot_id: grid_v1
@@ -11,22 +5,16 @@ symbol: BTC/USDT
 timeframe: 1h
 lookback: 50
 features:
-  - close
-  - bb_upper_20
-  - bb_lower_20
-  - bb_middle_20
-  - rsi_14
-
-# ── Paràmetres d'estratègia ─────────────────────────────────────────────────
-grid_spread: 0.02        # 2% entre nivells del grid
-num_levels: 5            # Nivells per sobre i per sota del preu
-level_size: 0.05         # 5% del capital per nivell
-rsi_filter_high: 75      # No compra si RSI > aquest valor
-rsi_filter_low: 25       # No ven si RSI < aquest valor
-
-# ── Optimització (Optuna) ────────────────────────────────────────────────────
-# Executar: python scripts/optimize_bots.py --bots grid
-# Resultat guardat a: config/models/grid_optimized.yaml
+- close
+- bb_upper_20
+- bb_lower_20
+- bb_middle_20
+- rsi_14
+grid_spread: 0.02
+num_levels: 5
+level_size: 0.05
+rsi_filter_high: 75
+rsi_filter_low: 25
 optimization:
   n_trials: 100
   metric: sharpe_ratio
@@ -44,3 +32,16 @@ optimization:
       type: int
       low: 15
       high: 40
+    bb_window:
+      type: categorical
+      choices:
+      - 14
+      - 20
+      - 25
+      - 30
+    bb_std:
+      type: float
+      low: 1.5
+      high: 3.0
+bb_window: 20
+bb_std: 2.0

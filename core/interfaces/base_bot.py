@@ -25,6 +25,13 @@ class BaseBot(ABC):
 
     def __init__(self, bot_id: str, config: dict):
         self.bot_id = bot_id
+        # For classical bots (flat config, category == "classic"), apply any
+        # best_params overrides persisted by BotOptimizer.save_best_config().
+        # RL / ML bots apply best_params earlier (in RLBot / MLBot __init__)
+        # where the full nested YAML structure is still intact.
+        if config.get("best_params") and config.get("category", "classic").lower() == "classic":
+            from core.config_utils import apply_best_params
+            config = apply_best_params(config)
         self.config = config
 
     @abstractmethod

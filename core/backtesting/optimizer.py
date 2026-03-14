@@ -126,9 +126,27 @@ class BotOptimizer:
 
         return config
 
-    def save_best_config(self, study: optuna.Study, output_path: str) -> None:
-        """Saves the best config as YAML ready for backtesting."""
-        best = self.best_config(study)
-        with open(output_path, "w") as f:
-            yaml.dump(best, f, default_flow_style=False, allow_unicode=True)
-        logger.info(f"  Optimized config saved to {output_path}")
+    def save_best_config(self, study: optuna.Study, config_path: str | None = None) -> None:
+        """
+        Guarda best_params dins el YAML base (in-place).
+
+        En lloc de crear un fitxer *_optimized.yaml separat, escriu la secció
+        ``best_params`` directament al YAML base.  Al moment de carregar el bot,
+        ``apply_best_params`` (via BaseBot.__init__) aplica els overrides.
+
+        Args:
+            config_path: ruta del YAML on escriure.  Per defecte: el YAML base
+                         passat al constructor (self.base_config_path).
+        """
+        target = config_path or self.base_config_path
+        with open(target) as f:
+            config = yaml.safe_load(f)
+
+        config["best_params"] = study.best_params
+
+        with open(target, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+
+        logger.info(
+            f"  best_params saved to {target}: {study.best_params}"
+        )

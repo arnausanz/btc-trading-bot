@@ -35,40 +35,18 @@ ALL_CONFIGS = {
     "patchtst": "config/models/patchtst.yaml",
 }
 
-# Mapeig clau → model_type per al registry
-_KEY_TO_MODEL_TYPE = {
-    "rf": "random_forest",
-    "xgb": "xgboost",
-    "lgbm": "lightgbm",
-    "catboost": "catboost",
-    "gru": "gru",
-    "patchtst": "patchtst",
-}
-
 
 def get_best_config_path(model_key: str) -> str:
     """
-    Retorna el millor config disponible per a un model.
+    Retorna la ruta al YAML base del model.
 
-    Cerca primer {model_type}_optimized.yaml (generat per Optuna),
-    si no existeix usa el YAML base (config/models/{model_key}.yaml).
-
-    Args:
-        model_key: Clau del model (e.g., 'rf', 'xgb', 'gru')
-
-    Returns:
-        Path al fitxer de config a usar
+    Els best_params d'Optuna es guarden directament dins el YAML base
+    (secció ``best_params``).  ``apply_best_params`` els aplica en temps
+    d'entrenament — no cal cap fitxer *_optimized.yaml separat.
     """
-    model_type = _KEY_TO_MODEL_TYPE.get(model_key, model_key)
-    optimized = f"config/models/{model_type}_optimized.yaml"
-    default = ALL_CONFIGS[model_key]
-
-    if os.path.exists(optimized):
-        logger.info(f"Found optimized config for {model_key}: {optimized}")
-        return optimized
-
-    logger.info(f"Using default config for {model_key}: {default}")
-    return default
+    path = ALL_CONFIGS[model_key]
+    logger.info(f"Config for {model_key}: {path}")
+    return path
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train supervised ML models")
@@ -109,8 +87,9 @@ if __name__ == "__main__":
 
     with tqdm(selected_configs, desc="Training models", unit="model", dynamic_ncols=True) as model_bar:
         for config_path in model_bar:
+            from core.config_utils import apply_best_params
             with open(config_path) as f:
-                config = yaml.safe_load(f)
+                config = apply_best_params(yaml.safe_load(f))
 
             # Llegim des de la nova estructura unificada
             name       = config["training"]["experiment_name"]

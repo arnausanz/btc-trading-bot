@@ -69,17 +69,15 @@ _DEFAULT_AGENTS = ["ppo", "sac"]
 
 def get_best_config_path(agent_name: str) -> str:
     """
-    Loads the optimized config if it exists, else uses the base YAML.
+    Retorna la ruta al YAML base de l'agent.
+
+    Els best_params d'Optuna es guarden directament dins el YAML base
+    (secció ``best_params``).  RLTrainer els aplica via ``apply_best_params``
+    — no cal cap fitxer *_optimized.yaml separat.
     """
-    optimized = f"config/models/{agent_name}_optimized.yaml"
-    default = AVAILABLE_AGENTS[agent_name]
-
-    if os.path.exists(optimized):
-        logger.info(f"Found optimized config: {optimized}")
-        return optimized
-
-    logger.info(f"Using default config: {default}")
-    return default
+    path = AVAILABLE_AGENTS[agent_name]
+    logger.info(f"Config for {agent_name}: {path}")
+    return path
 
 
 if __name__ == "__main__":

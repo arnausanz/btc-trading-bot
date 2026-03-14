@@ -1,6 +1,5 @@
 # core/engine/demo_runner.py
 import logging
-import os
 import time
 import yaml
 import zoneinfo
@@ -21,27 +20,19 @@ _RL_TYPES = {"ppo", "sac"}
 
 def _get_best_config_path(base_config_path: str) -> str:
     """
-    Check if an optimized version of the config exists and return the best path.
+    Retorna la ruta al YAML base del bot / model.
 
-    For base_config_path like "config/bots/dca.yaml", checks for "config/bots/dca_optimized.yaml".
-    For models like "config/training/rf_optimized.yaml", checks for optimized variant.
+    Els best_params d'Optuna es guarden directament dins el YAML base
+    (secció ``best_params``).  Cada bot / trainer els aplica via
+    ``apply_best_params`` — no cal cap fitxer *_optimized.yaml separat.
 
     Args:
         base_config_path: The original config path from demo.yaml
 
     Returns:
-        The optimized config path if it exists, otherwise the base config path
+        base_config_path (unchanged)
     """
-    dir_name = os.path.dirname(base_config_path)
-    file_name = os.path.basename(base_config_path)
-    name_without_ext = file_name.replace(".yaml", "")
-    optimized_path = os.path.join(dir_name, f"{name_without_ext}_optimized.yaml")
-
-    if os.path.exists(optimized_path):
-        logger.info(f"Using optimized config: {optimized_path}")
-        return optimized_path
-
-    logger.info(f"Using default config: {base_config_path}")
+    logger.info(f"Using config: {base_config_path}")
     return base_config_path
 
 

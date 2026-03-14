@@ -30,8 +30,9 @@ class RLBot(BaseBot):
     """
 
     def __init__(self, config_path: str = "config/models/ppo.yaml"):
+        from core.config_utils import apply_best_params
         with open(config_path) as f:
-            raw = yaml.safe_load(f)
+            raw = apply_best_params(yaml.safe_load(f))
 
         features_cfg = raw["features"]
         config = {

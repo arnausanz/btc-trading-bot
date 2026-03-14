@@ -68,13 +68,16 @@ BOT_REGISTRY = {
 
 
 def get_best_config_path(bot_key: str) -> str:
-    default = BOT_REGISTRY[bot_key]
-    optimized = default.replace(".yaml", "_optimized.yaml")
-    if os.path.exists(optimized):
-        logger.info(f"Using optimized config: {optimized}")
-        return optimized
-    logger.info(f"Using default config: {default}")
-    return default
+    """
+    Retorna la ruta al YAML base del bot.
+
+    Els best_params d'Optuna es guarden directament dins el YAML base
+    (secció ``best_params``).  Cada bot els aplica via ``apply_best_params``
+    — no cal cap fitxer *_optimized.yaml separat.
+    """
+    path = BOT_REGISTRY[bot_key]
+    logger.info(f"Config for {bot_key}: {path}")
+    return path
 
 
 def _instantiate_bot(key: str):

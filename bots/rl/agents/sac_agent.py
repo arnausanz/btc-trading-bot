@@ -2,28 +2,10 @@
 import logging
 import numpy as np
 from stable_baselines3 import SAC
-from stable_baselines3.common.callbacks import BaseCallback
+from bots.rl.callbacks import ProgressCallback
 from core.interfaces.base_rl_agent import BaseRLAgent
 
 logger = logging.getLogger(__name__)
-
-
-class ProgressCallback(BaseCallback):
-    def __init__(self, total_timesteps: int):
-        super().__init__()
-        self.total_timesteps = total_timesteps
-
-    def _on_step(self) -> bool:
-        print(
-            f"\r  {self.n_calls}/{self.total_timesteps} steps "
-            f"({self.n_calls/self.total_timesteps*100:.1f}%)",
-            end="",
-            flush=True,
-        )
-        return True
-
-    def _on_training_end(self) -> None:
-        print()  # newline at the end
 
 
 class SACAgent(BaseRLAgent):

@@ -80,9 +80,9 @@ if __name__ == "__main__":
         study = optimizer.run()
         studies[bot_key] = study
 
-        # Guarda el millor config a config/models/{bot}_optimized.yaml
-        out_path = f"config/models/{bot_key}_optimized.yaml"
-        optimizer.save_best_config(study, out_path)
+        # best_params es guarden directament al YAML base (in-place)
+        # BaseBot.__init__ els aplica automàticament en càrrega
+        optimizer.save_best_config(study)
 
     logger.info("=== FINAL OPTIMIZATION SUMMARY ===")
     for bot_key, study in studies.items():
