@@ -2,17 +2,22 @@
 """
 Trains supervised ML models.
 
+The list of available models is auto-discovered from config/models/*.yaml
+(category: ML) — no edits needed when adding new models.
+
 Usage:
-  python scripts/train_models.py                       # train all
-  python scripts/train_models.py --models rf xgb       # only RF and XGB
-  python scripts/train_models.py --models gru patchtst # only DL models
+  python scripts/train_models.py                           # train all ML models
+  python scripts/train_models.py --models xgboost gru      # only these two
+  python scripts/train_models.py --models patchtst catboost
 """
-import os
 import argparse
+import importlib
 import logging
+import os
 import sys
-import yaml
+
 import mlflow
+import yaml
 from tqdm import tqdm
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -24,29 +29,26 @@ sys.path.append(".")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# Clau → YAML unificat (config/models/*.yaml)
-# Ordre recomanat: ràpids primer
-ALL_CONFIGS = {
-    "rf":       "config/models/random_forest.yaml",
-    "xgb":      "config/models/xgboost.yaml",
-    "lgbm":     "config/models/lightgbm.yaml",
-    "catboost": "config/models/catboost.yaml",
-    "gru":      "config/models/gru.yaml",
-    "patchtst": "config/models/patchtst.yaml",
-}
+# ── Auto-discover all ML model configs ────────────────────────────────────────
+from core.config_utils import apply_best_params, discover_configs
+
+ALL_CONFIGS: dict[str, str] = discover_configs("ML")
+# e.g. {"catboost": "config/models/catboost.yaml",
+#        "gru":      "config/models/gru.yaml", ...}
 
 
-def get_best_config_path(model_key: str) -> str:
-    """
-    Retorna la ruta al YAML base del model.
+def _load_model_class(config: dict):
+    """Dynamically imports and returns the model class declared in the YAML."""
+    mod_path = config.get("module")
+    cls_name = config.get("class_name")
+    if not (mod_path and cls_name):
+        raise ValueError(
+            f"YAML for model_type '{config.get('model_type')}' is missing "
+            f"'module' or 'class_name' fields."
+        )
+    mod = importlib.import_module(mod_path)
+    return getattr(mod, cls_name)
 
-    Els best_params d'Optuna es guarden directament dins el YAML base
-    (secció ``best_params``).  ``apply_best_params`` els aplica en temps
-    d'entrenament — no cal cap fitxer *_optimized.yaml separat.
-    """
-    path = ALL_CONFIGS[model_key]
-    logger.info(f"Config for {model_key}: {path}")
-    return path
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train supervised ML models")
@@ -59,26 +61,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     from data.processing.dataset import DatasetBuilder
-    from core.interfaces.base_ml_model import BaseMLModel
-    from bots.ml.random_forest   import RandomForestModel
-    from bots.ml.xgboost_model   import XGBoostModel
-    from bots.ml.lightgbm_model  import LightGBMModel
-    from bots.ml.catboost_model  import CatBoostModel
-    from bots.ml.gru_model       import GRUModel
-    from bots.ml.patchtst_model  import PatchTSTModel
 
-    _MODEL_REGISTRY: dict[str, type[BaseMLModel]] = {
-        "random_forest": RandomForestModel,
-        "xgboost":       XGBoostModel,
-        "lightgbm":      LightGBMModel,
-        "catboost":      CatBoostModel,
-        "gru":           GRUModel,
-        "patchtst":      PatchTSTModel,
-    }
-
-    selected_models = args.models
-    selected_configs = [get_best_config_path(m) for m in selected_models]
-    logger.info(f"Selected models: {selected_models}")
+    selected_configs = [ALL_CONFIGS[m] for m in args.models]
+    logger.info(f"Selected models: {args.models}")
 
     for _noisy in ("data.processing.technical", "data.observation.builder", "core.db", "mlflow", "bots.ml"):
         logging.getLogger(_noisy).setLevel(logging.WARNING)
@@ -87,34 +72,34 @@ if __name__ == "__main__":
 
     with tqdm(selected_configs, desc="Training models", unit="model", dynamic_ncols=True) as model_bar:
         for config_path in model_bar:
-            from core.config_utils import apply_best_params
             with open(config_path) as f:
                 config = apply_best_params(yaml.safe_load(f))
 
-            # Llegim des de la nova estructura unificada
             name       = config["training"]["experiment_name"]
             model_type = config["model_type"]
             model_bar.set_description(f"Training {name}")
             mlflow.end_run()
 
             tqdm.write(f"\n── {name} ──")
-            # DatasetBuilder.from_config llegeix des del top-level (symbol, timeframes, ...)
             builder = DatasetBuilder.from_config(config)
-            X, y    = builder.build()
+            X, y = builder.build()
             tqdm.write(f"  Dataset: {X.shape[0]} rows x {X.shape[1]} features")
 
-            if model_type not in _MODEL_REGISTRY:
-                raise ValueError(f"Unknown model: {model_type}")
-
-            # El model llegeix config["model"] → passem config["training"]
-            model   = _MODEL_REGISTRY[model_type].from_config(config["training"])
+            model_cls = _load_model_class(config)
+            model = model_cls.from_config(config["training"])
             metrics = model.train(X, y)
             model.save(config["training"]["model_path"])
-            results.append({"name": name, "accuracy": metrics["accuracy_mean"],
-                "precision": metrics["precision_mean"], "recall": metrics["recall_mean"]})
+            results.append({
+                "name": name,
+                "accuracy": metrics["accuracy_mean"],
+                "precision": metrics["precision_mean"],
+                "recall": metrics["recall_mean"],
+            })
 
     logger.info("=== FINAL COMPARISON ===")
     logger.info(f"{'Model':<30} {'Accuracy':>10} {'Precision':>10} {'Recall':>10}")
     logger.info("-" * 65)
     for r in results:
-        logger.info(f"{r['name']:<30} {r['accuracy']:>10.3f} {r['precision']:>10.3f} {r['recall']:>10.3f}")
+        logger.info(
+            f"{r['name']:<30} {r['accuracy']:>10.3f} {r['precision']:>10.3f} {r['recall']:>10.3f}"
+        )

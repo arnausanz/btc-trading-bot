@@ -5,6 +5,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 category: ML
 model_type: catboost
+module: bots.ml.catboost_model
+class_name: CatBoostModel
 symbol: BTC/USDT
 timeframes:
   - 1h

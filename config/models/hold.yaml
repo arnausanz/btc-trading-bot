@@ -5,6 +5,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 category: classic
 model_type: hold
+module: bots.classical.hold_bot
+class_name: HoldBot
 bot_id: hold_v1
 symbol: BTC/USDT
 timeframe: 1h

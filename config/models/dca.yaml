@@ -6,6 +6,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 category: classic
 model_type: dca
+module: bots.classical.dca_bot
+class_name: DCABot
 bot_id: dca_v1
 symbol: BTC/USDT
 timeframe: 1h

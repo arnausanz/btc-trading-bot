@@ -1,5 +1,7 @@
 category: classic
 model_type: grid
+module: bots.classical.grid_bot
+class_name: GridBot
 bot_id: grid_v1
 symbol: BTC/USDT
 timeframe: 1h

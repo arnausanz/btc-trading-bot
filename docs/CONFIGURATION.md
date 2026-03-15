@@ -14,13 +14,17 @@ config/
 ├── exchanges/
 │   └── paper.yaml         → Configuració del PaperExchange (simulació)
 └── models/
-    ├── {model}.yaml        → Config UNIFICADA per a cada model/bot
-    └── {model}_optimized.yaml  → Config optimitzada per Optuna (auto-generat)
+    └── {model}.yaml        → Config UNIFICADA per a cada model/bot
 ```
 
 **Un sol YAML per model** conté tota la informació: dades, entrenament, optimització i desplegament.
 
-**Regla d'auto-carrega:** els scripts comproven si existeix `{model}_optimized.yaml` i el carreguen per defecte. Si no existeix, usen `{model}.yaml`.
+**Auto-discovery:** `discover_configs(category)` de `core/config_utils.py` llegeix tots els YAMLs
+i retorna `{stem: path}` per categoria.  Cada YAML declara `module` i `class_name` per
+a la càrrega dinàmica de la classe.
+
+**Paràmetres Optuna:** es guarden a la secció `best_params` del YAML base.  `apply_best_params()`
+els aplica en entrenament/inferència.  No hi ha fitxers `*_optimized.yaml` separats.
 
 ---
 
@@ -97,7 +101,9 @@ telegram:
 
 ```yaml
 category: classic
-model_type: dca           # Identifica la classe de bot (dca/trend/grid/hold/mean_reversion/momentum)
+model_type: dca           # Identifica la classe de bot
+module: bots.classical.dca_bot     # ← per auto-discovery (dinàmicament importat)
+class_name: DCABot                 # ← per auto-discovery
 bot_id: dca_v1
 symbol: BTC/USDT
 timeframe: 1h

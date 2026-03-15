@@ -6,6 +6,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 category: classic
 model_type: trend
+module: bots.classical.trend_bot
+class_name: TrendBot
 bot_id: trend_v1
 symbol: BTC/USDT
 timeframe: 1h

@@ -7,11 +7,12 @@ from tqdm import tqdm
 import mlflow
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
 from core.interfaces.base_ml_model import BaseMLModel
+from data.processing.torch_dataset import TimeSeriesDataset
 
 logger = logging.getLogger(__name__)
 
@@ -47,19 +48,6 @@ class BidirectionalGRU(nn.Module):
         out = self.dropout(out)
         out = self.sigmoid(self.fc2(out))
         return out.squeeze(-1)
-
-
-class TimeSeriesDataset(Dataset):
-    def __init__(self, X: np.ndarray, y: np.ndarray, seq_len: int):
-        self.X = torch.tensor(X, dtype=torch.float32)
-        self.y = torch.tensor(y, dtype=torch.float32)
-        self.seq_len = seq_len
-
-    def __len__(self) -> int:
-        return len(self.X) - self.seq_len
-
-    def __getitem__(self, idx: int):
-        return self.X[idx:idx + self.seq_len], self.y[idx + self.seq_len]
 
 
 class GRUModel(BaseMLModel):

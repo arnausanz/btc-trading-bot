@@ -4,6 +4,7 @@ import numpy as np
 from stable_baselines3 import SAC
 from bots.rl.callbacks import ProgressCallback
 from core.interfaces.base_rl_agent import BaseRLAgent
+from core.backtesting.agent_validator import validate_agent
 
 logger = logging.getLogger(__name__)
 
@@ -105,27 +106,4 @@ class SACAgent(BaseRLAgent):
         logger.info(f"SACAgent loaded from {path}")
 
     def _validate(self, env) -> dict:
-        obs, _ = env.reset()
-        done = False
-        portfolio_values = [env.initial_capital]
-
-        while not done:
-            action = self.act(obs, deterministic=True)
-            obs, _, done, _, info = env.step(action)
-            portfolio_values.append(info["portfolio_value"])
-
-        values = np.array(portfolio_values)
-        total_return = (values[-1] - env.initial_capital) / env.initial_capital * 100
-        peak = np.maximum.accumulate(values)
-        drawdown = float(((values - peak) / peak * 100).min())
-
-        logger.info(
-            f"  SAC Validation → return={total_return:.2f}% "
-            f"drawdown={drawdown:.2f}% trades={env.trades}"
-        )
-        return {
-            "val_return_pct": round(total_return, 2),
-            "val_max_drawdown_pct": round(drawdown, 2),
-            "val_trades": env.trades,
-            "val_final_capital": round(float(values[-1]), 2),
-        }
+        return validate_agent(self, env)

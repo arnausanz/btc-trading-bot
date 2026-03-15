@@ -6,6 +6,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 category: ML
 model_type: patchtst
+module: bots.ml.patchtst_model
+class_name: PatchTSTModel
 symbol: BTC/USDT
 timeframes:
   - 1h

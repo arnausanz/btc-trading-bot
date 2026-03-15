@@ -5,6 +5,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 category: ML
 model_type: lightgbm
+module: bots.ml.lightgbm_model
+class_name: LightGBMModel
 symbol: BTC/USDT
 timeframes:
   - 1h

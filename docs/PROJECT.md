@@ -110,8 +110,17 @@ TEST_FROM   = "2025-01-01"   # primera data del backtest de validació
 | ML | MLBot (PatchTST) | Discret | `config/models/patchtst.yaml` |
 | RL | RLBot (PPO) | Discret | `config/models/ppo.yaml` |
 | RL | RLBot (SAC) | Continu | `config/models/sac.yaml` |
+| RL | RLBot (PPO on-chain) | Discret | `config/models/ppo_onchain.yaml` |
+| RL | RLBot (SAC on-chain) | Continu | `config/models/sac_onchain.yaml` |
+| RL | RLBot (PPO professional) | Discret-5 | `config/models/ppo_professional.yaml` |
+| RL | RLBot (SAC professional) | Continu | `config/models/sac_professional.yaml` |
+| RL | RLBot (TD3 professional) | Continu | `config/models/td3_professional.yaml` |
 
 Veure **[MODELS.md](./MODELS.md)** per a descripció detallada de cada model.
+
+> **Auto-discovery:** els registres de models (`_MODEL_REGISTRY`, `BOT_REGISTRY`, `ALL_CONFIGS`)
+> es poblen automàticament llegint `config/models/*.yaml`.  Cada YAML declara `module` i
+> `class_name` per a la càrrega dinàmica.  Afegir un model = crear YAML + classe.  Zero edicions als scripts.
 
 ---
 
@@ -136,22 +145,23 @@ btc-trading-bot/
 ├── bots/
 │   ├── classical/       DCABot, TrendBot, GridBot, HoldBot, MeanReversionBot, MomentumBot
 │   ├── ml/              MLBot + Random Forest, XGBoost, LightGBM, CatBoost, GRU, PatchTST
-│   └── rl/              RLBot + PPO (discret), SAC (continu), entorn Gym
+│   └── rl/              RLBot + agents (PPO, SAC, TD3) + environments + rewards + constants
 ├── config/
 │   ├── models/          UN YAML per model/bot (base + training + optimization + bot)
-│   │   ├── {bot}.yaml          Config base (hand-crafted)
-│   │   └── {bot}_optimized.yaml  Config optimitzada per Optuna (auto-generat)
+│   │   └── {bot}.yaml          Config completa (paràmetres Optuna dins best_params)
 │   ├── exchanges/       Configuració del paper exchange
 │   ├── settings.yaml    Paràmetres globals (BD, exchange, etc.)
 │   └── demo.yaml        Quins bots s'executen al DemoRunner
 ├── core/
-│   ├── backtesting/     BacktestEngine, BacktestMetrics, Optimizer, Comparator
+│   ├── backtesting/     BacktestEngine, Comparator, Optimizers, agent_validator
 │   ├── engine/          Runner (backtest), DemoRunner (paper trading)
 │   ├── db/              models.py (esquema), session.py, repository.py
 │   ├── interfaces/      BaseBot, BaseMLModel, BaseRLAgent, BaseExchange, BaseStrategy
+│   ├── config_utils.py  apply_best_params, discover_configs (auto-discovery)
 │   └── models.py        Candle, Signal, Order, Trade (Pydantic)
 ├── data/
-│   ├── processing/      FeatureBuilder, DatasetBuilder, TechnicalIndicators
+│   ├── processing/      FeatureBuilder, DatasetBuilder, TechnicalIndicators,
+│   │                    TimeSeriesDataset (torch), ExternalLoader
 │   └── observation/     ObservationBuilder
 ├── exchanges/
 │   └── paper.py         PaperExchange (simulació amb fees + slippage)
@@ -181,16 +191,17 @@ btc-trading-bot/
 | `run_demo.py` | Executa paper trading 24/7 | `python scripts/run_demo.py` |
 | `validate_data.py` | Valida gaps i duplicats a la BD | `python scripts/validate_data.py` |
 
-**Tots els scripts auto-carreguen `{model}_optimized.yaml` si existeix** a `config/models/`.
-Si no existeix, usen `{model}.yaml` (el YAML base amb hyperparàmetres hand-crafted).
+**Paràmetres Optuna:** els millors hiperparàmetres es guarden dins el YAML base
+a la secció `best_params`. `apply_best_params()` els aplica en entrenament/inferència.
+No hi ha fitxers `*_optimized.yaml` separats.
 
 ---
 
 ## Cicle de vida complet
 
 ```
-optimize_bots   →  config/models/{bot}_optimized.yaml
-optimize_models →  config/models/{model}_optimized.yaml
+optimize_bots   →  config/models/{bot}.yaml [secció best_params]
+optimize_models →  config/models/{model}.yaml [secció best_params]
                         ↓
 train_models    →  models/{model}.pkl / .pt
 train_rl        →  models/{agent}.zip
@@ -233,4 +244,4 @@ pytest tests/integration/ -m integration # necessita PostgreSQL
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.2*
+*Última actualització: Març 2026 · Versió 2.0*

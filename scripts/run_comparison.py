@@ -2,30 +2,23 @@
 """
 Compares all bots (classical, ML, RL) on train and test periods.
 
-Llegeix configs unificades de config/models/*.yaml.
-El camp 'category' del YAML determina el tipus de bot (classic/ML/RL).
+The bot registry is auto-discovered from config/models/*.yaml — no edits
+needed when adding new models or bots.  Just create the YAML and the Python
+class; they will appear automatically in the CLI choices.
 
 Usage:
-  python scripts/run_comparison.py                                           # all available bots
-  python scripts/run_comparison.py --bots hold trend dca                     # selection
-  python scripts/run_comparison.py --bots rf xgb ppo
-  python scripts/run_comparison.py --bots ppo_professional sac_professional  # professional RL
-  python scripts/run_comparison.py --bots td3_professional td3_multiframe    # C3 TD3
-  python scripts/run_comparison.py --no-rl                                   # all except RL
-
-Available bots:
-  Classic     : hold, dca, trend, grid, mean_reversion, momentum
-  ML          : rf, xgb, lgbm, catboost, gru, patchtst
-  RL baseline : ppo, sac (require: python scripts/train_rl.py)
-  RL on-chain : ppo_onchain, sac_onchain (require external DB data)
-  RL pro      : ppo_professional, sac_professional
-  RL C3 TD3   : td3_professional, td3_multiframe
-                (require: python scripts/train_rl.py --agents td3_professional td3_multiframe)
+  python scripts/run_comparison.py                             # all non-RL bots
+  python scripts/run_comparison.py --bots hold trend xgboost  # selection
+  python scripts/run_comparison.py --bots ppo sac             # RL agents
+  python scripts/run_comparison.py --no-rl                    # explicit no-RL
+  python scripts/run_comparison.py --all                      # everything (skips untrainied RL)
 """
 import argparse
+import importlib
 import logging
 import os
 import sys
+
 import yaml
 
 sys.path.append(".")
@@ -33,60 +26,35 @@ sys.path.append(".")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
+# ── Auto-discover ALL bot configs ─────────────────────────────────────────────
+from core.config_utils import discover_configs
 
-# Registry: key -> base YAML path
-BOT_REGISTRY = {
-    # Classic
-    "hold":           "config/models/hold.yaml",
-    "dca":            "config/models/dca.yaml",
-    "trend":          "config/models/trend.yaml",
-    "grid":           "config/models/grid.yaml",
-    "mean_reversion": "config/models/mean_reversion.yaml",
-    "momentum":       "config/models/momentum.yaml",
-    # ML supervised
-    "rf":       "config/models/random_forest.yaml",
-    "xgb":      "config/models/xgboost.yaml",
-    "lgbm":     "config/models/lightgbm.yaml",
-    "catboost": "config/models/catboost.yaml",
-    "gru":      "config/models/gru.yaml",
-    "patchtst": "config/models/patchtst.yaml",
-    # RL baseline
-    "ppo": "config/models/ppo.yaml",
-    "sac": "config/models/sac.yaml",
-    # RL on-chain
-    "ppo_onchain": "config/models/ppo_onchain.yaml",
-    "sac_onchain": "config/models/sac_onchain.yaml",
-    # RL professional (12H swing + regime + on-chain + position state)
-    # Training: python scripts/train_rl.py --agents ppo_professional sac_professional
-    "ppo_professional": "config/models/ppo_professional.yaml",
-    "sac_professional": "config/models/sac_professional.yaml",
-    # C3: TD3 advanced (TD3 + sentiment / multi-timeframe)
-    # Training: python scripts/train_rl.py --agents td3_professional td3_multiframe
-    "td3_professional": "config/models/td3_professional.yaml",
-    "td3_multiframe":   "config/models/td3_multiframe.yaml",
-}
+BOT_REGISTRY: dict[str, str] = discover_configs()          # {stem: yaml_path}
+BOT_CONFIGS = BOT_REGISTRY                                  # alias for compatibility
 
+# Derive RL keys from the YAML category field
+_RL_KEYS: set[str] = set()
+for _stem, _path in BOT_REGISTRY.items():
+    try:
+        with open(_path) as _f:
+            _cfg = yaml.safe_load(_f)
+        if _cfg and _cfg.get("category") == "RL":
+            _RL_KEYS.add(_stem)
+    except Exception:
+        pass
 
-def get_best_config_path(bot_key: str) -> str:
-    """
-    Retorna la ruta al YAML base del bot.
-
-    Els best_params d'Optuna es guarden directament dins el YAML base
-    (secció ``best_params``).  Cada bot els aplica via ``apply_best_params``
-    — no cal cap fitxer *_optimized.yaml separat.
-    """
-    path = BOT_REGISTRY[bot_key]
-    logger.info(f"Config for {bot_key}: {path}")
-    return path
+DEFAULT_BOTS = [k for k in BOT_REGISTRY if k not in _RL_KEYS]
 
 
 def _instantiate_bot(key: str):
     """
-    Instantiates the bot by reading the 'category' field from the YAML.
-    Returns None if the RL model has not been trained yet.
-    """
-    config_path = get_best_config_path(key)
+    Instantiates the bot for *key* by reading its YAML category.
 
+    - RL: RLBot (skipped if model file not found)
+    - ML: MLBot
+    - classic: dynamic import via module + class_name fields in the YAML
+    """
+    config_path = BOT_REGISTRY[key]
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
 
@@ -97,7 +65,7 @@ def _instantiate_bot(key: str):
         if not (os.path.exists(model_path) or os.path.exists(model_path + ".zip")):
             agent_key = cfg["model_type"]
             logger.warning(
-                f"RL model not found: {model_path} -- skipping '{key}'. "
+                f"RL model not found: {model_path} — skipping '{key}'. "
                 f"Run: python scripts/train_rl.py --agents {agent_key}"
             )
             return None
@@ -108,33 +76,17 @@ def _instantiate_bot(key: str):
         from bots.ml.ml_bot import MLBot
         return MLBot(config_path=config_path)
 
-    # Classic
-    from bots.classical.hold_bot           import HoldBot
-    from bots.classical.dca_bot            import DCABot
-    from bots.classical.trend_bot          import TrendBot
-    from bots.classical.grid_bot           import GridBot
-    from bots.classical.mean_reversion_bot import MeanReversionBot
-    from bots.classical.momentum_bot       import MomentumBot
-    _CLASSICAL = {
-        "hold": HoldBot, "dca": DCABot,
-        "trend": TrendBot, "grid": GridBot,
-        "mean_reversion": MeanReversionBot,
-        "momentum": MomentumBot,
-    }
-    model_type = cfg.get("model_type", key)
-    if model_type not in _CLASSICAL:
-        raise ValueError(f"Unknown classic bot model_type: '{model_type}'")
-    return _CLASSICAL[model_type](config_path=config_path)
-
-
-# RL keys excluded from default "train all" run
-_RL_KEYS = {
-    "ppo", "sac", "ppo_onchain", "sac_onchain",
-    "ppo_professional", "sac_professional",
-    "td3_professional", "td3_multiframe",
-}
-BOT_CONFIGS = BOT_REGISTRY  # alias for compatibility
-DEFAULT_BOTS = [k for k in BOT_REGISTRY if k not in _RL_KEYS]
+    # classic — dynamic class loading from module + class_name in YAML
+    mod_path = cfg.get("module")
+    cls_name = cfg.get("class_name")
+    if not (mod_path and cls_name):
+        raise ValueError(
+            f"Classic bot '{key}' is missing 'module' or 'class_name' in {config_path}. "
+            f"Add them to enable auto-discovery."
+        )
+    mod = importlib.import_module(mod_path)
+    cls = getattr(mod, cls_name)
+    return cls(config_path=config_path)
 
 
 if __name__ == "__main__":

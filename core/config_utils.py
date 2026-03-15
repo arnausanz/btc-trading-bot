@@ -18,9 +18,23 @@ Routing rules
     - all other params → ``training.model[name]``
 * Classical bot configs (flat dict, no ``training.model``):
     - all params applied directly to the top-level config dict
+
+discover_configs
+----------------
+Reads all ``config/models/*.yaml`` files and returns a dict of
+``{filename_stem: yaml_path}`` for configs matching a given category
+(``"ML"``, ``"RL"``, ``"classic"``, or ``None`` for all).
+
+This allows ``train_models.py``, ``run_comparison.py``, and ``ml_bot.py``
+to auto-populate their registries without any hardcoded lists.  Adding a
+new model only requires creating the YAML + the Python class — no script edits.
 """
 import copy
+import glob
 import logging
+import os
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -71,3 +85,41 @@ def apply_best_params(config: dict) -> dict:
 
     logger.debug("Applied best_params: %s", params)
     return config
+
+
+def discover_configs(
+    category: str | None = None,
+    base_dir: str = "config/models",
+) -> dict[str, str]:
+    """
+    Returns ``{filename_stem: yaml_path}`` for every config matching *category*.
+
+    Args:
+        category: ``"ML"``, ``"RL"``, ``"classic"``, or ``None`` (all).
+        base_dir: Directory to scan.  Defaults to ``"config/models"``.
+
+    Returns:
+        Ordered dict sorted by filename stem.
+
+    Example::
+
+        from core.config_utils import discover_configs
+
+        ml_configs = discover_configs("ML")
+        # → {"catboost": "config/models/catboost.yaml",
+        #    "gru": "config/models/gru.yaml", ...}
+
+        all_configs = discover_configs()
+        # → all 20 YAML files, keyed by stem
+    """
+    result: dict[str, str] = {}
+    for path in sorted(glob.glob(os.path.join(base_dir, "*.yaml"))):
+        try:
+            with open(path) as f:
+                cfg = yaml.safe_load(f)
+            if cfg and (category is None or cfg.get("category") == category):
+                stem = os.path.splitext(os.path.basename(path))[0]
+                result[stem] = path
+        except Exception as exc:
+            logger.warning("discover_configs: could not read %s — %s", path, exc)
+    return result

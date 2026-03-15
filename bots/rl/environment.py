@@ -5,6 +5,7 @@ import gymnasium as gym
 from gymnasium import spaces
 from bots.rl.rewards import builtins  # import to register builtin reward functions
 from bots.rl.rewards.registry import get as get_reward
+from bots.rl.constants import CLIP_OBS_BOUNDS, NUMERICAL_EPSILON
 
 
 class _BaseTradingEnv(gym.Env):
@@ -58,15 +59,15 @@ class _BaseTradingEnv(gym.Env):
         # Robust normalization to prevent overflow and NaN
         col_mean = obs.mean(axis=0)
         col_std = obs.std(axis=0)
-        col_std = np.where(col_std < 1e-8, 1.0, col_std)  # avoid division by zero
+        col_std = np.where(col_std < NUMERICAL_EPSILON, 1.0, col_std)  # avoid division by zero
         obs = (obs - col_mean) / col_std
 
         # Aggressive clipping to avoid extreme values outside float32 range
-        obs = np.clip(obs, -10.0, 10.0)
+        obs = np.clip(obs, -CLIP_OBS_BOUNDS, CLIP_OBS_BOUNDS)
 
         # Safety check
         if not np.isfinite(obs).all():
-            obs = np.nan_to_num(obs, nan=0.0, posinf=10.0, neginf=-10.0)
+            obs = np.nan_to_num(obs, nan=0.0, posinf=CLIP_OBS_BOUNDS, neginf=-CLIP_OBS_BOUNDS)
 
         return obs.flatten()
 

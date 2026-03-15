@@ -2,6 +2,8 @@
 
 > Descripció concisa de cada model, paràmetres clau i consideracions pràctiques.
 > Per afegir un model nou: veure **[EXTENDING.md](./EXTENDING.md)**.
+> Arquitectura compartida dels models tree-based: `bots/ml/base_tree_model.py`.
+> Dataset PyTorch compartit (GRU/PatchTST): `data/processing/torch_dataset.py`.
 
 ---
 
@@ -44,6 +46,14 @@ Funciona bé en mercats en rang (laterals); perd en tendències forts.
 | `bb_std` | Desviació estàndard | 2.0 |
 | `rsi_filter` | Filtre RSI per evitar falsos senyals | 50 |
 | `level_size` | Fracció del capital per nivell | 0.2 |
+
+---
+
+> **Nota d'implementació:** Random Forest, XGBoost, LightGBM i CatBoost hereten
+> de `BaseTreeModel` (`bots/ml/base_tree_model.py`), que implementa el bucle
+> d'entrenament complet (TimeSeriesSplit 5-fold, MLflow, StandardScaler, pickle).
+> Cada model fill aporta ~50 LOC: la construcció del model, `from_config()` i
+> 3 mètodes d'1 línia per a l'experiment name, els paràmetres i el label de display.
 
 ---
 

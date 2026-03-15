@@ -17,12 +17,10 @@ Components
 """
 import numpy as np
 from bots.rl.rewards.registry import register
+from bots.rl.constants import ATR_REFERENCE
 
 # ── Constants ────────────────────────────────────────────────────────────────
-# ATR reference: 2 % of price is the "normal" 12H volatility baseline for BTC.
-# Trades in lower-than-average vol get a slight reward boost; in higher-than-
-# average vol they are dampened.
-_ATR_REFERENCE = 0.02
+# ATR_REFERENCE imported from bots.rl.constants (shared with environments).
 
 # Minimum wait between trades to avoid overtrading (in steps).
 # At 12H candles, 3 steps ≈ 1.5 days.
@@ -43,7 +41,7 @@ def professional_risk_adjusted(
     history: list[float],
     scaling: float = 100.0,
     # ── Extended context (injected by BtcTradingEnvProfessional) ────────────
-    atr_pct: float = _ATR_REFERENCE,   # atr_14 / close; default = neutral
+    atr_pct: float = ATR_REFERENCE,   # atr_14 / close; default = neutral
     vol_ratio: float = 1.0,            # atr_5 / atr_14; 1.0 = neutral
     drawdown_pct: float = 0.0,         # (portfolio - peak) / peak ≤ 0
     steps_since_trade: int = 999,      # steps since last trade
@@ -66,7 +64,7 @@ def professional_risk_adjusted(
     # High vol → scale < 1 (high vol makes returns easy but risky)
     pnl_step = (curr_value - prev_value) / prev_value
 
-    atr_scale = _ATR_REFERENCE / max(atr_pct, 0.005)   # prevent div-by-zero
+    atr_scale = ATR_REFERENCE / max(atr_pct, 0.005)   # prevent div-by-zero
     atr_scale = float(np.clip(atr_scale, 0.2, 5.0))
 
     base = pnl_step * scaling * atr_scale

@@ -6,6 +6,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 category: ML
 model_type: gru
+module: bots.ml.gru_model
+class_name: GRUModel
 symbol: BTC/USDT
 timeframes:
   - 1h

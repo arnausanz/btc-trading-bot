@@ -5,6 +5,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 category: ML
 model_type: random_forest
+module: bots.ml.random_forest
+class_name: RandomForestModel
 symbol: BTC/USDT
 timeframes:
   - 1h

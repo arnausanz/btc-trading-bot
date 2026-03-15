@@ -1,28 +1,55 @@
 # bots/ml/ml_bot.py
-import yaml
+"""
+ML/DL model-agnostic bot.
+
+The ``_MODEL_REGISTRY`` is built automatically at import time by scanning
+``config/models/*.yaml`` (category: ML).  Each YAML must declare:
+
+    module:     bots.ml.<module_name>
+    class_name: <ClassName>
+
+Adding a new model = create the YAML + the Python class.  No edits here.
+"""
+import importlib
 import logging
-import pandas as pd
-from datetime import datetime, timezone
+
+import yaml
+
+from core.config_utils import discover_configs
 from core.interfaces.base_bot import BaseBot, ObservationSchema
 from core.interfaces.base_ml_model import BaseMLModel
 from core.models import Signal, Action
-from bots.ml.random_forest import RandomForestModel
-from bots.ml.xgboost_model import XGBoostModel
-from bots.ml.lightgbm_model import LightGBMModel
-from bots.ml.catboost_model import CatBoostModel
-from bots.ml.gru_model import GRUModel
-from bots.ml.patchtst_model import PatchTSTModel
+from datetime import datetime, timezone
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-_MODEL_REGISTRY: dict[str, type[BaseMLModel]] = {
-    "random_forest": RandomForestModel,
-    "xgboost": XGBoostModel,
-    "lightgbm": LightGBMModel,
-    "catboost": CatBoostModel,
-    "gru": GRUModel,
-    "patchtst": PatchTSTModel,
-}
+
+def _build_ml_registry() -> dict[str, type[BaseMLModel]]:
+    """
+    Auto-populates the model registry from config/models/*.yaml (category: ML).
+
+    Each YAML must have ``module`` and ``class_name`` fields.
+    If a YAML is missing these fields it is silently skipped (can still be loaded
+    manually via MLBot with a direct config path).
+    """
+    registry: dict[str, type[BaseMLModel]] = {}
+    for stem, path in discover_configs("ML").items():
+        try:
+            with open(path) as f:
+                cfg = yaml.safe_load(f)
+            mt       = cfg.get("model_type")
+            mod_path = cfg.get("module")
+            cls_name = cfg.get("class_name")
+            if mt and mod_path and cls_name:
+                mod = importlib.import_module(mod_path)
+                registry[mt] = getattr(mod, cls_name)
+        except Exception as exc:
+            logger.warning("Could not register ML model from %s: %s", path, exc)
+    return registry
+
+
+_MODEL_REGISTRY: dict[str, type[BaseMLModel]] = _build_ml_registry()
 
 
 class MLBot(BaseBot):
@@ -32,9 +59,11 @@ class MLBot(BaseBot):
     Afegir un nou model = una línia a _MODEL_REGISTRY.
 
     Config esperada (config/models/{model}.yaml):
-      category: ML
-      model_type: xgboost
-      timeframes: [1h]
+      category:    ML
+      model_type:  xgboost
+      module:      bots.ml.xgboost_model
+      class_name:  XGBoostModel
+      timeframes:  [1h]
       training:
         model_path: models/xgboost_v1.pkl
       bot:
@@ -50,8 +79,6 @@ class MLBot(BaseBot):
             raw = yaml.safe_load(f)
 
         # Construïm config plana combinant root + bot section + claus derivades.
-        # Permet que observation_schema() i on_observation() accedeixin via
-        # self.config["key"] sense canviar la resta del codi.
         config = {
             **raw,
             **raw.get("bot", {}),
@@ -88,7 +115,6 @@ class MLBot(BaseBot):
         timeframe = self.config["timeframe"]
         features: pd.DataFrame = observation[timeframe]["features"].copy()
 
-        # Clean and generic — works for any current and future model
         X_input = features[self._model.feature_names].iloc[-self._model.lookback:]
 
         prediction, confidence = self._model.predict(
@@ -99,7 +125,6 @@ class MLBot(BaseBot):
         min_confidence = self.config["min_confidence"]
         size = self.config["trade_size"]
 
-        # BUY: model predicts upward and sufficient confidence and not in position
         if prediction == 1 and confidence >= min_confidence and not self._in_position:
             self._in_position = True
             return Signal(
@@ -111,9 +136,6 @@ class MLBot(BaseBot):
                 reason=f"ML predicts upward. Confidence: {confidence:.2f}",
             )
 
-        # SELL: model stops predicting upward (prediction==0 means prob < threshold)
-        # NOTE: we don't apply min_confidence to SELL — would be impossible (prob<threshold < min_confidence)
-        # Bearish confidence is 1 - prob (lower prob = more certain sell signal)
         if prediction == 0 and self._in_position:
             bearish_conf = 1.0 - confidence
             self._in_position = False

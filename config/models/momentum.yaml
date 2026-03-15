@@ -17,6 +17,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 category: classic
 model_type: momentum
+module: bots.classical.momentum_bot
+class_name: MomentumBot
 bot_id: momentum_v1
 symbol: BTC/USDT
 timeframe: 1h

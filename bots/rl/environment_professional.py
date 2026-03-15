@@ -32,6 +32,7 @@ from bots.rl.environment import _BaseTradingEnv
 from bots.rl.rewards import builtins       # noqa: F401
 from bots.rl.rewards import professional   # noqa: F401
 from bots.rl.rewards.registry import get as get_reward
+from bots.rl.constants import ATR_REFERENCE, NUMERICAL_EPSILON, DEADBAND
 
 
 def _safe_col(row: pd.Series, col: str, default: float) -> float:
@@ -105,7 +106,7 @@ class _ProfessionalBase(_BaseTradingEnv):
         """Current fraction of portfolio value held in BTC [0, 1]."""
         price = self._get_price()
         total = self.usdt_balance + self.btc_balance * price
-        if total < 1e-8:
+        if total < NUMERICAL_EPSILON:
             return 0.0
         return float(np.clip(self.btc_balance * price / total, 0.0, 1.0))
 
@@ -154,7 +155,7 @@ class _ProfessionalBase(_BaseTradingEnv):
         row   = self.df.iloc[self.current_step]
         price = self._get_price()
 
-        atr_14    = _safe_col(row, "atr_14",    price * _ATR_REFERENCE_FALLBACK)
+        atr_14    = _safe_col(row, "atr_14",    price * ATR_REFERENCE)
         atr_pct   = atr_14 / max(price, 1e-8)
         vol_ratio = _safe_col(row, "vol_ratio", 1.0)
 
@@ -206,7 +207,7 @@ class _ProfessionalBase(_BaseTradingEnv):
         if current_fraction < 0.05 and target_fraction >= 0.05:
             self.entry_price = price
             row = self.df.iloc[self.current_step]
-            self.entry_atr  = _safe_col(row, "atr_14", price * _ATR_REFERENCE_FALLBACK)
+            self.entry_atr  = _safe_col(row, "atr_14", price * ATR_REFERENCE)
             self.stop_price = price * (
                 1.0 - self.stop_atr_multiplier * self.entry_atr / max(price, 1e-8)
             )
@@ -266,8 +267,6 @@ class _ProfessionalBase(_BaseTradingEnv):
         return obs, reward, done, False, info
 
 
-# Fallback ATR reference in case column not in df
-_ATR_REFERENCE_FALLBACK = 0.02
 
 
 # ── Discrete (5-action) variant — PPO ────────────────────────────────────────
@@ -336,7 +335,6 @@ class BtcTradingEnvProfessionalContinuous(_ProfessionalBase):
     This prevents micro-trading from eroding returns via continuous fee payments.
     """
 
-    DEADBAND = 0.05
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -360,7 +358,7 @@ class BtcTradingEnvProfessionalContinuous(_ProfessionalBase):
 
         # ── Apply deadband and execute rebalance ──────────────────────────
         if not self._trade_this_step:
-            if abs(target_fraction - current_fraction) >= self.DEADBAND:
+            if abs(target_fraction - current_fraction) >= DEADBAND:
                 self._execute_rebalance(target_fraction, price)
 
         self.position = self._get_position_fraction()

@@ -5,6 +5,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 category: ML
 model_type: xgboost
+module: bots.ml.xgboost_model
+class_name: XGBoostModel
 symbol: BTC/USDT
 timeframes:
   - 1h
