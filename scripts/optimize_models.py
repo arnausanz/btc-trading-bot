@@ -48,6 +48,7 @@ ALL_ML_CONFIGS = {
     "catboost": "config/models/catboost.yaml",
     "gru":      "config/models/gru.yaml",
     "patchtst": "config/models/patchtst.yaml",
+    "tft":      "config/models/tft.yaml",
 }
 
 ALL_RL_CONFIGS = {

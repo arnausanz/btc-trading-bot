@@ -68,6 +68,7 @@ class MLOptimizer:
         from bots.ml.catboost_model import CatBoostModel
         from bots.ml.gru_model import GRUModel
         from bots.ml.patchtst_model import PatchTSTModel
+        from bots.ml.tft_model import TFTModel
 
         _REGISTRY: dict[str, type[BaseMLModel]] = {
             "random_forest": RandomForestModel,
@@ -76,6 +77,7 @@ class MLOptimizer:
             "catboost": CatBoostModel,
             "gru": GRUModel,
             "patchtst": PatchTSTModel,
+            "tft": TFTModel
         }
 
         params = self._sample_params(trial)

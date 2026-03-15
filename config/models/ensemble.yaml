@@ -1,0 +1,50 @@
+# config/models/ensemble.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# EnsembleBot — meta-bot que combina senyals de múltiples sub-bots
+#
+# Política v1 (demo): majority_vote
+#   BUY  si > 50% sub-bots diuen BUY
+#   SELL si > 50% sub-bots diuen SELL
+#   HOLD en qualsevol altre cas
+#
+# Per afegir/treure sub-bots: edita la llista sub_bots i reinicia el DemoRunner.
+# ─────────────────────────────────────────────────────────────────────────────
+category: classic
+model_type: ensemble
+module: bots.classical.ensemble_bot
+class_name: EnsembleBot
+
+bot_id: ensemble_v1
+policy: majority_vote   # majority_vote | weighted (futur) | stacking (futur)
+trade_size: 0.5         # fracció del capital per compra
+
+# ── Sub-bots participants ────────────────────────────────────────────────────
+# Afegeix o treu bots lliurement. Els ML/RL han d'estar entrenats (models/ dir).
+# Habilita nomes els bots que hagin superat HoldBot en Sharpe+Calmar out-of-sample.
+sub_bots:
+  # Clàssics
+  - config/models/trend.yaml
+  - config/models/mean_reversion.yaml
+  - config/models/momentum.yaml
+
+  # ML supervisat — activar després de train_models.py
+  # - config/models/random_forest.yaml
+  # - config/models/xgboost.yaml
+  # - config/models/lightgbm.yaml
+  # - config/models/catboost.yaml
+  # - config/models/gru.yaml
+  # - config/models/patchtst.yaml
+  # - config/models/tft.yaml
+
+  # RL — activar després de train_rl.py + backtest out-of-sample
+  # - config/models/ppo_professional.yaml
+  # - config/models/sac_professional.yaml
+  # - config/models/td3_professional.yaml
+
+# ── Notes ────────────────────────────────────────────────────────────────────
+# - EnsembleBot gestiona el seu propi PaperExchange (cartera independent).
+# - Els sub-bots també poden córrer en paral·lel com a bots independents
+#   (demo.yaml) sense interferir amb l'ensemble.
+# - No afegis HoldBot com a sub-bot: el seu HOLD permanent distorsiona el vot.
+# - Criteris mínims per entrar a l'ensemble: Sharpe > 1.0, Drawdown < -25%
+#   en backtest out-of-sample (TEST_FROM en endavant).

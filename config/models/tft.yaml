@@ -1,0 +1,76 @@
+best_params:
+  d_model: 64
+  dropout: 0.21242177333881365
+  learning_rate: 0.00010994335574766199
+  n_heads: 2
+  n_layers: 2
+  seq_len: 48
+bot:
+  bot_id: ml_tft_v1
+  lookback: 200
+  min_confidence: 0.4
+  prediction_threshold: 0.35
+  trade_size: 0.5
+category: ML
+class_name: TFTModel
+features:
+  external: {}
+  select: null
+forward_window: 24
+model_type: tft
+module: bots.ml.tft_model
+optimization:
+  direction: maximize
+  metric: accuracy_mean
+  n_trials: 20
+  search_space:
+    d_model:
+      choices:
+      - 32
+      - 64
+      - 128
+      type: categorical
+    dropout:
+      high: 0.3
+      low: 0.0
+      type: float
+    learning_rate:
+      high: 0.01
+      log: true
+      low: 0.0001
+      type: float
+    n_heads:
+      choices:
+      - 2
+      - 4
+      - 8
+      type: categorical
+    n_layers:
+      choices:
+      - 1
+      - 2
+      - 3
+      type: categorical
+    seq_len:
+      choices:
+      - 48
+      - 96
+      - 168
+      type: categorical
+symbol: BTC/USDT
+threshold_pct: 0.005
+timeframes:
+- 1h
+training:
+  experiment_name: tft_v1
+  model:
+    batch_size: 64
+    d_model: 64
+    dropout: 0.1
+    epochs: 20
+    learning_rate: 0.0005
+    n_heads: 4
+    n_layers: 2
+    patience: 5
+    seq_len: 96
+  model_path: models/tft_v1.pt

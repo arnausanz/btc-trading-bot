@@ -52,6 +52,10 @@ bots:
   - config_path: config/models/sac_onchain.yaml
     enabled: false
 
+  # Ensemble — activar un cop tots els sub-bots hagin passat el backtest out-of-sample
+  - config_path: config/models/ensemble.yaml
+    enabled: false   # activar desprès de validació C (Sharpe > 1.0, Drawdown < -25%)
+
 exchange:
   config_path: config/exchanges/paper.yaml
 

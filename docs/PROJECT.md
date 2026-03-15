@@ -102,12 +102,14 @@ TEST_FROM   = "2025-01-01"   # primera data del backtest de validació
 | classic | GridBot | Discret (BUY/SELL/HOLD) | `config/models/grid.yaml` |
 | classic | MeanReversionBot | Discret (BUY/SELL/HOLD) | `config/models/mean_reversion.yaml` |
 | classic | MomentumBot | Discret (BUY/SELL/HOLD) | `config/models/momentum.yaml` |
+| classic | EnsembleBot | Discret (BUY/SELL/HOLD) — meta-bot | `config/models/ensemble.yaml` |
 | ML | MLBot (Random Forest) | Discret | `config/models/random_forest.yaml` |
 | ML | MLBot (XGBoost) | Discret | `config/models/xgboost.yaml` |
 | ML | MLBot (LightGBM) | Discret | `config/models/lightgbm.yaml` |
 | ML | MLBot (CatBoost) | Discret | `config/models/catboost.yaml` |
 | ML | MLBot (GRU) | Discret | `config/models/gru.yaml` |
 | ML | MLBot (PatchTST) | Discret | `config/models/patchtst.yaml` |
+| ML | MLBot (TFT) | Discret | `config/models/tft.yaml` |
 | RL | RLBot (PPO) | Discret | `config/models/ppo.yaml` |
 | RL | RLBot (SAC) | Continu | `config/models/sac.yaml` |
 | RL | RLBot (PPO on-chain) | Discret | `config/models/ppo_onchain.yaml` |
@@ -115,6 +117,7 @@ TEST_FROM   = "2025-01-01"   # primera data del backtest de validació
 | RL | RLBot (PPO professional) | Discret-5 | `config/models/ppo_professional.yaml` |
 | RL | RLBot (SAC professional) | Continu | `config/models/sac_professional.yaml` |
 | RL | RLBot (TD3 professional) | Continu | `config/models/td3_professional.yaml` |
+| RL | RLBot (TD3 multiframe) | Continu | `config/models/td3_multiframe.yaml` |
 
 Veure **[MODELS.md](./MODELS.md)** per a descripció detallada de cada model.
 
@@ -143,8 +146,8 @@ Veure **[MODELS.md](./MODELS.md)** per a descripció detallada de cada model.
 ```
 btc-trading-bot/
 ├── bots/
-│   ├── classical/       DCABot, TrendBot, GridBot, HoldBot, MeanReversionBot, MomentumBot
-│   ├── ml/              MLBot + Random Forest, XGBoost, LightGBM, CatBoost, GRU, PatchTST
+│   ├── classical/       DCABot, TrendBot, GridBot, HoldBot, MeanReversionBot, MomentumBot, EnsembleBot
+│   ├── ml/              MLBot + Random Forest, XGBoost, LightGBM, CatBoost, GRU, PatchTST, TFT
 │   └── rl/              RLBot + agents (PPO, SAC, TD3) + environments + rewards + constants
 ├── config/
 │   ├── models/          UN YAML per model/bot (base + training + optimization + bot)
@@ -239,9 +242,9 @@ pytest tests/integration/ -m integration # necessita PostgreSQL
 - **[DATABASE.md](./DATABASE.md)** — Esquema BD, taules, consultes útils
 - **[EXTENDING.md](./EXTENDING.md)** — Com afegir bots, models, agents, fonts de dades
 - **[CONFIGURATION.md](./CONFIGURATION.md)** — Referència de tots els YAMLs i CLI args
-- **[ROADMAP.md](./ROADMAP.md)** — Tasques pendents, millores, arquitectures futures
-- **[decisions/](./decisions/)** — Architecture Decision Records
+- **[ROADMAP.md](./ROADMAP.md)** — Tasques pendents, camí a la demo
+- **[DECISIONS.md](./DECISIONS.md)** — Architecture Decision Records (10 decisions clau)
 
 ---
 
-*Última actualització: Març 2026 · Versió 2.0*
+*Última actualització: Març 2026 · Versió 2.1*

@@ -14,8 +14,12 @@ logger = logging.getLogger(__name__)
 
 TZ = zoneinfo.ZoneInfo("Europe/Madrid")
 
-_ML_TYPES = {"random_forest", "xgboost", "lightgbm", "catboost", "gru", "patchtst"}
-_RL_TYPES = {"ppo", "sac"}
+_ML_TYPES = {"random_forest", "xgboost", "lightgbm", "catboost", "gru", "patchtst", "tft"}
+_RL_TYPES = {
+    "ppo", "sac",
+    "ppo_professional", "sac_professional",
+    "td3_professional", "td3_multiframe",
+}
 
 
 def _get_best_config_path(base_config_path: str) -> str:
@@ -37,25 +41,45 @@ def _get_best_config_path(base_config_path: str) -> str:
 
 
 def _load_bot_from_config(config_path: str) -> BaseBot:
+    """
+    Carrega un bot des del seu YAML.
+
+    Ordre de detecció:
+    1. model_type en _ML_TYPES → MLBot
+    2. model_type en _RL_TYPES → RLBot
+    3. 'module' + 'class_name' en el YAML → càrrega genèrica dinàmica
+       (classical bots, EnsembleBot, qualsevol bot futur)
+
+    Afegir un bot nou no requereix editar aquest fitxer — només cal que el seu
+    YAML tingui els camps 'module' i 'class_name'.
+    """
+    import importlib
     with open(config_path) as f:
         config = yaml.safe_load(f)
     model_type = config.get("model_type", "")
+
+    # ── ML supervisat ──────────────────────────────────────────────────────────
     if model_type in _ML_TYPES:
         from bots.ml.ml_bot import MLBot
         return MLBot(config_path=config_path)
+
+    # ── RL ────────────────────────────────────────────────────────────────────
     if model_type in _RL_TYPES:
         from bots.rl.rl_bot import RLBot
         return RLBot(config_path=config_path)
-    bot_name = config_path.split("/")[-1]
-    from bots.classical.trend_bot import TrendBot
-    from bots.classical.dca_bot   import DCABot
-    from bots.classical.grid_bot  import GridBot
-    from bots.classical.hold_bot  import HoldBot
-    _CLASSICAL = {"trend.yaml": TrendBot, "dca.yaml": DCABot, "grid.yaml": GridBot, "hold.yaml": HoldBot}
-    bot_class = _CLASSICAL.get(bot_name)
-    if bot_class:
-        return bot_class(config_path=config_path)
-    raise ValueError(f"Cannot detect bot type: {config_path}")
+
+    # ── Càrrega genèrica: classical bots, EnsembleBot, futurs bots ────────────
+    module_path = config.get("module")
+    class_name  = config.get("class_name")
+    if module_path and class_name:
+        mod = importlib.import_module(module_path)
+        cls = getattr(mod, class_name)
+        return cls(config_path=config_path)
+
+    raise ValueError(
+        f"Cannot detect bot type for '{config_path}'. "
+        "El YAML ha de tenir 'module' + 'class_name' o un model_type reconegut."
+    )
 
 
 class DemoRunner:

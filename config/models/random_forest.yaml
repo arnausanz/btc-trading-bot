@@ -1,52 +1,40 @@
-# config/models/random_forest.yaml
-# ─────────────────────────────────────────────────────────────────────────────
-# Random Forest — model supervisat d'ensemble (arbres de decisió)
-# Prediu si el preu pujarà > threshold_pct en les properes forward_window hores.
-# ─────────────────────────────────────────────────────────────────────────────
-category: ML
-model_type: random_forest
-module: bots.ml.random_forest
-class_name: RandomForestModel
-symbol: BTC/USDT
-timeframes:
-  - 1h
-forward_window: 24       # Horitzó de predicció (hores)
-threshold_pct: 0.005     # Mínim 0.5% de moviment per considerar senyal positiu
-
-# ── Features ────────────────────────────────────────────────────────────────
-features:
-  select: null            # null = totes les columnes de FeatureBuilder
-  external: {}            # sense dades externes en aquest baseline
-
-# ── Entrenament ─────────────────────────────────────────────────────────────
-training:
-  experiment_name: random_forest_v1
-  model_path: models/random_forest_v1.pkl
-  model:
-    n_estimators: 500     # +400: estabilitat estadística, redueix variància
-    max_depth: 8          # Profunditat màxima dels arbres
-
-# ── Optimització (Optuna) ────────────────────────────────────────────────────
-# Executar: python scripts/optimize_models.py --models rf
-# Resultat guardat a: config/models/random_forest_optimized.yaml
-optimization:
-  n_trials: 30
-  metric: accuracy_mean
-  direction: maximize
-  search_space:
-    n_estimators:
-      type: int
-      low: 50
-      high: 500
-    max_depth:
-      type: int
-      low: 3
-      high: 20
-
-# ── Desplegament (bot) ──────────────────────────────────────────────────────
+best_params:
+  max_depth: 3
+  n_estimators: 496
 bot:
   bot_id: ml_rf_v1
   lookback: 200
   min_confidence: 0.4
-  trade_size: 0.5
   prediction_threshold: 0.35
+  trade_size: 0.5
+category: ML
+class_name: RandomForestModel
+features:
+  external: {}
+  select: null
+forward_window: 24
+model_type: random_forest
+module: bots.ml.random_forest
+optimization:
+  direction: maximize
+  metric: accuracy_mean
+  n_trials: 30
+  search_space:
+    max_depth:
+      high: 20
+      low: 3
+      type: int
+    n_estimators:
+      high: 500
+      low: 50
+      type: int
+symbol: BTC/USDT
+threshold_pct: 0.005
+timeframes:
+- 1h
+training:
+  experiment_name: random_forest_v1
+  model:
+    max_depth: 8
+    n_estimators: 500
+  model_path: models/random_forest_v1.pkl
