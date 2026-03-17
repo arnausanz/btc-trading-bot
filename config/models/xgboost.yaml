@@ -6,8 +6,8 @@ best_params:
 bot:
   bot_id: ml_xgb_v1
   lookback: 200
-  min_confidence: 0.4
-  prediction_threshold: 0.35
+  min_confidence: 0.65
+  prediction_threshold: 0.55
   trade_size: 0.5
 category: ML
 class_name: XGBoostModel
@@ -19,7 +19,7 @@ model_type: xgboost
 module: bots.ml.xgboost_model
 optimization:
   direction: maximize
-  metric: accuracy_mean
+  metric: sharpe_ratio
   n_trials: 30
   search_space:
     learning_rate:

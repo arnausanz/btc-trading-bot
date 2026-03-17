@@ -19,15 +19,25 @@ policy: majority_vote   # majority_vote | weighted (futur) | stacking (futur)
 trade_size: 0.5         # fracció del capital per compra
 
 # ── Sub-bots participants ────────────────────────────────────────────────────
-# Afegeix o treu bots lliurement. Els ML/RL han d'estar entrenats (models/ dir).
-# Habilita nomes els bots que hagin superat HoldBot en Sharpe+Calmar out-of-sample.
+# ⚠️  PROBLEMA DETECTAT (backtest Març 2026):
+#   Amb només 3 bots clàssics (trend, mean_reversion, momentum), l'ensemble
+#   NO genera cap trade. Causa: TrendBot senyalitza <0.1% de les candles;
+#   la probabilitat que 2/3 bots coincideixin en la mateixa candle és ~0.
+#   SOLUCIÓ: afegir els models ML un cop retrenats amb sharpe_ratio com a mètrica.
+#   XGB i LGBM generen ~900 senyals per 52k candles (1.7%) → molt més viable.
+#
+# Ordre recomanat per habilitar sub-bots:
+#   1. Clàssics que superin HoldBot en TEST (trend ✅, grid ✅ ja verificats)
+#   2. ML retrenats amb metric: sharpe_ratio (xgb, lgbm prioritaris)
+#   3. RL professionals un cop validats
 sub_bots:
-  # Clàssics
+  # Clàssics — senyals molt esparsos, vot de majoria quasi mai dispara sol
   - config/models/trend.yaml
   - config/models/mean_reversion.yaml
   - config/models/momentum.yaml
 
-  # ML supervisat — activar després de train_models.py
+  # ML supervisat — HABILITAR UN COP RETRENATS amb metric: sharpe_ratio
+  # Prioritat: xgb i lgbm (generen prou senyals per fer funcionar la majoria)
   # - config/models/random_forest.yaml
   # - config/models/xgboost.yaml
   # - config/models/lightgbm.yaml
@@ -48,3 +58,4 @@ sub_bots:
 # - No afegis HoldBot com a sub-bot: el seu HOLD permanent distorsiona el vot.
 # - Criteris mínims per entrar a l'ensemble: Sharpe > 1.0, Drawdown < -25%
 #   en backtest out-of-sample (TEST_FROM en endavant).
+# - Mínim recomanat: 5 sub-bots actius per a majority_vote efectiu.

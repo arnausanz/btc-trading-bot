@@ -56,7 +56,7 @@ class MLBot(BaseBot):
     """
     ML/DL model-agnostic bot.
     Llegeix configs unificades de config/models/*.yaml.
-    Afegir un nou model = una línia a _MODEL_REGISTRY.
+    Afegir un nou model = crear YAML + classe Python (auto-discovery via _build_ml_registry).
 
     Config esperada (config/models/{model}.yaml):
       category:    ML

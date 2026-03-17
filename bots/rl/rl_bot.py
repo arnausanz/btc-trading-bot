@@ -70,11 +70,17 @@ class RLBot(BaseBot):
             extras={"external": self.config.get("external", {})},
         )
 
+    # Professional agent types that append +4 position-state dims during training
+    _PROFESSIONAL_TYPES: frozenset[str] = frozenset({
+        "ppo_professional", "sac_professional",
+        "td3_professional", "td3_multiframe",
+    })
+
     def on_observation(self, observation: dict) -> Signal:
         timeframe = self.config["timeframe"]
         features: pd.DataFrame = observation[timeframe]["features"]
 
-        # Construct flattened observation same as BtcTradingEnv._get_observation()
+        # ── Market observation — same normalisation as BtcTradingEnv._get_observation() ──
         window = features[self.config["features"]].iloc[-self.config["lookback"]:]
         obs = window.values.astype(np.float32)
         col_std = obs.std(axis=0)
@@ -82,9 +88,51 @@ class RLBot(BaseBot):
         obs = (obs - obs.mean(axis=0)) / col_std
         obs_flat = obs.flatten()
 
+        # ── Professional agents: append 4-dim position state (+4 dims) ──────────
+        # BtcTradingEnvProfessional appends [pnl_pct, pos_fraction, steps_norm, drawdown_pct]
+        # to every observation during training (obs_shape = n_feats × lookback + 4).
+        # Without these the obs shape won't match the saved model → ValueError at act().
+        # We reconstruct an equivalent vector from the current portfolio state.
+        agent_type = self.config["model_type"]
+        if agent_type in self._PROFESSIONAL_TYPES:
+            portfolio = observation.get("portfolio", {})
+            usdt  = float(portfolio.get("USDT", 0.0))
+            btc   = float(portfolio.get("BTC",  0.0))
+            price = float(features["close"].iloc[-1]) if "close" in features.columns else 0.0
+            total = usdt + btc * price
+            pos_frac = float(np.clip((btc * price) / max(total, 1e-8), 0.0, 1.0))
+
+            # pnl_pct: unrealised return from tracked entry price
+            if not hasattr(self, "_entry_price"):
+                self._entry_price: float = 0.0
+            if pos_frac < 0.05 and getattr(self, "_was_in_position", False):
+                self._entry_price = 0.0   # closed position — reset entry
+            if pos_frac >= 0.05 and self._entry_price == 0.0:
+                self._entry_price = price  # opened new position — record entry
+            pnl = float(np.clip(
+                (price - self._entry_price) / max(self._entry_price, 1e-8)
+                if self._entry_price > 0 else 0.0,
+                -1.0, 1.0,
+            ))
+            self._was_in_position: bool = pos_frac >= 0.05
+
+            # steps_in_position normalised (ref: 14 steps ≈ 7 days at 12H)
+            if not hasattr(self, "_steps_in_pos"):
+                self._steps_in_pos: int = 0
+            self._steps_in_pos = self._steps_in_pos + 1 if pos_frac >= 0.05 else 0
+            steps_norm = float(np.clip(self._steps_in_pos / 14.0, 0.0, 3.0))
+
+            # drawdown_pct from session peak
+            if not hasattr(self, "_peak_value"):
+                self._peak_value: float = total
+            self._peak_value = max(self._peak_value, total)
+            dd = float(np.clip((total - self._peak_value) / max(self._peak_value, 1e-8), -1.0, 0.0))
+
+            pos_state = np.array([pnl, pos_frac, steps_norm, dd], dtype=np.float32)
+            obs_flat = np.concatenate([obs_flat, pos_state])
+
         # Act: PPO -> discrete action; SAC/TD3 -> continuous fraction [0,1]
         raw_action = self._agent.act(obs_flat, deterministic=True)
-        agent_type = self.config["model_type"]
 
         ts = datetime.now(timezone.utc)
 

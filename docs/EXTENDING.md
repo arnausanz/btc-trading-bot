@@ -352,27 +352,36 @@ Fonts ja implementades (referència per al patró):
 
 ---
 
-## 6. Afegir un EnsembleBot (ROADMAP — pendent)
+## 6. EnsembleBot — ✅ Implementat
 
-```python
-class EnsembleBot(BaseBot):
-    def __init__(self, bots: list[BaseBot], policy: str = "majority_vote"):
-        self.bots = bots
-        self.policy = policy  # majority_vote | weighted | unanimous | stacking
+`EnsembleBot` és a `bots/classical/ensemble_bot.py`. Funciona via auto-discovery
+com qualsevol bot clàssic (camps `module` + `class_name` al YAML).
 
-    def on_observation(self, obs) -> Signal:
-        signals = [bot.on_observation(obs) for bot in self.bots]
-        return self._aggregate(signals)
+**Polítiques disponibles:**
+
+| Política | Estat | Quan usar |
+|---------|-------|-----------|
+| `majority_vote` | ✅ implementada | Punt de partida — > 50% sub-bots han d'acordar |
+| `weighted` | 🔜 futur | Quan alguns bots clarament millors (Sharpe sliding window) |
+| `stacking` | 🔜 futur | Quan tens historial suficient per entrenar meta-capa ML |
+
+**Afegir o treure sub-bots:** edita `config/models/ensemble.yaml` (secció `sub_bots`)
+i reinicia el DemoRunner. No cal modificar cap fitxer Python.
+
+```yaml
+# config/models/ensemble.yaml
+sub_bots:
+  - config/models/trend.yaml         # classical
+  - config/models/xgboost.yaml       # ML (ha d'estar entrenat)
+  - config/models/ppo_professional.yaml  # RL (ha d'estar entrenat)
 ```
 
-| Política | Quan usar |
-|---------|-----------|
-| `majority_vote` | Diversitat alta entre bots — punt de partida |
-| `weighted` | Alguns bots clarament millors (Sharpe sliding window) |
-| `unanimous` | Conservador; molt poques operacions |
-| `stacking` | Quan tens prou historial de prediccions per entrenar meta-capa |
-| `dynamic_routing` | Quan tens detecció de règim de mercat |
+L'EnsembleBot detecta automàticament el tipus de cada sub-bot (classic / ML / RL)
+pel camp `category` del seu YAML — sense hard-coding ni registres manuals.
+
+**Criteris mínims per afegir un sub-bot a l'ensemble:**
+Sharpe > 1.0 i Drawdown < −25% en backtest out-of-sample (period TEST_FROM en endavant).
 
 ---
 
-*Última actualització: Març 2026 · Versió 3.0*
+*Última actualització: Març 2026 · Versió 3.1*

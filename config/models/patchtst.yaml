@@ -1,76 +1,75 @@
-# config/models/patchtst.yaml
-# ─────────────────────────────────────────────────────────────────────────────
-# PatchTST — Transformer per a sèries temporals amb patching
-# Divideix la seqüència en patches (finestres) i aplica atenció entre elles.
-# Referència: Nie et al. 2023 "A Time Series is Worth 64 Words"
-# ─────────────────────────────────────────────────────────────────────────────
-category: ML
-model_type: patchtst
-module: bots.ml.patchtst_model
-class_name: PatchTSTModel
-symbol: BTC/USDT
-timeframes:
-  - 1h
-forward_window: 24       # Horitzó de predicció (hores)
-threshold_pct: 0.005     # Mínim 0.5% de moviment per considerar senyal positiu
-
-# ── Features ────────────────────────────────────────────────────────────────
-features:
-  select: null            # null = totes les columnes de FeatureBuilder
-  external: {}            # sense dades externes en aquest baseline
-
-# ── Entrenament ─────────────────────────────────────────────────────────────
-training:
-  experiment_name: patchtst_v1
-  model_path: models/patchtst_v1.pt  # .pt per diferenciar de .pkl
-  model:
-    seq_len: 168          # 7 dies — captura patrons setmanals de BTC
-    patch_len: 24         # 1 dia per patch — unitat semàntica natural
-    stride: 12            # 50% solapament — equilibri context/redundància
-    d_model: 128          # Representació interna enriquida (PatchTST original)
-    n_heads: 8            # 128/8 = 16 dims per cap (recomanat en literatura)
-    n_layers: 3           # Encoder profund per dependències complexes
-    dropout: 0.1          # Transformers amb AdamW no necessiten molt dropout
-    epochs: 50            # Early stopping gestiona el tall real
-    batch_size: 32        # Batches petits milloren generalització en Transformers
-    learning_rate: 0.0001 # AdamW + Transformers requereixen lr molt baix vs RNNs
-    patience: 10          # Transformers triguen més a convergir
-
-# ── Optimització (Optuna) ────────────────────────────────────────────────────
-# Executar: python scripts/optimize_models.py --models patchtst
-# Resultat guardat a: config/models/patchtst_optimized.yaml
-optimization:
-  n_trials: 15
-  metric: accuracy_mean
-  direction: maximize
-  search_space:
-    seq_len:
-      type: categorical
-      choices: [72, 96, 168]
-    d_model:
-      type: categorical
-      choices: [64, 128]
-    n_layers:
-      type: int
-      low: 1
-      high: 3
-    dropout:
-      type: float
-      low: 0.05
-      high: 0.3
-    learning_rate:
-      type: float
-      low: 0.0001
-      high: 0.005
-      log: true
-    batch_size:
-      type: categorical
-      choices: [32, 64, 128]
-
-# ── Desplegament (bot) ──────────────────────────────────────────────────────
+best_params:
+  batch_size: 32
+  d_model: 128
+  dropout: 0.21846603723512553
+  learning_rate: 0.000251226046038035
+  n_layers: 3
+  seq_len: 168
 bot:
   bot_id: ml_patchtst_v1
   lookback: 200
-  min_confidence: 0.4
+  min_confidence: 0.65
+  prediction_threshold: 0.55
   trade_size: 0.5
-  prediction_threshold: 0.35
+category: ML
+class_name: PatchTSTModel
+features:
+  external: {}
+  select: null
+forward_window: 24
+model_type: patchtst
+module: bots.ml.patchtst_model
+optimization:
+  direction: maximize
+  metric: sharpe_ratio
+  n_trials: 15
+  search_space:
+    batch_size:
+      choices:
+      - 32
+      - 64
+      - 128
+      type: categorical
+    d_model:
+      choices:
+      - 64
+      - 128
+      type: categorical
+    dropout:
+      high: 0.3
+      low: 0.05
+      type: float
+    learning_rate:
+      high: 0.005
+      log: true
+      low: 0.0001
+      type: float
+    n_layers:
+      high: 3
+      low: 1
+      type: int
+    seq_len:
+      choices:
+      - 72
+      - 96
+      - 168
+      type: categorical
+symbol: BTC/USDT
+threshold_pct: 0.005
+timeframes:
+- 1h
+training:
+  experiment_name: patchtst_v1
+  model:
+    batch_size: 32
+    d_model: 128
+    dropout: 0.1
+    epochs: 50
+    learning_rate: 0.0001
+    n_heads: 8
+    n_layers: 3
+    patch_len: 24
+    patience: 10
+    seq_len: 168
+    stride: 12
+  model_path: models/patchtst_v1.pt

@@ -18,8 +18,9 @@
 | Optimize workflow | ✅ | Optuna + best_params in-place al YAML base |
 | BacktestEngine + MLflow | ✅ | Walk-forward, mètriques Sharpe/Calmar |
 | DemoRunner | ✅ | Persistència + Telegram |
-| Documentació | ✅ | PROJECT, MODELS, EXTENDING, CONFIG, DATABASE, DECISIONS |
 | **EnsembleBot v1** | ✅ | majority_vote — `bots/classical/ensemble_bot.py` |
+| **State restore** | ✅ | Portfolio + _in_position restaurats des de BD al reinici |
+| Documentació | ✅ | PROJECT, MODELS, EXTENDING, CONFIG, DATABASE, DECISIONS |
 
 ---
 
@@ -27,20 +28,19 @@
 
 ```
 [✅]   EnsembleBot v1 implementat (majority vote)
+[✅]   State persistence (portfolio + posició restaurada des de BD)
 [ara]  Optimització Optuna de tots els models (en curs)
           ↓
 [A]    Entrenar tots els models amb hiperparàmetres òptims
           ↓
 [B]    Backtest EnsembleBot — ha de superar HoldBot
           ↓
-[C]    Correccions DemoRunner (sync candles + persistir estat)
-          ↓
 [D]    Migrar a servidor 24/7
           ↓
 [E]    🚀 Iniciar demo — 3-6 mesos de paper trading
 ```
 
-A partir de [F], les tasques de Telegram i Dashboard es fan **en paral·lel** mentre la demo corre. No bloquegen l'inici.
+Les tasques G–K es fan **en paral·lel** mentre la demo corre. No bloquegen l'inici.
 
 ---
 
@@ -90,16 +90,6 @@ Criteri mínim d'entrada a la demo: **Sharpe > 1.0 i Drawdown màx. < -25%** en 
 |---------|-----------------|
 | `weighted` | Pes proporcional al Sharpe dels darrers N dies de cada sub-bot |
 | `stacking` | Model ML de 2a capa entrenat sobre les prediccions dels sub-bots |
-
----
-
-### C — Correccions DemoRunner
-
-Dues correccions necessàries per a un demo fiable:
-
-**C1. Sincronització de candles** — el bot ha d'actuar quan TANCA una candle (1 cop/hora), no cada 60 s sobre la mateixa candle oberta. Evita que el bot operi múltiples vegades sobre el mateix tick.
-
-**C2. Persistir estat intern** — `_in_position`, `_tick_count` i l'estat del portfolio han de restaurar-se des de la BD si el procés es reinicia. Ara es perden si el DemoRunner s'atura.
 
 ---
 
@@ -161,25 +151,84 @@ Quan hi hagi mesos de dades reals:
 - Comparativa vs BTC spot
 - Ranking per Sharpe/Calmar dels darrers 30/90/180 dies
 
-### I — Nous models (opcional, baix impacte en demo)
+---
 
-| Model | Tipus | Notes |
-|-------|-------|-------|
-| BreakoutBot | Clàssic | Pivot points + ATR per confirmar ruptures |
-| N-BEATS / N-HiTS | Deep Learning | Arquitectures eficients sense RNN |
-| TabNet | Tabular | Competitiu amb XGBoost, interpretatiu |
-| EnsembleBot weighted | Meta | Pes proporcional al Sharpe de cada bot |
+## Nous models i millores futures
 
-### J — Neteja de BD per a la demo
+### I — Nous models de ML/RL
+
+| Model | Tipus | Prioritat | Notes |
+|-------|-------|-----------|-------|
+| EnsembleBot weighted | Meta | 🟢 **Alta** | Pes proporcional al Sharpe dels últims N dies — fàcil un cop la demo té dades |
+| N-BEATS / N-HiTS | Deep Learning | 🟡 Mitjana | Arquitectures purament de forecasting, eficients sense RNN; sovint superen GRU |
+| TabNet | Tabular | 🟡 Mitjana | Competitiu amb XGBoost, attention-based interpretatiu — bon reemplaçament o complement |
+| BreakoutBot | Clàssic | 🟡 Mitjana | Pivot points + ATR per confirmar ruptures; complement natural a TrendBot |
+| DreamerV3 | RL model-based | 🔴 Baixa | World model (RSSM) — projecte de recerca independent, massa complex per ara |
+
+---
+
+### J — Capa LLM per a sentiment de notícies ⭐ (Recomanat)
+
+#### La proposta
+
+Afegir una font de dades diària on un LLM analitza headlines de BTC i retorna un senyal de sentiment `[-1.0, 1.0]`. L'objectiu és capturar informació macro que els indicadors tècnics no detecten: aprovació d'ETFs, regulació, col·lapses d'exchanges, moviments institucionals.
+
+#### Té sentit per a swing trading?
+
+**Sí, i especialment per a swing trading.** Per a scalping o day trading, les notícies impacten en mil·lisegons i un LLM seria massa lent. Per a operacions de dies/setmanes (timeframe 1H–12H), el sentiment diari és predictiu: diverses recerques 2023–2025 mostren que senyals LLM basats en notícies milloren la predicció de BTC en horitzons de 24–72h (López-Lira & Tang 2023, Shen et al. 2024).
+
+#### Arquitectura recomanada: LLM com a feature, no com a gatekeeper
+
+```
+CryptoPanic/RSS → LLM (GPT-4o-mini / Claude Haiku) → news_sentiment [-1, 1]
+                                    ↓
+                   BD: taula `news_sentiment` (timestamp, score, raw_text)
+                                    ↓
+              FeatureBuilder → columna `news_sentiment` en tots els models
+                                    ↓
+              ML models + RL professional la usen com a feature extra
+```
+
+**Per què feature i no gatekeeper?** Un gatekeeper LLM que "veta" els senyals dels altres bots eliminaria moltes oportunitats bones. Com a feature, els models aprenen ells mateixos quan el sentiment importa i quan no.
+
+**Fonts de dades:** CryptoPanic API (gratuïta, headlines des de 2014), CoinDesk RSS, CoinTelegraph RSS.
+
+**Freqüència:** una vegada/dia (suficient per swing trading). Cost: ~$0.01–$0.05 USD/dia.
+
+#### Passos d'implementació
+
+```
+1. data/sources/news_sentiment.py     # Fetcher: headlines → LLM → score [-1,1]
+2. core/db/models.py + alembic        # Nova taula: news_sentiment
+3. data/processing/external.py        # Loader: retorna DataFrame UTC-indexed
+4. FeatureBuilder                     # Integra news_sentiment com a feature diària
+5. YAMLs dels models                  # features.external.news_sentiment: true
+6. scripts/update_news_sentiment.py   # Cron diari (ex: 07:00h)
+```
+
+**Risks i mitigació:**
+
+| Risc | Mitigació |
+|------|-----------|
+| LLM al·lucina / error API | Fallback a 0.0 (neutral) si l'API falla |
+| Biaix de lookahead | Analitzar notícies del dia anterior, no del dia actual |
+| Historial limitat | CryptoPanic té dades des de 2014 — suficient per entrenar |
+| Cost | Cap preocupació: <$20/any |
+
+**Prioritat recomanada:** 🟢 Alta. Implementar un cop la demo estigui en marxa i les primeres comparatives mostrin on fallen els models. El sentiment LLM pot capturar els "black swan" positius i negatius que cap indicador tècnic no detecta.
+
+---
+
+### K — Neteja de BD per a la demo
 
 La BD de dades de mercat (OHLCV, fear_greed, etc.) s'ha de conservar íntegra.
 El que cal netejar és l'estat de demo anterior (si n'hi ha):
 
 ```sql
 -- Executar si vols iniciar la demo des de zero
-TRUNCATE TABLE demo_portfolio;  -- estat del portfolio anterior
-TRUNCATE TABLE demo_trades;     -- historial de trades anteriors
--- Les taules de candles i dades externes no s'han de tocar
+TRUNCATE TABLE demo_ticks;   -- estat del portfolio anterior
+TRUNCATE TABLE demo_trades;  -- historial de trades anteriors
+-- Les taules de candles i dades externes NO s'han de tocar
 ```
 
 *(Verifica els noms exactes de taules amb `\dt` a psql)*
@@ -190,15 +239,15 @@ TRUNCATE TABLE demo_trades;     -- historial de trades anteriors
 
 > *"El desenvolupament de Telegram i Dashboard el puc fer mentre la demo ja vagi corrent?"*
 
-**Sí, completament.** El DemoRunner és independent del Telegram i del Dashboard. Pots iniciar la demo amb el Telegram bàsic que ja tens i millorar-lo mentre les dades s'acumulen. El Dashboard és fins i tot millor fer-lo un cop tens mesos de dades reals — no té sentit construir gràfics bonics sense dades.
+**Sí, completament.** El DemoRunner és independent del Telegram i del Dashboard. Pots iniciar la demo amb el Telegram bàsic que ja tens i millorar-lo mentre les dades s'acumulen. El Dashboard és fins i tot millor fer-lo un cop tens mesos de dades reals.
 
 **Ordre de prioritats real:**
-1. Entrenar models (ara)
-2. EnsembleBot v1
-3. Correcció DemoRunner
-4. Servidor + demo
-5. Tot the rest mentre la demo corre
+1. Acabar optimització Optuna + entrenar models
+2. Backtest EnsembleBot
+3. Servidor Oracle + demo
+4. LLM sentiment layer (mentre corre la demo)
+5. Dashboard, Telegram millorat, nous models ML/RL
 
 ---
 
-*Última actualització: Març 2026 · Versió 3.0*
+*Última actualització: Març 2026 · Versió 4.0*

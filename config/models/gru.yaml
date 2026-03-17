@@ -1,69 +1,67 @@
-# config/models/gru.yaml
-# ─────────────────────────────────────────────────────────────────────────────
-# GRU Bidireccional — xarxa neuronal recurrent per a sèries temporals
-# BiGRU: captura dependències passades I futures en la seqüència.
-# NOTA: num_layers=1 per compatibilitat amb PyTorch MPS (macOS).
-# ─────────────────────────────────────────────────────────────────────────────
-category: ML
-model_type: gru
-module: bots.ml.gru_model
-class_name: GRUModel
-symbol: BTC/USDT
-timeframes:
-  - 1h
-forward_window: 24       # Horitzó de predicció (hores)
-threshold_pct: 0.005     # Mínim 0.5% de moviment per considerar senyal positiu
-
-# ── Features ────────────────────────────────────────────────────────────────
-features:
-  select: null            # null = totes les columnes de FeatureBuilder
-  external: {}            # sense dades externes en aquest baseline
-
-# ── Entrenament ─────────────────────────────────────────────────────────────
-training:
-  experiment_name: gru_bidireccional_v1
-  model_path: models/gru_v1.pt   # .pt per diferenciar de .pkl dels tree-based
-  model:
-    seq_len: 72           # +22: 3 dies de context, captura cicles diaris
-    hidden_size: 128      # BiGRU amb 128 hidden = 256 features totals
-    num_layers: 1         # num_layers=1 per compatibilitat MPS/macOS
-    dropout: 0.25         # FC dropout (GRU layer dropout = 0 per num_layers=1)
-    epochs: 50            # Early stopping tallarà quan calgui
-    batch_size: 64        # Batches petits = gradients sorollosos = millor regularització
-    learning_rate: 0.0005 # lr menor + més epochs = convergència suau
-    patience: 10          # BTC és sorollós, cal paciència
-
-# ── Optimització (Optuna) ────────────────────────────────────────────────────
-# Executar: python scripts/optimize_models.py --models gru
-# Resultat guardat a: config/models/gru_optimized.yaml
-optimization:
-  n_trials: 15
-  metric: accuracy_mean
-  direction: maximize
-  search_space:
-    seq_len:
-      type: categorical
-      choices: [48, 72, 96]
-    hidden_size:
-      type: categorical
-      choices: [64, 128]
-    dropout:
-      type: float
-      low: 0.1
-      high: 0.5
-    learning_rate:
-      type: float
-      low: 0.0001
-      high: 0.01
-      log: true
-    batch_size:
-      type: categorical
-      choices: [32, 64, 128]
-
-# ── Desplegament (bot) ──────────────────────────────────────────────────────
+best_params:
+  batch_size: 32
+  dropout: 0.22756480779821103
+  hidden_size: 128
+  learning_rate: 0.0004672941588975314
+  seq_len: 72
 bot:
   bot_id: ml_gru_v1
   lookback: 200
-  min_confidence: 0.4
+  min_confidence: 0.65
+  prediction_threshold: 0.55
   trade_size: 0.5
-  prediction_threshold: 0.35
+category: ML
+class_name: GRUModel
+features:
+  external: {}
+  select: null
+forward_window: 24
+model_type: gru
+module: bots.ml.gru_model
+optimization:
+  direction: maximize
+  metric: sharpe_ratio
+  n_trials: 15
+  search_space:
+    batch_size:
+      choices:
+      - 32
+      - 64
+      - 128
+      type: categorical
+    dropout:
+      high: 0.5
+      low: 0.1
+      type: float
+    hidden_size:
+      choices:
+      - 64
+      - 128
+      type: categorical
+    learning_rate:
+      high: 0.01
+      log: true
+      low: 0.0001
+      type: float
+    seq_len:
+      choices:
+      - 48
+      - 72
+      - 96
+      type: categorical
+symbol: BTC/USDT
+threshold_pct: 0.005
+timeframes:
+- 1h
+training:
+  experiment_name: gru_bidireccional_v1
+  model:
+    batch_size: 64
+    dropout: 0.25
+    epochs: 50
+    hidden_size: 128
+    learning_rate: 0.0005
+    num_layers: 1
+    patience: 10
+    seq_len: 72
+  model_path: models/gru_v1.pt

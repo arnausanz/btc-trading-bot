@@ -14,7 +14,7 @@ class GridBot(BaseBot):
     Grid Trading Bot that calculates Bollinger Bands dynamically.
     """
 
-    def __init__(self, config_path: str = "config/bots/grid.yaml"):
+    def __init__(self, config_path: str = "config/models/grid.yaml"):
         with open(config_path) as f:
             config = yaml.safe_load(f)
         super().__init__(bot_id=config["bot_id"], config=config)

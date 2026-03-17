@@ -17,7 +17,7 @@ class HoldBot(BaseBot):
     If restored from DB and already has BTC (btc_balance > 0), does not buy again.
     """
 
-    def __init__(self, config_path: str = "config/bots/hold.yaml"):
+    def __init__(self, config_path: str = "config/models/hold.yaml"):
         with open(config_path) as f:
             config = yaml.safe_load(f)
         super().__init__(bot_id=config["bot_id"], config=config)

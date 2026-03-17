@@ -176,7 +176,6 @@ btc-trading-bot/
 │   ├── unit/            57 tests — lògica amb dades mock
 │   └── integration/     5 tests — pipeline complet (necessita BD real)
 ├── models/              Models entrenats: *.pkl, *.pt, *.zip
-├── [OLD]config/         Arxius antics (conservats per referència)
 └── docs/                Tota la documentació del projecte
 ```
 

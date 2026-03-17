@@ -15,7 +15,7 @@ class DCABot(BaseBot):
     Optimal strategy for markets with bullish long-term trend.
     """
 
-    def __init__(self, config_path: str = "config/bots/dca.yaml"):
+    def __init__(self, config_path: str = "config/models/dca.yaml"):
         with open(config_path) as f:
             config = yaml.safe_load(f)
         super().__init__(bot_id=config["bot_id"], config=config)

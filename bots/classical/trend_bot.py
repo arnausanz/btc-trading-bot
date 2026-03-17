@@ -16,7 +16,7 @@ class TrendBot(BaseBot):
     does not depend on pre-calculated columns in the Feature Store.
     """
 
-    def __init__(self, config_path: str = "config/bots/trend.yaml"):
+    def __init__(self, config_path: str = "config/models/trend.yaml"):
         with open(config_path) as f:
             config = yaml.safe_load(f)
         super().__init__(bot_id=config["bot_id"], config=config)

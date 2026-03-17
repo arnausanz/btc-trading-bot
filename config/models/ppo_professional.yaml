@@ -1,112 +1,93 @@
-# config/models/ppo_professional.yaml
-# ─────────────────────────────────────────────────────────────────────────────
-# PPO Professional — swing trading sense apalancament
-#
-# Diferències clau vs ppo.yaml:
-#   - Timeframe 12h (no 1h): comissions ≈ negligibles en moviments de 2-5 %
-#   - 23 features (+ règim + on-chain + position state)
-#   - Entorn BtcTradingEnvProfessionalDiscrete (Discrete-5 + stop ATR)
-#   - Reward professional_risk_adjusted
-#
-# PRE-REQUISIT dades:
-#   python scripts/download_data.py            # 12h candles (BTC/USDT)
-#   python scripts/download_fear_greed.py
-#   python scripts/update_futures.py           # funding rate + OI
-#
-# obs_shape = (18 features × 90 lookback) + 4 position state = 1.624
-# ─────────────────────────────────────────────────────────────────────────────
+best_params:
+  batch_size: 128
+  gamma: 0.9828921743760681
+  learning_rate: 0.0004597968920314659
+  lookback: 90
+  n_steps: 2048
+  stop_atr_multiplier: 1.542922994523725
+bot:
+  bot_id: rl_ppo_professional_v1
+  trade_size: 1.0
 category: RL
-model_type: ppo_professional
-symbol: BTC/USDT
-timeframe: 12h
-
-# ── Features ────────────────────────────────────────────────────────────────
-# CRÍTIC: select + lookback determinen obs_shape.
-# Han de coincidir EXACTAMENT entre entrenament i desplegament.
-# Les 4 dimensions de position state (pnl_pct, position_fraction,
-# steps_in_position, drawdown_pct) s'afegeixen automàticament per l'entorn;
-# NO han d'estar a aquesta llista.
 features:
-  lookback: 90             # 90 × 12h = 45 dies d'historial
-  select:
-    # ── Tècnics base ──────────────────────────────────────────────────────
-    - close
-    - rsi_14
-    - macd
-    - macd_signal
-    - macd_hist
-    - atr_14               # volatilitat base (també usada pel stop loss)
-    - bb_upper_20
-    - bb_lower_20
-    - bb_middle_20
-    - ema_20
-    - ema_50
-    - volume
-    - volume_norm_20       # confirmació de ruptures (> 1 = volum alt)
-    # ── Règim ─────────────────────────────────────────────────────────────
-    - adx_14               # força de tendència: > 25 trending, < 20 rang
-    - atr_5                # ATR curt per calcular vol_ratio
-    - vol_ratio            # atr_5 / atr_14: > 1.2 expansió, < 0.8 compressió
-    # ── On-chain + sentiment ──────────────────────────────────────────────
-    - fear_greed_value     # 0-100; extrems = senyals de sobrecompra/venda
-    - funding_rate         # > 0.1 % sobrecomprat; < -0.1 % sobrevenut
   external:
     fear_greed: true
     funding_rate: true
     funding_rate_symbol: BTC/USDT:USDT
-
-# ── Entrenament ─────────────────────────────────────────────────────────────
-training:
-  experiment_name: ppo_professional_v1
-  train_pct: 0.8
-  model_path: models/ppo_professional_v1
-  environment:
-    initial_capital: 10000.0
-    fee_rate: 0.001
-    reward_scaling: 100.0
-    reward_type: professional
-    stop_atr_multiplier: 2.0    # 2 × ATR_14 below entry price
-  model:
-    total_timesteps: 500000
-    learning_rate: 0.0003
-    batch_size: 128
-    n_steps: 2048
-    n_epochs: 10
-    gamma: 0.99
-    policy: MlpPolicy
-
-# ── Optimització (Optuna) ────────────────────────────────────────────────────
-# Executar: python scripts/optimize_models.py --agents ppo_professional
+  lookback: 90
+  select:
+  - close
+  - rsi_14
+  - macd
+  - macd_signal
+  - macd_hist
+  - atr_14
+  - bb_upper_20
+  - bb_lower_20
+  - bb_middle_20
+  - ema_20
+  - ema_50
+  - volume
+  - volume_norm_20
+  - adx_14
+  - atr_5
+  - vol_ratio
+  - fear_greed_value
+  - funding_rate
+model_type: ppo_professional
 optimization:
+  direction: maximize
+  metric: val_return_pct
   n_trials: 15
   probe_timesteps: 25000
-  metric: val_return_pct
-  direction: maximize
   search_space:
-    learning_rate:
+    batch_size:
+      choices:
+      - 64
+      - 128
+      - 256
+      type: categorical
+    gamma:
+      high: 0.999
+      low: 0.95
       type: float
-      low: 0.0001
+    learning_rate:
       high: 0.001
       log: true
-    n_steps:
-      type: categorical
-      choices: [1024, 2048, 4096]
-    batch_size:
-      type: categorical
-      choices: [64, 128, 256]
-    gamma:
+      low: 0.0001
       type: float
-      low: 0.95
-      high: 0.999
-    stop_atr_multiplier:
-      type: float
-      low: 1.5
-      high: 3.0
     lookback:
+      choices:
+      - 60
+      - 90
       type: categorical
-      choices: [60, 90]
-
-# ── Desplegament (bot) ──────────────────────────────────────────────────────
-bot:
-  bot_id: rl_ppo_professional_v1
-  trade_size: 1.0
+    n_steps:
+      choices:
+      - 1024
+      - 2048
+      - 4096
+      type: categorical
+    stop_atr_multiplier:
+      high: 3.0
+      low: 1.5
+      type: float
+symbol: BTC/USDT
+timeframe: 12h
+training:
+  environment:
+    fee_rate: 0.001
+    initial_capital: 10000.0
+    reward_scaling: 100.0
+    reward_type: professional
+    stop_atr_multiplier: 2.0
+  experiment_name: ppo_professional_v1
+  model:
+    batch_size: 128
+    gamma: 0.99
+    learning_rate: 0.0003
+    n_epochs: 10
+    n_steps: 2048
+    policy: MlpPolicy
+    total_timesteps: 500000
+  model_path: models/ppo_professional_v1
+  train_pct: 0.8

@@ -245,14 +245,17 @@ bot:
 ## Regla crítica: `obs_shape` per a RL
 
 ```
-# Agents baseline (ppo, sac):
+# Agents baseline (ppo, sac — entorn BtcTradingEnvDiscrete / Continuous):
 obs_shape = len(features.select) × features.lookback
 
-# Agents professional (ppo_professional, sac_professional):
+# Agents professional (ppo_professional, sac_professional, td3_professional, td3_multiframe):
 obs_shape = len(features.select) × features.lookback + 4
 #                                                       ↑
-#                           position state afegit per l'entorn:
+#                           position state afegit per BtcTradingEnvProfessional:
 #                           [pnl_pct, position_fraction, steps_norm, drawdown_pct]
+#
+# RLBot.on_observation() reconstrueix aquest vector a partir del portfolio actual
+# per garantir la consistència entre entrenament i inferència.
 ```
 
 - `features.select` ha de ser **idèntic** al que s'ha usat per entrenar
@@ -350,7 +353,7 @@ Configuració de la simulació a `config/exchanges/paper.yaml`:
 ```yaml
 initial_balance_usdt: 10000.0  # Capital inicial
 fee_rate: 0.001                 # 0.1% per operació (Binance taker fee)
-slippage_rate: 0.0001           # 0.01% d'impacte de mercat simulat
+slippage_rate: 0.0005           # 0.05% d'impacte de mercat simulat (mercat líquid)
 ```
 
 ---

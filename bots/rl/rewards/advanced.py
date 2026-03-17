@@ -30,10 +30,11 @@ Usage:
 """
 import numpy as np
 from bots.rl.rewards.registry import register
+from bots.rl.constants import ATR_REFERENCE
 
 # ── Shared constants ──────────────────────────────────────────────────────────
-_ATR_REFERENCE      = 0.02   # 2 % of price = normal 12H BTC volatility baseline
-_MIN_STEPS          = 3      # minimum steps between trades (overtrading guard)
+_ATR_REFERENCE      = ATR_REFERENCE   # from bots.rl.constants — single source of truth
+_MIN_STEPS          = 3               # minimum steps between trades (overtrading guard)
 
 # Drawdown penalty thresholds (same as professional)
 _DD_MILD     = 0.05

@@ -51,6 +51,18 @@ bots:
     enabled: false
   - config_path: config/models/sac_onchain.yaml
     enabled: false
+  # RL professional (12H, ATR stop, position state) — obs_shape = n_features × lookback + 4
+  # python scripts/train_rl.py --agents ppo_professional sac_professional
+  - config_path: config/models/ppo_professional.yaml
+    enabled: false
+  - config_path: config/models/sac_professional.yaml
+    enabled: false
+  # RL TD3 (12H + multi-frame 12H+4H) — generació C3
+  # python scripts/train_rl.py --agents td3_professional td3_multiframe
+  - config_path: config/models/td3_professional.yaml
+    enabled: false
+  - config_path: config/models/td3_multiframe.yaml
+    enabled: false
 
   # Ensemble — activar un cop tots els sub-bots hagin passat el backtest out-of-sample
   - config_path: config/models/ensemble.yaml

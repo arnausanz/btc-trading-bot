@@ -100,17 +100,22 @@ class RLTrainer:
                 df = FeatureBuilder.from_config(self.config).build()
 
             n_features = len(df.columns)
-            obs_shape = features_cfg["lookback"] * n_features
+            lookback = features_cfg["lookback"]
+            # Professional envs add 4 position-state dims: obs_shape = n_feats×lookback + 4
+            _PROFESSIONAL_ENV_TYPES = {"ppo_professional", "sac_professional", "td3_professional", "td3_multiframe"}
+            pos_state_dims = 4 if agent_type in _PROFESSIONAL_ENV_TYPES else 0
+            obs_shape = lookback * n_features + pos_state_dims
             logger.info(
-                f"Features: {n_features} columns, lookback={features_cfg['lookback']}, "
+                f"Features: {n_features} columns, lookback={lookback}, "
                 f"obs_shape={obs_shape}"
+                + (f" ({n_features}×{lookback} + {pos_state_dims} pos state)" if pos_state_dims else "")
             )
             logger.info(f"  Selected: {features_cfg.get('select')}")
 
             mlflow.log_params({
                 "model_type": agent_type,
                 "total_timesteps": train_cfg["model"]["total_timesteps"],
-                "lookback": features_cfg["lookback"],
+                "lookback": lookback,
                 "reward_type": env_cfg["reward_type"],
                 "timeframe": self.config["timeframe"],
                 "aux_timeframes": str(self.config.get("aux_timeframes", [])),
