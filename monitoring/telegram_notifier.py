@@ -992,8 +992,35 @@ class TelegramNotifier:
                 logger.error(f"Telegram listener error: {exc}")
                 time.sleep(5)
 
+    def _drain_pending_updates(self) -> None:
+        """
+        Consume all updates already in the Telegram queue without processing them.
+
+        This is called once on startup so that after a restart (os.execv) we don't
+        re-execute stale callbacks (e.g. a confirm_reset that triggered the restart).
+        We call getUpdates with timeout=0 repeatedly until the queue is empty,
+        advancing _last_update_id past every pending update.
+        """
+        try:
+            while True:
+                r = requests.get(
+                    f"{self.base_url}/getUpdates",
+                    params={"offset": self._last_update_id + 1, "timeout": 0},
+                    timeout=10,
+                )
+                updates = r.json().get("result", [])
+                if not updates:
+                    break
+                for upd in updates:
+                    self._last_update_id = upd["update_id"]
+            if self._last_update_id > 0:
+                logger.info(f"Telegram: drained pending updates up to id={self._last_update_id}")
+        except Exception as exc:
+            logger.warning(f"Telegram: could not drain pending updates: {exc}")
+
     def start_listener(self) -> None:
         """Start the polling loop in a background daemon thread."""
+        self._drain_pending_updates()
         self._listener_thread = threading.Thread(
             target=self._poll_updates, daemon=True, name="telegram-listener"
         )
