@@ -121,7 +121,8 @@ class TestHoldBot:
 
         obs = make_synthetic_observation()
         # Simulate a portfolio that already has BTC from previous session
-        obs["portfolio"] = {"btc_balance": 0.1}
+        # Key must match what PaperExchange.get_portfolio() returns: "BTC"
+        obs["portfolio"] = {"BTC": 0.1}
 
         # Should skip the buy and go straight to HOLD
         sig = bot.on_observation(obs)
