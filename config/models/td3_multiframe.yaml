@@ -2,12 +2,12 @@ aux_timeframes:
 - 4h
 best_params:
   batch_size: 256
-  gamma: 0.9531875280562787
-  learning_rate: 0.0011736424885649085
-  lookback: 60
-  policy_delay: 1
-  reward_type: regime_adaptive
-  stop_atr_multiplier: 2.9233283058799997
+  gamma: 0.9793342657256547
+  learning_rate: 0.0004296748115469076
+  lookback: 90
+  policy_delay: 2
+  reward_type: professional
+  stop_atr_multiplier: 1.8185086660174141
 bot:
   bot_id: rl_td3_multiframe_v1
   trade_size: 1.0
@@ -49,7 +49,7 @@ optimization:
   direction: maximize
   metric: val_return_pct
   n_trials: 15
-  probe_timesteps: 30000
+  probe_timesteps: 60000
   search_space:
     batch_size:
       choices:
@@ -113,7 +113,7 @@ training:
     target_noise_clip: 0.5
     target_policy_noise: 0.2
     tau: 0.005
-    total_timesteps: 600000
+    total_timesteps: 1500000
     train_freq: 1
   model_path: models/td3_multiframe_v1
   train_pct: 0.8

@@ -1,8 +1,10 @@
 best_params:
-  depth: 8
-  iterations: 379
-  learning_rate: 0.07846733931041715
-  scale_pos_weight: 1.0067874079474264
+  depth: 4
+  iterations: 1336
+  l2_leaf_reg: 4.22669194730447
+  learning_rate: 0.07328592664166535
+  min_data_in_leaf: 50
+  scale_pos_weight: 3.5791633142197044
 bot:
   bot_id: ml_catboost_v1
   lookback: 200
@@ -19,35 +21,45 @@ model_type: catboost
 module: bots.ml.catboost_model
 optimization:
   direction: maximize
-  metric: sharpe_ratio
-  n_trials: 30
+  metric: precision_mean
+  n_trials: 50
   search_space:
     depth:
-      high: 10
-      low: 3
+      high: 8
+      low: 4
       type: int
     iterations:
-      high: 500
-      low: 100
+      high: 1500
+      low: 500
       type: int
+    l2_leaf_reg:
+      high: 10.0
+      low: 1.0
+      type: float
     learning_rate:
       high: 0.3
       log: true
       low: 0.01
       type: float
+    min_data_in_leaf:
+      high: 50
+      low: 5
+      type: int
     scale_pos_weight:
       high: 5.0
       low: 1.0
       type: float
 symbol: BTC/USDT
-threshold_pct: 0.005
+threshold_pct: 0.01
 timeframes:
 - 1h
 training:
   experiment_name: catboost_v1
   model:
     depth: 6
-    iterations: 700
-    learning_rate: 0.03
-    scale_pos_weight: 2.0
+    iterations: 1000
+    l2_leaf_reg: 3.0
+    learning_rate: 0.01
+    min_data_in_leaf: 10
+    scale_pos_weight: 1.0
   model_path: models/catboost_v1.pkl

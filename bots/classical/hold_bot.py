@@ -36,7 +36,7 @@ class HoldBot(BaseBot):
     def on_observation(self, observation: dict) -> Signal:
         # Check if we already have BTC (session restoration)
         portfolio = observation.get("portfolio", {})
-        if not self._bought and portfolio.get("btc_balance", 0) > 1e-6:
+        if not self._bought and portfolio.get("BTC", 0) > 1e-6:
             self._bought = True  # already have BTC from previous session
 
         if not self._bought:

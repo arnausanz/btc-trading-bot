@@ -23,12 +23,12 @@ trade_size: 0.5         # fracció del capital per compra
 #   Amb només 3 bots clàssics (trend, mean_reversion, momentum), l'ensemble
 #   NO genera cap trade. Causa: TrendBot senyalitza <0.1% de les candles;
 #   la probabilitat que 2/3 bots coincideixin en la mateixa candle és ~0.
-#   SOLUCIÓ: afegir els models ML un cop retrenats amb sharpe_ratio com a mètrica.
+#   SOLUCIÓ: afegir els models ML un cop retrenats amb precision_mean com a mètrica.
 #   XGB i LGBM generen ~900 senyals per 52k candles (1.7%) → molt més viable.
 #
 # Ordre recomanat per habilitar sub-bots:
 #   1. Clàssics que superin HoldBot en TEST (trend ✅, grid ✅ ja verificats)
-#   2. ML retrenats amb metric: sharpe_ratio (xgb, lgbm prioritaris)
+#   2. ML retrenats amb metric: precision_mean (xgb, lgbm prioritaris)
 #   3. RL professionals un cop validats
 sub_bots:
   # Clàssics — senyals molt esparsos, vot de majoria quasi mai dispara sol
@@ -36,7 +36,7 @@ sub_bots:
   - config/models/mean_reversion.yaml
   - config/models/momentum.yaml
 
-  # ML supervisat — HABILITAR UN COP RETRENATS amb metric: sharpe_ratio
+  # ML supervisat — HABILITAR UN COP RETRENATS amb metric: precision_mean
   # Prioritat: xgb i lgbm (generen prou senyals per fer funcionar la majoria)
   # - config/models/random_forest.yaml
   # - config/models/xgboost.yaml

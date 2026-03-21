@@ -1,8 +1,13 @@
 best_params:
-  learning_rate: 0.03943928078439521
-  max_depth: 4
-  n_estimators: 272
-  scale_pos_weight: 1.0556081199629272
+  colsample_bytree: 0.8110470845580929
+  learning_rate: 0.011773896528121152
+  max_depth: 3
+  min_child_weight: 8
+  n_estimators: 1230
+  reg_alpha: 0.5599775838976793
+  reg_lambda: 4.067807149193069
+  scale_pos_weight: 1.1525505529230908
+  subsample: 0.9333889165751407
 bot:
   bot_id: ml_xgb_v1
   lookback: 200
@@ -19,35 +24,60 @@ model_type: xgboost
 module: bots.ml.xgboost_model
 optimization:
   direction: maximize
-  metric: sharpe_ratio
-  n_trials: 30
+  metric: precision_mean
+  n_trials: 50
   search_space:
+    colsample_bytree:
+      high: 0.95
+      low: 0.6
+      type: float
     learning_rate:
       high: 0.3
       log: true
       low: 0.01
       type: float
     max_depth:
-      high: 10
+      high: 6
       low: 3
       type: int
-    n_estimators:
-      high: 500
-      low: 100
+    min_child_weight:
+      high: 20
+      low: 1
       type: int
+    n_estimators:
+      high: 1500
+      low: 500
+      type: int
+    reg_alpha:
+      high: 1.0
+      low: 0.0
+      type: float
+    reg_lambda:
+      high: 5.0
+      low: 0.5
+      type: float
     scale_pos_weight:
       high: 5.0
       low: 1.0
       type: float
+    subsample:
+      high: 0.95
+      low: 0.6
+      type: float
 symbol: BTC/USDT
-threshold_pct: 0.005
+threshold_pct: 0.01
 timeframes:
 - 1h
 training:
   experiment_name: xgboost_v1
   model:
-    learning_rate: 0.02
-    max_depth: 5
-    n_estimators: 500
-    scale_pos_weight: 2.0
+    colsample_bytree: 0.8
+    learning_rate: 0.01
+    max_depth: 4
+    min_child_weight: 5
+    n_estimators: 1000
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    scale_pos_weight: 1.0
+    subsample: 0.8
   model_path: models/xgboost_v1.pkl

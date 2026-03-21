@@ -2,6 +2,7 @@
 
 > PostgreSQL. Connexió configurada a `config/settings.yaml` → `DATABASE_URL`.
 > Models SQLAlchemy a `core/db/models.py`. Sessió a `core/db/session.py`.
+> Per a la configuració: veure **[04_CONFIGURATION.md](./04_CONFIGURATION.md)**.
 
 ---
 
@@ -309,6 +310,87 @@ Reporta per a cada font: total de registres, rang de dates, cobertura estimada, 
 
 ---
 
+---
+
+### `gate_positions`
+Posicions obertes del GateBot, persistides entre reinicis del DemoRunner.
+
+| Columna | Tipus | Descripció |
+|---------|-------|-----------|
+| `id` | int PK | Autoincrement |
+| `bot_id` | str(100) | Ex: `"gate_v1"` |
+| `opened_at` | datetime tz | Moment d'obertura de la posició |
+| `entry_price` | float | Preu d'entrada |
+| `stop_level` | float | Preu del stop loss inicial |
+| `target_level` | float | Preu objectiu (take profit) |
+| `highest_price` | float | Preu màxim assolit (per trailing stop) |
+| `size_usdt` | float | Mida de la posició en USDT |
+| `regime` | str(50) | Règim P1 en el moment de l'entrada (ex: `"STRONG_BULL"`) |
+| `decel_counter` | int | Nombre de candles 4H consecutives en desacceleració |
+
+**Notes:** S'esborra quan la posició es tanca. Permet que el GateBot recuperi el seu estat complet si el DemoRunner es reinicia. Script de creació: `alembic upgrade head`.
+
+---
+
+### `gate_near_misses`
+Registre de cada avaluació on P1 + P2 + P3 passen simultàniament. Permet analitzar quines portes bloquegen més trades i per quin motiu.
+
+| Columna | Tipus | Descripció |
+|---------|-------|-----------|
+| `id` | int PK | Autoincrement |
+| `timestamp` | datetime tz | Moment de l'avaluació |
+| `bot_id` | str(100) | Ex: `"gate_v1"` |
+| `p1_regime` | str(50) | Règim detectat (`STRONG_BULL`, etc.) |
+| `p1_confidence` | float | Probabilitat màxima del règim [0–1] |
+| `p2_multiplier` | float | Position multiplier de P2 [0–1] |
+| `p3_level_type` | str(50) | Tipus de nivell (`fractal`, `fibonacci`, `vp`, `confluence`) |
+| `p3_strength` | float | Força del nivell [0–1] |
+| `p3_risk_reward` | float | R:R del nivell |
+| `p3_volume_ratio` | float | Volum d'acostament / vol_ma20 (filtre: <0.8 = tanca) |
+| `p4_d1_ok` | bool | Senyal 1 P4 actiu |
+| `p4_d2_ok` | bool | Senyal 2 P4 actiu |
+| `p4_rsi_ok` | bool | Senyal 3 P4 actiu (RSI-2) |
+| `p4_macd_ok` | bool | Senyal 4 P4 actiu (MACD) |
+| `p4_score` | float | Score P4 [0–1] |
+| `p4_triggered` | bool | Si P4 va obrir porta |
+| `p5_veto_reason` | str(200) | Motiu de veto P5 (null si no hi ha veto) |
+| `p5_position_size` | float | Mida calculada per P5 (Kelly) |
+| `executed` | bool | Si el trade es va executar finalment |
+
+**Volum estimat:** ~10–30 registres/dia (cada cop que P1+P2+P3 coincideixen a les 4H).
+
+**Consultes d'anàlisi útils:**
+
+```sql
+-- Quina porta bloqueja més?
+SELECT
+  CASE
+    WHEN NOT p4_triggered THEN 'P4'
+    WHEN p5_veto_reason IS NOT NULL THEN 'P5'
+    ELSE 'executat'
+  END as bloqueig,
+  COUNT(*) as total
+FROM gate_near_misses
+GROUP BY 1 ORDER BY 2 DESC;
+
+-- P4: quin senyal és el més restrictiu?
+SELECT
+  SUM(CASE WHEN NOT p4_d1_ok THEN 1 ELSE 0 END) as d1_falla,
+  SUM(CASE WHEN NOT p4_d2_ok THEN 1 ELSE 0 END) as d2_falla,
+  SUM(CASE WHEN NOT p4_rsi_ok THEN 1 ELSE 0 END) as rsi_falla,
+  SUM(CASE WHEN NOT p4_macd_ok THEN 1 ELSE 0 END) as macd_falla
+FROM gate_near_misses WHERE NOT p4_triggered;
+
+-- Règims que arriben a P3 però no a trade
+SELECT p1_regime, COUNT(*) as near_misses,
+       SUM(executed::int) as executats,
+       AVG(p3_volume_ratio) as avg_vol_ratio
+FROM gate_near_misses
+GROUP BY p1_regime ORDER BY near_misses DESC;
+```
+
+---
+
 ## Taules futures (ROADMAP)
 
 | Taula | Per a | Notes |
@@ -317,4 +399,4 @@ Reporta per a cada font: total de registres, rang de dates, cobertura estimada, 
 
 ---
 
-*Última actualització: Març 2026 · Versió 1.3*
+*Última actualització: Març 2026 · Versió 2.0 (Gate System: gate_positions + gate_near_misses)*

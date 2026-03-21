@@ -95,6 +95,7 @@ class DemoTradeDB(Base):
     size_usdt: Mapped[float] = mapped_column(Float, nullable=False)
     fees: Mapped[float] = mapped_column(Float, nullable=False)
     portfolio_value: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=True, default=0.0)
     reason: Mapped[str] = mapped_column(String(500), nullable=False)
 
 
@@ -150,3 +151,65 @@ class BlockchainMetricDB(Base):
     metric: Mapped[str] = mapped_column(String(50), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     value: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+# ── Gate System ───────────────────────────────────────────────────────────────
+
+class GatePositionDB(Base):
+    """
+    Posicions obertes del GateBot. Persistides entre reinicis.
+    Cada registre = 1 posició llarga activa.
+    """
+    __tablename__ = "gate_positions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    bot_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    entry_price: Mapped[float] = mapped_column(Float, nullable=False)
+    stop_level: Mapped[float] = mapped_column(Float, nullable=False)    # s'actualitza amb trailing
+    target_level: Mapped[float] = mapped_column(Float, nullable=False)
+    highest_price: Mapped[float] = mapped_column(Float, nullable=False) # màxim des d'entrada
+    size_usdt: Mapped[float] = mapped_column(Float, nullable=False)      # mida en USDT
+    regime: Mapped[str] = mapped_column(String(20), nullable=False)      # règim en el moment d'entrada
+    decel_counter: Mapped[int] = mapped_column(Integer, default=0)       # candles consecutives amb d2<0
+
+
+class GateNearMissDB(Base):
+    """
+    Registre d'avaluacions on P1+P2+P3 han passat, independentment de si s'executa un trade.
+    Permet analitzar quines portes tanquen més i per quin motiu (calibratge de llindars).
+    Crida: cada cop que P3 retorna has_actionable_level=True.
+    """
+    __tablename__ = "gate_near_misses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    bot_id: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    # P1
+    p1_regime: Mapped[str] = mapped_column(String(20), nullable=False)
+    p1_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # P2
+    p2_multiplier: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # P3
+    p3_level_type: Mapped[str | None] = mapped_column(String(20), nullable=True)   # 'support'|'resistance'
+    p3_level_strength: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p3_risk_reward: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p3_volume_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # P4 — senyals individuals (True = actiu)
+    p4_d1_ok: Mapped[bool | None] = mapped_column(nullable=True)
+    p4_d2_ok: Mapped[bool | None] = mapped_column(nullable=True)
+    p4_rsi_ok: Mapped[bool | None] = mapped_column(nullable=True)
+    p4_macd_ok: Mapped[bool | None] = mapped_column(nullable=True)
+    p4_score: Mapped[float | None] = mapped_column(Float, nullable=True)    # 0.0–1.0
+    p4_triggered: Mapped[bool | None] = mapped_column(nullable=True)
+
+    # P5
+    p5_veto_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)  # NULL = no vetat
+    p5_position_size: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Resultat final
+    executed: Mapped[bool] = mapped_column(nullable=False, default=False)

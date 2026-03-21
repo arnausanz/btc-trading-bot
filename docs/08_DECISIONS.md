@@ -1,7 +1,10 @@
-# ADR-001: Decisions d'Arquitectura — BTC Trading Bot Platform
+# Decisions d'Arquitectura — Architecture Decision Records
 
-**Data:** 2026-03-01  
-**Estat:** Acceptat  
+> 11 decisions de disseny clau amb context, alternatives descartades i justificació.
+> Per a l'arquitectura resultant: veure **[01_ARCHITECTURE.md](./01_ARCHITECTURE.md)**.
+
+**Data:** 2026-03-01
+**Estat:** Acceptat
 **Autor:** Arnau Sanz
 
 ---
@@ -114,11 +117,63 @@ Plataforma de trading algorítmic per BTC construïda des de zero amb l'objectiu
 
 ---
 
+---
+
+### 11. Gate System — Decisions d'Arquitectura (Març 2026)
+
+**Context:** Implementació del Gate System, un bot de swing trading de nova generació basat en 5 portes seqüencials. Quatre decisions arquitecturals clau.
+
+---
+
+**11-A: Long-only en v1**
+
+**Decisió:** V1 opera únicament en llarg (STRONG_BULL, WEAK_BULL, RANGING → entrades; BEAR/UNCERTAIN → flat).
+
+**Per què:** Les posicions curtes requereixen gestió d'stop específica per a mercats en tendència decreixent i validació externa addicional. En un bull market estructural de BTC, el risc/recompensa de curts és asimètric. Es pot afegir en v2 un cop la infraestructura de portes estigui validada en paper trading.
+
+**Implicació:** `p5.py` només genera ordres BUY. La lògica de SELL és exclusivament per tancar posicions llargues (stop, target, trailing).
+
+---
+
+**11-B: Sense news sentiment en v1**
+
+**Decisió:** P2 usa Fear & Greed + funding rate com a proxy; news sentiment (LLM) exclòs.
+
+**Per què:** El news sentiment requereix integració d'una API externa (CryptoPanic), un cron diari, un model LLM, i validació del seu senyal. Afegeix complexitat d'infraestructura que no és necessària per validar la hipòtesi central del Gate System. Es pot afegir com a component de P2 en v2 (ja documentat al ROADMAP.md §J).
+
+**Implicació:** `p2_health.py` usa `_fg_score()` + `_funding_score()`. El `_news_score()` és un stub comentat.
+
+---
+
+**11-C: 14 features P1, sense exchange_netflow**
+
+**Decisió:** Les 14 features de P1 inclouen EMA slopes, ADX, ATR percentile, funding rate (3d/7d), volume, Fear & Greed i returns. `exchange_netflow_7d` exclòs.
+
+**Per què:** `exchange_netflow` requereix CryptoQuant o Glassnode (APIs de pagament, ~$50-$200/mes). Les 14 features seleccionades estan totes disponibles de fonts gratuïtes (Binance + alternative.me). Mantenir el sistema zero-cost és prioritat per a la fase de demo.
+
+**Implicació:** `xgb_classifier.py::P1_FEATURES` conté exactament 14 entrades. Cap referència a `exchange_netflow`.
+
+---
+
+**11-D: Sense prefix, unió deduplificada a ObservationSchema**
+
+**Decisió:** `GateBot.observation_schema()` declara les features sense prefix (no `4h_close`, `1d_close`); la unió de features_4h + features_1d és deduplificada (features compartides com `close`, `rsi_14` apareixen una sola vegada).
+
+**Per què:** Els dfs de cada timeframe (`obs["4h"]`, `obs["1d"]`) ja estan separats per clau. El prefix seria redundant i complicaria els noms de columna. La deduplicació evita declarar la mateixa feature dues vegades.
+
+**Implicació:** `ObservationBuilder.build()` construeix cada timeframe de forma independent. `GateBot` accedeix `obs["4h"]["features"]` i `obs["1d"]["features"]` per separat i selecciona les columnes que necessita per nom.
+
+---
+
 ## Alternatives Descartades
 
 | Alternativa | Per què es va descartar |
 |---|---|
 | TA-Lib per a indicadors | Problemes de compilació en alguns entorns; implementació pròpia amb pandas és suficient i portable |
+| Shorts en Gate System v1 | Risc asimètric en bull market; complexitat d'stop addicional; v2 ho pot afegir un cop validada la infraestructura |
+| News sentiment en P2 v1 | Requereix API externa de pagament + LLM; afegeix complexitat innecessària per validar la hipòtesi central |
+| exchange_netflow com a feature P1 | API de pagament (CryptoQuant/Glassnode); prioritat zero-cost per a la fase de demo |
+| Prefix en features multi-TF | Redundant quan cada TF té el seu propi df; la deduplicació és més neta que gestionar `4h_close` vs `1d_close` |
 | Polars en comptes de pandas | L'ecosistema ML (sklearn, SB3) espera pandas/numpy; la conversió afegiria complexitat |
 | Redis per a cache d'observacions | Overkill per a demo local; dict en memòria és suficient |
 | FastAPI per a REST API | No necessari per a demo; Telegram és suficient per a interacció remota |

@@ -1,7 +1,8 @@
 # Com Estendre el Projecte — Receptes
 
 > Instruccions per afegir nous bots, models, agents i fonts de dades.
-> Per al schema complet dels YAMLs: veure **[CONFIGURATION.md](./CONFIGURATION.md)**.
+> Per al schema complet dels YAMLs: veure **[04_CONFIGURATION.md](./04_CONFIGURATION.md)**.
+> Per a l'arquitectura del BaseBot pattern: veure **[01_ARCHITECTURE.md](./01_ARCHITECTURE.md)**.
 
 ---
 
@@ -384,4 +385,156 @@ Sharpe > 1.0 i Drawdown < −25% en backtest out-of-sample (period TEST_FROM en 
 
 ---
 
-*Última actualització: Març 2026 · Versió 3.1*
+---
+
+## 7. Estendre el Gate System
+
+El Gate System és un bot independent a `bots/gate/`. Pots provar variacions de portes individuals o implementar un GateBot v2 sense tocar res existent.
+
+---
+
+### 7.1 Canviar els paràmetres d'una porta sense re-entrenar
+
+Tots els paràmetres de P3, P4 i P5 llegits del YAML (`gate.yaml`) es poden modificar directament:
+
+```yaml
+# config/models/gate.yaml
+
+p3:
+  min_level_strength: 0.5   # era 0.4 — més estricte
+  fractal_n_4h: 3           # era 2 — fractals menys sensibles
+
+p4:
+  rsi2_oversold: 15         # era 10 — llindar RSI-2 menys extrem
+
+p5:
+  max_risk_pct: 0.005       # era 0.01 — 0.5% de risc per trade (més conservador)
+  min_rr:
+    STRONG_BULL: 2.0        # era 1.5 — R:R més estricte
+```
+
+P1 i P2 no llegeixen paràmetres crítics del YAML (els models ja estan entrenats). Reiniciar el DemoRunner aplica els nous valors.
+
+⚠️ Si canvies `features_4h`, `features_1d`, `lookback` o `timeframe`, cal re-entrenar.
+
+---
+
+### 7.2 Afegir un nou senyal a P4
+
+**Exemple:** afegir un 5è senyal (Stochastic RSI < 20).
+
+**7.2.1** A `bots/gate/gates/p4_momentum.py`, afegeix el càlcul i inclou-lo als resultats:
+
+```python
+# En _compute_signals():
+stoch_rsi = self._stoch_rsi(df_4h)
+stoch_ok = bool(stoch_rsi.iloc[-1] < 20)
+
+return P4Result(
+    signals_detail={..., "stoch_rsi": stoch_ok},
+    signals_total=5,   # era 4
+    ...
+)
+```
+
+**7.2.2** Actualitza `_MIN_SIGNALS` si cal:
+```python
+_MIN_SIGNALS = {
+    "STRONG_BULL": 1,
+    "WEAK_BULL": 2,    # potser ara exigeixes 3 de 5
+    "RANGING": 3,
+}
+```
+
+No cal canviar cap YAML ni re-entrenar.
+
+---
+
+### 7.3 Afegir un nou component a P2
+
+P2 retorna un `position_multiplier [0,1]` com a producte de sub-scores. Per afegir un 3r factor (ex: news sentiment):
+
+```python
+# bots/gate/gates/p2_health.py
+
+def _news_score(self, news_sentiment: float) -> float:
+    """news_sentiment ∈ [-1, 1]. Negatiu → reduir; positiu → amplificar."""
+    if news_sentiment < -0.5:
+        return 0.5   # notícies molt negatives → reduir a la meitat
+    elif news_sentiment > 0.5:
+        return 1.0   # notícies positives → pes complet
+    return 0.8
+
+def evaluate(self, df_1d, regime, news_sentiment=0.0) -> float:
+    fg_score      = self._fg_score(df_1d, regime)
+    funding_score = self._funding_score(df_1d)
+    news_score    = self._news_score(news_sentiment)
+    return fg_score * funding_score * news_score
+```
+
+Actualitza `gate_bot.py` per passar el valor de sentiment a `p2.evaluate()`.
+
+---
+
+### 7.4 Implementar GateBot v2 (nova instància en paral·lel)
+
+Per provar una variació important (ex: incluure shorts, 3 timeframes) sense interferir amb gate_v1:
+
+**7.4.1** Crea `bots/gate_v2/` amb la nova implementació (o hereta de `GateBot`).
+
+**7.4.2** Crea `config/models/gate_v2.yaml`:
+```yaml
+category:   gate
+model_type: gate_v2
+module:     bots.gate_v2.gate_bot_v2
+class_name: GateBotV2
+bot_id:     gate_v2
+...
+model_paths:
+  hmm: models/gate_v2_hmm.pkl
+  xgb: models/gate_v2_xgb.pkl
+```
+
+**7.4.3** Entrena:
+```bash
+python scripts/train_gate_regime.py --config config/models/gate_v2.yaml
+```
+
+**7.4.4** Afegeix a `config/demo.yaml`:
+```yaml
+- config_path: config/models/gate_v2.yaml
+  enabled: false   # activa quan estigui entrenat
+```
+
+Tots dos (gate_v1 i gate_v2) corren en paral·lel i les seves posicions van a taules independents gràcies al camp `bot_id`.
+
+---
+
+### 7.5 Canviar P1: provar un altre classificador de règim
+
+P1 usa HMM per descobrir estats + XGBoost per classificar. Per provar LightGBM com a classificador:
+
+**7.5.1** Crea `bots/gate/regime_models/lgbm_classifier.py` seguint el mateix patró que `xgb_classifier.py` (implementa `fit`, `predict_proba`, `save`, `load`).
+
+**7.5.2** A `bots/gate/gates/p1_regime.py`, afegeix lògica per carregar el classificador alternatiu:
+```python
+classifier_type = self.config.get("p1", {}).get("classifier", "xgb")
+if classifier_type == "lgbm":
+    self._clf = LGBMRegimeClassifier()
+    self._clf.load(paths["lgbm"])
+```
+
+**7.5.3** Actualitza `gate.yaml`:
+```yaml
+model_paths:
+  hmm: models/gate_hmm.pkl
+  lgbm: models/gate_lgbm_regime.pkl
+p1:
+  classifier: lgbm   # "xgb" per defecte
+```
+
+**7.5.4** Actualitza `train_gate_regime.py` per entrenar i guardar el model alternatiu.
+
+---
+
+*Última actualització: Març 2026 · Versió 4.0 (Gate System afegit)*

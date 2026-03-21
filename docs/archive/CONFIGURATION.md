@@ -94,6 +94,7 @@ telegram:
 | `classic`  | hold, dca, trend, grid, mean_reversion, momentum | Bots basats en regles, sense ML |
 | `ML`       | xgboost, gru, patchtst | Models supervisats (predicció de preu) |
 | `RL`       | ppo, sac, ppo_professional, sac_professional | Agents de reinforcement learning |
+| `gate`     | gate | Gate System: 5 portes seqüencials, swing trading, HMM+XGBoost |
 
 ---
 
@@ -242,6 +243,81 @@ bot:
 
 ---
 
+---
+
+### Schema — `category: gate`
+
+```yaml
+category:   gate
+model_type: gate
+module:     bots.gate.gate_bot
+class_name: GateBot
+bot_id:     gate_v1
+symbol:     BTC/USDT
+
+# Timeframe primari (on_observation cridat per cada candle 4H tancada)
+timeframe:     4h
+aux_timeframe: 1d   # context per P1/P2 (re-avaluat quan tanca nova candle diària)
+lookback: 300        # 300×4H = 50 dies | 300×1D = ~1 any (cobreix EMA-200)
+
+# Paths dels models entrenats per P1
+model_paths:
+  hmm: models/gate_hmm.pkl
+  xgb: models/gate_xgb_regime.pkl
+
+# Features separades per timeframe (no prefix — cada df és independent)
+features_4h: [close, high, low, volume, atr_14, rsi_14, macd, macd_signal, funding_rate]
+features_1d: [close, ema_50, ema_200, adx_14, rsi_14, atr_14, fear_greed_value, funding_rate, volume]
+
+external:
+  fear_greed:   true
+  funding_rate: true
+
+p1:
+  min_regime_confidence: 0.60   # <0.60 → UNCERTAIN, porta tancada
+
+p2:
+  onchain_enabled: true         # Fear & Greed + funding rate com a proxy
+
+p3:
+  min_level_strength: 0.4       # Força mínima per a nivell accionable
+  fractal_n_4h: 2               # N per pivots fractals al 4H
+  fractal_n_1d: 5               # N per pivots fractals al diari
+  min_swing_pct: 0.03           # Swing mínim (3%) per calcular Fibonacci
+  volume_profile_bins: 50       # Resolució del Volume Profile
+
+p4:
+  ewm_span: 3                   # Span EWM per suavitzar derivades
+  rsi2_oversold: 10             # Llindar RSI-2 Connors (sobrevenut extrem)
+
+p5:
+  max_risk_pct:           0.01  # 1% capital en risc per trade (Kelly fraccionari)
+  max_exposure_pct:       0.95  # Cap dur d'exposició total
+  max_open_positions:     2     # Màxim de posicions obertes simultànies
+  weekly_drawdown_limit:  0.05  # 5% pèrdua setmanal → veto noves entrades
+  stagnation_days:        6     # Dies màxims en negatiu + portes obertes
+  min_rr:
+    STRONG_BULL: 1.5
+    WEAK_BULL:   2.0
+    RANGING:     2.0
+  trailing_atr_multiplier:
+    low_vol: 1.5   normal_vol: 2.0   high_vol: 2.5
+  decel_exit_candles:
+    STRONG_BULL: 5   WEAK_BULL: 3   RANGING: 2
+
+# best_params: omplert automàticament per train_gate_regime.py (XGBoost Optuna)
+```
+
+**Script d'entrenament exclusiu:** `python scripts/train_gate_regime.py`
+(diferent del flux ML/RL — entrena HMM + XGBoost en pipeline propi)
+
+**Prerequisits per activar:**
+1. `alembic upgrade head` — crea les taules `gate_positions` i `gate_near_misses`
+2. `python scripts/train_gate_regime.py` — genera `models/gate_hmm.pkl` + `models/gate_xgb_regime.pkl`
+3. `config/demo.yaml`: `gate_bot → enabled: true`
+
+---
+
 ## Regla crítica: `obs_shape` per a RL
 
 ```
@@ -309,6 +385,14 @@ Veure `ppo_onchain.yaml` o `ppo_professional.yaml` com a exemples complets.
 --models    rf xgb lgbm catboost gru patchtst   # Models a entrenar (default: tots)
 ```
 
+### `train_gate_regime.py`
+```
+--config    config/models/gate.yaml   # Config del GateBot (default)
+--symbol    BTC/USDT                  # Símbol (default: BTC/USDT)
+--n-trials  50                        # Trials Optuna per a XGBoost (default: 50)
+--no-optuna                           # Salta Optuna, usa paràmetres per defecte
+```
+
 ### `train_rl.py`
 ```
 --agents    sac ppo ppo_professional sac_professional   # Agents a entrenar (default: tots)
@@ -322,7 +406,9 @@ Veure `ppo_onchain.yaml` o `ppo_professional.yaml` com a exemples complets.
 --no-rl                            # Exclou agents RL
 ```
 
-**Noms de bots disponibles:** `hold`, `dca`, `trend`, `grid`, `mean_reversion`, `momentum`, `rf`, `xgb`, `lgbm`, `catboost`, `gru`, `patchtst`, `ppo`, `sac`, `ppo_onchain`, `sac_onchain`, `ppo_professional`, `sac_professional`
+**Noms de bots disponibles:** `hold`, `dca`, `trend`, `grid`, `mean_reversion`, `momentum`, `rf`, `xgb`, `lgbm`, `catboost`, `gru`, `patchtst`, `ppo`, `sac`, `ppo_onchain`, `sac_onchain`, `ppo_professional`, `sac_professional`, `gate`
+
+> **Nota Gate System:** el GateBot no passa per `optimize_bots.py` ni `train_models.py`. Té el seu propi pipeline `train_gate_regime.py`. El `category: gate` és exclusiu del GateBot i el DemoRunner el gestiona via auto-discovery igual que la resta.
 
 ### `run_demo.py`
 ```
@@ -370,4 +456,4 @@ Cada experiment registra: `model_type`, `params`, `sharpe`, `drawdown`, `win_rat
 
 ---
 
-*Última actualització: Març 2026 · Versió 2.1*
+*Última actualització: Març 2026 · Versió 3.0 (Gate System afegit)*

@@ -1,9 +1,9 @@
 best_params:
-  batch_size: 32
-  dropout: 0.22756480779821103
-  hidden_size: 128
-  learning_rate: 0.0004672941588975314
-  seq_len: 72
+  dropout: 0.18323844495783392
+  hidden_size: 256
+  learning_rate: 0.00015127340530506054
+  num_layers: 2
+  seq_len: 96
 bot:
   bot_id: ml_gru_v1
   lookback: 200
@@ -20,48 +20,48 @@ model_type: gru
 module: bots.ml.gru_model
 optimization:
   direction: maximize
-  metric: sharpe_ratio
-  n_trials: 15
+  metric: precision_mean
+  n_trials: 20
   search_space:
-    batch_size:
-      choices:
-      - 32
-      - 64
-      - 128
-      type: categorical
     dropout:
       high: 0.5
       low: 0.1
       type: float
     hidden_size:
       choices:
-      - 64
       - 128
+      - 256
+      - 512
       type: categorical
     learning_rate:
-      high: 0.01
+      high: 0.005
       log: true
-      low: 0.0001
+      low: 5.0e-05
       type: float
+    num_layers:
+      choices:
+      - 1
+      - 2
+      type: categorical
     seq_len:
       choices:
-      - 48
       - 72
       - 96
+      - 168
       type: categorical
 symbol: BTC/USDT
-threshold_pct: 0.005
+threshold_pct: 0.01
 timeframes:
 - 1h
 training:
   experiment_name: gru_bidireccional_v1
   model:
     batch_size: 64
-    dropout: 0.25
-    epochs: 50
-    hidden_size: 128
-    learning_rate: 0.0005
-    num_layers: 1
-    patience: 10
-    seq_len: 72
+    dropout: 0.3
+    epochs: 100
+    hidden_size: 256
+    learning_rate: 0.0003
+    num_layers: 2
+    patience: 15
+    seq_len: 96
   model_path: models/gru_v1.pt

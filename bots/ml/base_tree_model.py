@@ -133,7 +133,7 @@ class BaseTreeModel(BaseMLModel):
         X_scaled = pd.DataFrame(
             self.scaler.transform(X), columns=self.feature_names
         )
-        proba = self.model.predict_proba(X_scaled)[0][1]
+        proba = self.model.predict_proba(X_scaled)[-1][1]
         return int(proba >= threshold), float(proba)
 
     def save(self, path: str) -> None:

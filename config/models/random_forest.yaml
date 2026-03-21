@@ -1,6 +1,7 @@
 best_params:
-  max_depth: 3
-  n_estimators: 496
+  max_depth: 5
+  min_samples_leaf: 13
+  n_estimators: 861
 bot:
   bot_id: ml_rf_v1
   lookback: 200
@@ -17,24 +18,30 @@ model_type: random_forest
 module: bots.ml.random_forest
 optimization:
   direction: maximize
-  metric: sharpe_ratio
+  metric: precision_mean
   n_trials: 30
   search_space:
     max_depth:
-      high: 20
-      low: 3
+      high: 30
+      low: 5
+      type: int
+    min_samples_leaf:
+      high: 30
+      low: 1
       type: int
     n_estimators:
-      high: 500
-      low: 50
+      high: 1500
+      low: 500
       type: int
 symbol: BTC/USDT
-threshold_pct: 0.005
+threshold_pct: 0.01
 timeframes:
 - 1h
 training:
   experiment_name: random_forest_v1
   model:
-    max_depth: 8
-    n_estimators: 500
+    max_depth: 15
+    max_features: sqrt
+    min_samples_leaf: 5
+    n_estimators: 1000
   model_path: models/random_forest_v1.pkl

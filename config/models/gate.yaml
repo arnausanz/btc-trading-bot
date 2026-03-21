@@ -1,0 +1,113 @@
+# config/models/gate.yaml
+# Configuració unificada del GateBot (Gate System v1)
+# ─────────────────────────────────────────────────────────────────────────────
+# NOTA: no modificar aquest fitxer mentre hi ha models antics en optimització.
+# És un fitxer NOU — no afecta cap bot existent.
+
+category:   gate
+model_type: gate
+module:     bots.gate.gate_bot
+class_name: GateBot
+bot_id:     gate_v1
+symbol:     BTC/USDT
+
+# ── Timeframes ────────────────────────────────────────────────────────────────
+# timeframe: timeframe primari (on_observation cridat cada 4H pel DemoRunner)
+# El DemoRunner detecta la candle 4H gràcies al nou _TF_SECONDS map.
+timeframe:     4h
+aux_timeframe: 1d   # context per P1/P2 (re-evaluat quan tanca nova candle diària)
+
+# 300 × 4H = 50 dies | 300 × 1D = ~1 any → cobreix EMA200
+lookback: 300
+
+# ── Paths dels models entrenats ───────────────────────────────────────────────
+model_paths:
+  hmm: models/gate_hmm.pkl
+  xgb: models/gate_xgb_regime.pkl
+
+# ── Features per timeframe (sense prefix — cada df és independent) ───────────
+# L'ObservationSchema declara la UNIÓ deduplificada.
+# GateBot accedeix obs["4h"] i obs["1d"] per separat i selecciona per nom.
+features_4h:
+  - close
+  - high
+  - low
+  - volume
+  - atr_14
+  - rsi_14
+  - macd
+  - macd_signal
+  - funding_rate
+
+features_1d:
+  - close
+  - ema_50
+  - ema_200
+  - adx_14
+  - rsi_14
+  - atr_14
+  - fear_greed_value
+  - funding_rate
+  - volume
+
+# ── Dades externes ────────────────────────────────────────────────────────────
+# exchange_netflow_7d exclòs en v1 (requereix CryptoQuant/Glassnode, API de pagament)
+external:
+  fear_greed:   true
+  funding_rate: true
+
+# ── Porta 1 — Règim Macro ─────────────────────────────────────────────────────
+p1:
+  min_regime_confidence: 0.60   # < 0.60 → UNCERTAIN, porta tancada
+
+# ── Porta 2 — Salut Qualitativa ───────────────────────────────────────────────
+# v1: Fear & Greed + funding rate com a proxy on-chain. News en v2.
+p2:
+  onchain_enabled: true
+
+# ── Porta 3 — Estructura de Preu ─────────────────────────────────────────────
+p3:
+  min_level_strength: 0.4     # força mínima per considerar un nivell accionable
+  fractal_n_4h: 2             # N períodes per pivots fractals al 4H
+  fractal_n_1d: 5             # N períodes per pivots fractals al diari
+  min_swing_pct: 0.03         # swing mínim (3%) per calcular Fibonacci
+  volume_profile_bins: 50     # resolució del Volume Profile
+
+# ── Porta 4 — Momentum ───────────────────────────────────────────────────────
+p4:
+  ewm_span: 3                 # span de l'EWM per suavitzar el preu
+  rsi2_oversold: 10           # llindar RSI-2 Connors (sobrevenut extrem)
+
+# ── Porta 5 — Risc i Gestió ──────────────────────────────────────────────────
+# V1 long-only: STRONG_BULL i WEAK_BULL → entrades llargues
+# RANGING → entrades amb R:R més estricte (2.0). BEAR/UNCERTAIN → cap nova entrada.
+p5:
+  max_risk_pct:           0.01    # 1% del capital en risc per trade (Kelly fraccionari)
+  max_exposure_pct:       0.95    # cap dur d'exposició total (mai > 95% del capital)
+  max_open_positions:     2       # màxim de posicions obertes simultànies
+  weekly_drawdown_limit:  0.05    # 5% de pèrdua setmanal → veto de noves entrades
+  stagnation_days:        6       # dies màxims en negatiu + portes obertes → reduir 50%
+
+  # R:R mínim. En v1 (long-only) no hi ha entrades en BEAR.
+  min_rr:
+    STRONG_BULL: 1.5
+    WEAK_BULL:   2.0
+    RANGING:     2.0
+
+  # Trailing stop: multiplicador ATR adaptatiu per percentil de volatilitat
+  trailing_atr_multiplier:
+    low_vol:    1.5    # percentil ATR < 30 (mercat calm)
+    normal_vol: 2.0    # percentil ATR 30–70 (normal)
+    high_vol:   2.5    # percentil ATR > 70 (mercat volàtil)
+
+  # Candles 4H consecutives amb d2 < 0 (desaccelerant) per sortida
+  decel_exit_candles:
+    STRONG_BULL: 5     # 5 × 4H = 20h
+    WEAK_BULL:   3     # 3 × 4H = 12h
+    RANGING:     2     # 2 × 4H = 8h
+
+# ── best_params (omplert automàticament per train_gate_regime.py) ─────────────
+# best_params:
+#   max_depth: 4
+#   learning_rate: 0.03
+#   ...

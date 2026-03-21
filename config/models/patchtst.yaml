@@ -1,10 +1,9 @@
 best_params:
-  batch_size: 32
-  d_model: 128
-  dropout: 0.21846603723512553
-  learning_rate: 0.000251226046038035
+  d_model: 512
+  dropout: 0.10325194762507467
+  learning_rate: 0.00013777953973841267
   n_layers: 3
-  seq_len: 168
+  seq_len: 96
 bot:
   bot_id: ml_patchtst_v1
   lookback: 200
@@ -21,55 +20,52 @@ model_type: patchtst
 module: bots.ml.patchtst_model
 optimization:
   direction: maximize
-  metric: sharpe_ratio
-  n_trials: 15
+  metric: precision_mean
+  n_trials: 20
   search_space:
-    batch_size:
-      choices:
-      - 32
-      - 64
-      - 128
-      type: categorical
     d_model:
       choices:
-      - 64
       - 128
+      - 256
+      - 512
       type: categorical
     dropout:
-      high: 0.3
+      high: 0.4
       low: 0.05
       type: float
     learning_rate:
-      high: 0.005
+      high: 0.002
       log: true
-      low: 0.0001
+      low: 5.0e-05
       type: float
     n_layers:
-      high: 3
-      low: 1
-      type: int
+      choices:
+      - 2
+      - 3
+      - 4
+      type: categorical
     seq_len:
       choices:
-      - 72
       - 96
       - 168
+      - 336
       type: categorical
 symbol: BTC/USDT
-threshold_pct: 0.005
+threshold_pct: 0.01
 timeframes:
 - 1h
 training:
   experiment_name: patchtst_v1
   model:
-    batch_size: 32
-    d_model: 128
-    dropout: 0.1
-    epochs: 50
+    batch_size: 64
+    d_model: 256
+    dropout: 0.2
+    epochs: 100
     learning_rate: 0.0001
     n_heads: 8
     n_layers: 3
-    patch_len: 24
-    patience: 10
+    patch_len: 16
+    patience: 15
     seq_len: 168
-    stride: 12
+    stride: 8
   model_path: models/patchtst_v1.pt

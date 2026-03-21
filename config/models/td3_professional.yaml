@@ -1,11 +1,12 @@
 best_params:
-  batch_size: 128
-  gamma: 0.9576449133816793
-  learning_rate: 0.0007106591851092234
-  lookback: 90
-  policy_delay: 2
-  stop_atr_multiplier: 1.733991780504304
-  target_policy_noise: 0.31242177333881366
+  action_noise_sigma: 0.2581106602001054
+  batch_size: 256
+  gamma: 0.9793342657256547
+  learning_rate: 0.0004296748115469076
+  lookback: 60
+  policy_delay: 1
+  stop_atr_multiplier: 1.5308767414437037
+  target_policy_noise: 0.39097295564859835
 bot:
   bot_id: rl_td3_professional_v1
   trade_size: 1.0
@@ -40,8 +41,12 @@ optimization:
   direction: maximize
   metric: val_return_pct
   n_trials: 15
-  probe_timesteps: 25000
+  probe_timesteps: 50000
   search_space:
+    action_noise_sigma:
+      high: 0.3
+      low: 0.05
+      type: float
     batch_size:
       choices:
       - 128

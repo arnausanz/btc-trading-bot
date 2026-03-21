@@ -21,56 +21,43 @@ model_type: tft
 module: bots.ml.tft_model
 optimization:
   direction: maximize
-  metric: sharpe_ratio
+  metric: precision_mean
   n_trials: 20
   search_space:
     d_model:
+      type: categorical
       choices:
-      - 32
-      - 64
       - 128
-      type: categorical
-    dropout:
-      high: 0.3
-      low: 0.0
-      type: float
-    learning_rate:
-      high: 0.01
-      log: true
-      low: 0.0001
-      type: float
-    n_heads:
-      choices:
-      - 2
-      - 4
-      - 8
-      type: categorical
+      - 256
+      - 512
     n_layers:
-      choices:
-      - 1
-      - 2
-      - 3
-      type: categorical
+      type: int
+      low: 2
+      high: 4
+    dropout:
+      type: float
+      low: 0.1
+      high: 0.4
     seq_len:
+      type: categorical
       choices:
-      - 48
       - 96
       - 168
-      type: categorical
+      - 336
 symbol: BTC/USDT
-threshold_pct: 0.005
+threshold_pct: 0.01
 timeframes:
 - 1h
 training:
   experiment_name: tft_v1
   model:
+    seq_len: 168
+    d_model: 256
+    n_heads: 8
+    n_layers: 3
+    dropout: 0.2
+    epochs: 100
     batch_size: 64
-    d_model: 64
-    dropout: 0.1
-    epochs: 20
-    learning_rate: 0.0005
-    n_heads: 4
-    n_layers: 2
-    patience: 5
-    seq_len: 96
+    learning_rate: 0.0003
+    patience: 15
   model_path: models/tft_v1.pt

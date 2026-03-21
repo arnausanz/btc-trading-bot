@@ -118,6 +118,7 @@ TEST_FROM   = "2025-01-01"   # primera data del backtest de validació
 | RL | RLBot (SAC professional) | Continu | `config/models/sac_professional.yaml` |
 | RL | RLBot (TD3 professional) | Continu | `config/models/td3_professional.yaml` |
 | RL | RLBot (TD3 multiframe) | Continu | `config/models/td3_multiframe.yaml` |
+| gate | GateBot | Discret (BUY/HOLD/SELL) — swing, 5 portes | `config/models/gate.yaml` |
 
 Veure **[MODELS.md](./MODELS.md)** per a descripció detallada de cada model.
 
@@ -148,7 +149,8 @@ btc-trading-bot/
 ├── bots/
 │   ├── classical/       DCABot, TrendBot, GridBot, HoldBot, MeanReversionBot, MomentumBot, EnsembleBot
 │   ├── ml/              MLBot + Random Forest, XGBoost, LightGBM, CatBoost, GRU, PatchTST, TFT
-│   └── rl/              RLBot + agents (PPO, SAC, TD3) + environments + rewards + constants
+│   ├── rl/              RLBot + agents (PPO, SAC, TD3) + environments + rewards + constants
+│   └── gate/            GateBot + 5 portes (P1–P5) + regime_models (HMM, XGBoost) + near_miss_logger
 ├── config/
 │   ├── models/          UN YAML per model/bot (base + training + optimization + bot)
 │   │   └── {bot}.yaml          Config completa (paràmetres Optuna dins best_params)
@@ -192,6 +194,7 @@ btc-trading-bot/
 | `run_comparison.py` | Backtesta tots i compara | `python scripts/run_comparison.py --all` |
 | `run_demo.py` | Executa paper trading 24/7 | `python scripts/run_demo.py` |
 | `validate_data.py` | Valida gaps i duplicats a la BD | `python scripts/validate_data.py` |
+| `train_gate_regime.py` | Entrena HMM + XGBoost del Gate System | `python scripts/train_gate_regime.py` |
 
 **Paràmetres Optuna:** els millors hiperparàmetres es guarden dins el YAML base
 a la secció `best_params`. `apply_best_params()` els aplica en entrenament/inferència.
@@ -237,13 +240,14 @@ pytest tests/integration/ -m integration # necessita PostgreSQL
 ## Documentació
 
 - **PROJECT.md** ← Ets aquí — visió general, arquitectura, flux
-- **[MODELS.md](./MODELS.md)** — Tots els models: descripció, paràmetres, pros/contres
-- **[DATABASE.md](./DATABASE.md)** — Esquema BD, taules, consultes útils
-- **[EXTENDING.md](./EXTENDING.md)** — Com afegir bots, models, agents, fonts de dades
-- **[CONFIGURATION.md](./CONFIGURATION.md)** — Referència de tots els YAMLs i CLI args
+- **[MODELS.md](./MODELS.md)** — Tots els models: descripció, paràmetres, pros/contres, Gate System
+- **[DATABASE.md](./DATABASE.md)** — Esquema BD, taules, consultes útils (inclou Gate tables)
+- **[EXTENDING.md](./EXTENDING.md)** — Com afegir bots, models, agents, fonts de dades, Gate extensions
+- **[CONFIGURATION.md](./CONFIGURATION.md)** — Referència de tots els YAMLs i CLI args (inclou gate.yaml)
 - **[ROADMAP.md](./ROADMAP.md)** — Tasques pendents, camí a la demo
-- **[DECISIONS.md](./DECISIONS.md)** — Architecture Decision Records (10 decisions clau)
+- **[DECISIONS.md](./DECISIONS.md)** — Architecture Decision Records (11 decisions, inclou Gate System)
+- **[docs/temp/](./temp/)** — Especificacions tècniques detallades (Gate System spec, pre-production review, Telegram spec)
 
 ---
 
-*Última actualització: Març 2026 · Versió 2.1*
+*Última actualització: Març 2026 · Versió 3.0 (Gate System afegit)*

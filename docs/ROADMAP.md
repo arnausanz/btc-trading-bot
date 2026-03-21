@@ -9,7 +9,7 @@
 | Component | Estat | Notes |
 |-----------|-------|-------|
 | Classical bots (6) | ✅ | Trend, DCA, Grid, Hold, MeanReversion, Momentum |
-| ML models (7) | ✅ | RF, XGB, LGBM, CB, GRU, PatchTST, TFT |
+| ML models (6+1) | ⚠️ Parcial | RF, XGB, LGBM, CB, GRU, PatchTST ✅ · TFT ⏳ Pendent |
 | RL agents — baseline | ✅ | PPO, SAC (1H, 500k steps) |
 | RL agents — on-chain | ✅ | PPO + SAC amb Fear&Greed, funding rate, hash-rate |
 | RL agents — professional | ✅ | PPO + SAC (12H, ATR stop, position state, reward professional) |
@@ -20,7 +20,8 @@
 | DemoRunner | ✅ | Persistència + Telegram |
 | **EnsembleBot v1** | ✅ | majority_vote — `bots/classical/ensemble_bot.py` |
 | **State restore** | ✅ | Portfolio + _in_position restaurats des de BD al reinici |
-| Documentació | ✅ | PROJECT, MODELS, EXTENDING, CONFIG, DATABASE, DECISIONS |
+| **Gate System v1** | ✅ | 5 portes seqüencials, HMM+XGBoost, swing trading 4H+1D |
+| Documentació | ✅ | PROJECT, MODELS, EXTENDING, CONFIG, DATABASE, DECISIONS + Gate |
 
 ---
 
@@ -29,9 +30,11 @@
 ```
 [✅]   EnsembleBot v1 implementat (majority vote)
 [✅]   State persistence (portfolio + posició restaurada des de BD)
+[✅]   Gate System v1 implementat (5 portes, HMM+XGBoost, swing 4H+1D)
 [ara]  Optimització Optuna de tots els models (en curs)
           ↓
 [A]    Entrenar tots els models amb hiperparàmetres òptims
+          + entrenar Gate System: alembic upgrade head + train_gate_regime.py
           ↓
 [B]    Backtest EnsembleBot — ha de superar HoldBot
           ↓
@@ -52,6 +55,8 @@ Les tasques G–K es fan **en paral·lel** mentre la demo corre. No bloquegen l'
 
 Abans d'entrenar cal acabar l'optimització Optuna.
 
+> ⚠️ **TFT (Temporal Fusion Transformer):** El model TFT NO ha estat optimitzat ni entrenat per la seva càrrega computacional extrema (estimació: 8-16h d'optimització Optuna + 8-16h d'entrenament, amb ~8 GB de RAM). Pendent de completar quan el temps disponible ho permeti. Tots els altres models ML estan optimitzats i entrenats. Veure `docs/03_ML_RL_MODELS.md §4.3` per als detalls.
+
 **Recomanació de steps per a entrenament RL:**
 
 | Agent | Steps recomanats | Justificació |
@@ -65,6 +70,10 @@ Abans d'entrenar cal acabar l'optimització Optuna.
 # Entrenar tot d'una (un cop l'Optuna hagi acabat)
 python scripts/train_models.py          # tots els ML
 python scripts/train_rl.py              # tots els RL (modifica total_timesteps als YAMLs primer)
+
+# Gate System (pipeline propi, no usa train_models.py)
+alembic upgrade head                    # crea gate_positions + gate_near_misses a la BD
+python scripts/train_gate_regime.py     # HMM K=2..6 BIC + XGBoost Optuna → models/gate_*.pkl
 ```
 
 ---
@@ -160,6 +169,7 @@ Quan hi hagi mesos de dades reals:
 | Model | Tipus | Prioritat | Notes |
 |-------|-------|-----------|-------|
 | EnsembleBot weighted | Meta | 🟢 **Alta** | Pes proporcional al Sharpe dels últims N dies — fàcil un cop la demo té dades |
+| Gate System v2 | Gate | 🟢 **Alta** | Afegir shorts + news sentiment en P2 + exchange_netflow; un cop v1 valida el concepte |
 | N-BEATS / N-HiTS | Deep Learning | 🟡 Mitjana | Arquitectures purament de forecasting, eficients sense RNN; sovint superen GRU |
 | TabNet | Tabular | 🟡 Mitjana | Competitiu amb XGBoost, attention-based interpretatiu — bon reemplaçament o complement |
 | BreakoutBot | Clàssic | 🟡 Mitjana | Pivot points + ATR per confirmar ruptures; complement natural a TrendBot |
@@ -242,12 +252,12 @@ TRUNCATE TABLE demo_trades;  -- historial de trades anteriors
 **Sí, completament.** El DemoRunner és independent del Telegram i del Dashboard. Pots iniciar la demo amb el Telegram bàsic que ja tens i millorar-lo mentre les dades s'acumulen. El Dashboard és fins i tot millor fer-lo un cop tens mesos de dades reals.
 
 **Ordre de prioritats real:**
-1. Acabar optimització Optuna + entrenar models
+1. Acabar optimització Optuna + entrenar models (ML/RL + Gate System)
 2. Backtest EnsembleBot
 3. Servidor Oracle + demo
-4. LLM sentiment layer (mentre corre la demo)
-5. Dashboard, Telegram millorat, nous models ML/RL
+4. LLM sentiment layer (mentre corre la demo) → candidat per Gate System v2 P2
+5. Dashboard, Telegram millorat, nous models ML/RL, Gate System v2
 
 ---
 
-*Última actualització: Març 2026 · Versió 4.0*
+*Última actualització: Març 2026 · Versió 5.0 (Gate System v1 marcat com a implementat)*

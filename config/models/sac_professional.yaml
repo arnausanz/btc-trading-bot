@@ -1,9 +1,9 @@
 best_params:
   batch_size: 256
-  gamma: 0.9649260746894951
-  learning_rate: 0.00011615865989246468
-  lookback: 60
-  stop_atr_multiplier: 1.6465081710095757
+  gamma: 0.9642702278697041
+  learning_rate: 0.00040912205744437856
+  lookback: 90
+  stop_atr_multiplier: 2.0495427649405373
 bot:
   bot_id: rl_sac_professional_v1
   trade_size: 1.0
@@ -38,7 +38,7 @@ optimization:
   direction: maximize
   metric: val_return_pct
   n_trials: 15
-  probe_timesteps: 25000
+  probe_timesteps: 50000
   search_space:
     batch_size:
       choices:
@@ -78,7 +78,7 @@ training:
     batch_size: 256
     buffer_size: 100000
     gamma: 0.99
-    gradient_steps: 1
+    gradient_steps: -1
     learning_rate: 0.0003
     learning_starts: 1000
     net_arch:

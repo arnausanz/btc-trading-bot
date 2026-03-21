@@ -72,28 +72,56 @@ class ObservationBuilder:
     ) -> dict:
         """
         Builds the observation for a specific point in time.
-        index is the current position in the primary timeframe DataFrame.
+        index is the current position in the PRIMARY timeframe DataFrame.
+
+        Multi-timeframe support (backward-compatible):
+        For each secondary timeframe, we find the correct row via searchsorted
+        on the primary timestamp. For bots with a single timeframe, searchsorted
+        returns exactly `index` — identical behaviour to before.
         """
         observation = {}
 
+        # Resolve the timestamp from the primary (first) timeframe
+        primary_tf  = schema.timeframes[0]
+        primary_df  = self._cache[f"{symbol}_{primary_tf}"]
+
+        if index < schema.lookback:
+            raise ValueError(
+                f"Index {index} too small for lookback {schema.lookback}"
+            )
+
+        # The timestamp of the current candle in the primary timeframe
+        primary_ts = primary_df.index[index]
+
         for timeframe in schema.timeframes:
             key = f"{symbol}_{timeframe}"
-            df = self._cache[key]
+            df  = self._cache[key]
 
-            if index < schema.lookback:
-                raise ValueError(
-                    f"Index {index} too small for lookback {schema.lookback}"
-                )
+            if timeframe == primary_tf:
+                # Primary TF: use index directly (no searchsorted needed)
+                tf_idx = index
+            else:
+                # Secondary TF: find the last candle whose timestamp <= primary_ts
+                # searchsorted(..., side="right") - 1 gives the last idx <= ts
+                tf_idx = int(df.index.searchsorted(primary_ts, side="right")) - 1
+                if tf_idx < schema.lookback:
+                    raise ValueError(
+                        f"Lookback insuficient [{timeframe}]: "
+                        f"tf_idx={tf_idx} < lookback={schema.lookback}. "
+                        f"Carrega més historial."
+                    )
 
-            window = df.iloc[index - schema.lookback:index]
+            window  = df.iloc[tf_idx - schema.lookback : tf_idx]
             missing = [f for f in schema.features if f not in window.columns]
             if missing:
-                raise ValueError(f"Features not found in cache: {missing}")
+                raise ValueError(
+                    f"Features not found in cache [{timeframe}]: {missing}"
+                )
 
             observation[timeframe] = {
-                "features": window[schema.features].copy(),
-                "current_price": float(df.iloc[index]["close"]),
-                "timestamp": df.index[index],
+                "features":      window[schema.features].copy(),
+                "current_price": float(df.iloc[tf_idx]["close"]),
+                "timestamp":     df.index[tf_idx],
             }
 
         return observation

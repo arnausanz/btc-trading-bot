@@ -24,6 +24,9 @@ class PPOAgent(BaseRLAgent):
         n_epochs: int = 10,
         gamma: float = 0.99,
         policy: str = "MlpPolicy",
+        ent_coef: float = 0.01,
+        clip_range: float = 0.2,
+        net_arch: list[int] | None = None,
     ):
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -31,6 +34,9 @@ class PPOAgent(BaseRLAgent):
         self.n_epochs = n_epochs
         self.gamma = gamma
         self.policy = policy
+        self.ent_coef = ent_coef
+        self.clip_range = clip_range
+        self.net_arch = net_arch if net_arch is not None else [256, 256]
         self.model = None
         self.is_trained = False
 
@@ -44,6 +50,9 @@ class PPOAgent(BaseRLAgent):
             n_epochs=m.get("n_epochs", 10),
             gamma=m.get("gamma", 0.99),
             policy=m.get("policy", "MlpPolicy"),
+            ent_coef=m.get("ent_coef", 0.01),
+            clip_range=m.get("clip_range", 0.2),
+            net_arch=m.get("net_arch", [256, 256]),
         )
 
     def train(self, train_env, val_env, total_timesteps: int) -> dict:
@@ -55,6 +64,9 @@ class PPOAgent(BaseRLAgent):
             n_steps=self.n_steps,
             n_epochs=self.n_epochs,
             gamma=self.gamma,
+            ent_coef=self.ent_coef,
+            clip_range=self.clip_range,
+            policy_kwargs={"net_arch": self.net_arch},
             verbose=0,
         )
         logger.info(f"  Training PPO — {total_timesteps} timesteps...")

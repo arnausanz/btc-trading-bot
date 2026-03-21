@@ -16,7 +16,7 @@ features:
   - close
 
 # ── Paràmetres d'estratègia ─────────────────────────────────────────────────
-buy_every_n_ticks: 163   # Compra cada N candles (163h ≈ 1 setmana)
+buy_every_n_ticks: 163   # Valor òptim Optuna per producció (~6.8 dies a timeframe 1h)
 buy_size: 0.05           # Fracció del capital per compra (5%)
 
 # ── Optimització (Optuna) ────────────────────────────────────────────────────

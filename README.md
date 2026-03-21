@@ -9,46 +9,49 @@ walk-forward validation i les executa en paral·lel 24/7 amb notificacions Teleg
 
 ---
 
-## Requisits
+## Documentació — Comença aquí
 
-```bash
-Python 3.11+
-PostgreSQL 14+
-```
+> **Si ets nou al projecte**, obre primer [`docs/00_START_HERE.md`](docs/00_START_HERE.md).
 
-```bash
-pip install -r requirements.txt
-```
-
-Variables d'entorn (o `config/settings.yaml`):
-
-```yaml
-database:
-  host: localhost
-  port: 5432
-  name: btc_trading
-  user: btc_user
-  password: btc_password
-```
+| Document | Contingut |
+|----------|-----------|
+| **[00_START_HERE.md](docs/00_START_HERE.md)** | Mapa del projecte, glossari, FAQ, ordre de lectura |
+| **[01_ARCHITECTURE.md](docs/01_ARCHITECTURE.md)** | Arquitectura, flux de dades, bots disponibles, scripts |
+| **[02_GATE_SYSTEM.md](docs/02_GATE_SYSTEM.md)** | Gate System (5 portes seqüencials) — documentació completa |
+| **[03_ML_RL_MODELS.md](docs/03_ML_RL_MODELS.md)** | Models ML supervisats i RL — paràmetres i decisions |
+| **[04_CONFIGURATION.md](docs/04_CONFIGURATION.md)** | Referència de tots els YAMLs i arguments CLI |
+| **[05_DATABASE.md](docs/05_DATABASE.md)** | Esquema BD, taules, consultes útils |
+| **[06_EXTENDING.md](docs/06_EXTENDING.md)** | Com afegir nous bots, models i fonts de dades |
+| **[07_OPERATIONS.md](docs/07_OPERATIONS.md)** | Runbook: com engegar, monitoritzar i mantenir el sistema |
+| **[08_DECISIONS.md](docs/08_DECISIONS.md)** | 11 Architecture Decision Records amb justificació |
+| **[ROADMAP.md](docs/ROADMAP.md)** | Tasques pendents i visió de futur |
+| **[examples/trade_walkthrough.md](docs/examples/trade_walkthrough.md)** | Un trade del Gate System pas a pas |
+| **[examples/near_miss_analysis.md](docs/examples/near_miss_analysis.md)** | Anàlisi d'una oportunitat rebutjada |
 
 ---
 
-## Quick start
+## Quick Start
 
 ```bash
-# 1. Descarregar dades històriques (detecta automàticament els timeframes necessaris)
+# 1. Setup
+cp .env.example .env              # editar DATABASE_URL, TELEGRAM_TOKEN
+pip install -r requirements.txt
+alembic upgrade head              # crear esquema BD
+
+# 2. Dades
 python scripts/download_data.py
+python scripts/download_fear_greed.py
+python scripts/update_futures.py
 
-# 2. Entrenar models ML
+# 3. Entrenar (veure 07_OPERATIONS.md per al cicle complet)
 python scripts/train_models.py
-
-# 3. Entrenar agents RL
 python scripts/train_rl.py
+python scripts/train_gate_regime.py
 
-# 4. Comparar tots els bots en out-of-sample
+# 4. Validar
 python scripts/run_comparison.py --all
 
-# 5. Executar paper trading 24/7
+# 5. Demo 24/7
 python scripts/run_demo.py
 ```
 
@@ -56,74 +59,28 @@ python scripts/run_demo.py
 
 ## Estratègies disponibles
 
-**Clàssics** (sense entrenament, regles deterministes):
+**Clàssics** (sense entrenament):
+HoldBot · DCABot · TrendBot · GridBot · MeanReversionBot · MomentumBot · EnsembleBot
 
-| Bot | Lògica | Config |
-|-----|--------|--------|
-| HoldBot | Buy & hold — *benchmark de referència* | `config/models/hold.yaml` |
-| DCABot | Dollar-Cost Averaging | `config/models/dca.yaml` |
-| TrendBot | EMA crossover + RSI | `config/models/trend.yaml` |
-| GridBot | Bollinger Bands | `config/models/grid.yaml` |
-| MeanReversionBot | Z-score + RSI + filtre de volum | `config/models/mean_reversion.yaml` |
-| MomentumBot | ROC + volum + MACD | `config/models/momentum.yaml` |
+**ML supervisat** (predicció binària):
+Random Forest · XGBoost · LightGBM · CatBoost · GRU · PatchTST · TFT (pendent)
 
-**ML supervisat** (entrenament offline, predicció binària):
+**Reinforcement Learning** (política de trading):
+PPO · SAC · PPO on-chain · SAC on-chain · PPO professional · SAC professional · TD3 professional · TD3 multiframe
 
-| Model | Tipus | Config |
-|-------|-------|--------|
-| Random Forest | Tree-based | `config/models/random_forest.yaml` |
-| XGBoost | Tree-based | `config/models/xgboost.yaml` |
-| LightGBM | Tree-based | `config/models/lightgbm.yaml` |
-| CatBoost | Tree-based | `config/models/catboost.yaml` |
-| GRU | Deep Learning | `config/models/gru.yaml` |
-| PatchTST | Transformer | `config/models/patchtst.yaml` |
-
-**Reinforcement Learning** (entrenament per interacció):
-
-| Agent | Tipus | Config |
-|-------|-------|--------|
-| PPO | Discret (BUY/SELL/HOLD) | `config/models/ppo.yaml` |
-| SAC | Continu [0–1] | `config/models/sac.yaml` |
-| PPO on-chain | PPO + features on-chain | `config/models/ppo_onchain.yaml` |
-| SAC on-chain | SAC + features on-chain | `config/models/sac_onchain.yaml` |
-| PPO professional | PPO 12H + política professional | `config/models/ppo_professional.yaml` |
-| SAC professional | SAC 12H + política professional | `config/models/sac_professional.yaml` |
-| TD3 professional | TD3 12H + política professional | `config/models/td3_professional.yaml` |
+**Gate System** (5 portes seqüencials):
+P1 Règim (HMM+XGBoost) · P2 Salut · P3 Estructura · P4 Momentum · P5 Risc
 
 **Regla d'or:** cap bot va a demo fins que supera HoldBot en Sharpe i Calmar en el període de test out-of-sample.
 
 ---
 
-## Scripts principals
+## Tests
 
-| Script | Propòsit |
-|--------|----------|
-| `download_data.py` | Descàrrega OHLCV des de 2019 (timeframes llegits del YAML) |
-| `download_fear_greed.py` | Fear & Greed Index des de 2018 |
-| `download_blockchain.py` | Mètriques on-chain des de 2009 |
-| `update_data.py` | Actualització incremental de tots els OHLCV |
-| `train_models.py` | Entrena tots els models ML (o els que specifiques) |
-| `train_rl.py` | Entrena agents RL (500k steps) |
-| `optimize_bots.py` | Optuna per a bots clàssics |
-| `optimize_models.py` | Optuna per a ML + RL |
-| `run_comparison.py` | Backtest walk-forward + ranking Sharpe |
-| `run_demo.py` | Paper trading 24/7 + Telegram |
-| `validate_data.py` | Comprova gaps i duplicats a la BD |
-| `check_data_completeness.py` | Resum de cobertura de totes les fonts |
-
----
-
-## Afegir un model nou
-
-El sistema usa **auto-discovery**: els registres de models es poblen automàticament llegint els YAMLs de `config/models/`. Per afegir un model nou:
-
-1. Crea `bots/ml/my_model.py` (hereta `BaseTreeModel` si és tree-based, o `BaseMLModel` directament)
-2. Crea `config/models/my_model.yaml` amb `category: ML`, `module: bots.ml.my_model`, `class_name: MyModel`
-3. Ja apareix a `train_models.py`, `run_comparison.py` i `ml_bot.py` sense cap edició addicional
-
-Per a bots clàssics, el mateix: crea el bot + YAML amb `category: classic`, `module:` i `class_name:`.
-
-Guia completa: `docs/EXTENDING.md`.
+```bash
+pytest tests/smoke/ tests/unit/ -v          # 123 tests, sense BD necessària
+pytest tests/integration/ -m integration    # necessita PostgreSQL + dades
+```
 
 ---
 
@@ -132,49 +89,27 @@ Guia completa: `docs/EXTENDING.md`.
 ```
 btc-trading-bot/
 ├── bots/
-│   ├── classical/       # 6 bots clàssics
-│   ├── ml/              # MLBot + 6 backends (base_tree_model.py, gru, patchtst)
-│   └── rl/              # RLBot + agents (PPO, SAC, TD3) + environments + rewards
+│   ├── classical/       HoldBot, DCABot, TrendBot, GridBot, MeanReversionBot, MomentumBot, EnsembleBot
+│   ├── ml/              MLBot + models (RF, XGBoost, LightGBM, CatBoost, GRU, PatchTST, TFT)
+│   ├── rl/              RLBot + agents (PPO, SAC, TD3) + environments + rewards
+│   └── gate/            GateBot + 5 portes + regime_models (HMM, XGBoost)
 ├── config/
-│   ├── models/          # 1 YAML per model: config + training + optimization + bot
-│   ├── settings.yaml    # BD, exchange, walk-forward dates
-│   └── demo.yaml        # Bots actius al DemoRunner
+│   ├── models/          1 YAML per model: config + training + optimization
+│   ├── settings.yaml    BD, exchange, walk-forward dates
+│   └── demo.yaml        Bots actius al DemoRunner
 ├── core/
-│   ├── backtesting/     # BacktestEngine, Comparator, Optimizers, agent_validator
-│   ├── db/              # Models SQLAlchemy, sessions
-│   ├── engine/          # Runner, DemoRunner
-│   ├── interfaces/      # BaseBot, BaseMLModel, BaseRLAgent, BaseExchange
-│   └── config_utils.py  # apply_best_params, discover_configs
+│   ├── backtesting/     BacktestEngine, Comparator, Optimizers
+│   ├── db/              Models SQLAlchemy, sessions, repository
+│   ├── engine/          DemoRunner, BacktestEngine runner
+│   └── interfaces/      BaseBot, BaseMLModel, BaseRLAgent, BaseExchange
 ├── data/
-│   ├── processing/      # FeatureBuilder, DatasetBuilder, TechnicalIndicators,
-│   │                    # TimeSeriesDataset (torch), ExternalLoader
-│   ├── observation/     # ObservationBuilder
-│   └── sources/         # Fetchers: OHLCV, Fear&Greed, futures, blockchain, Vision
-├── docs/                # PROJECT.md, MODELS.md, EXTENDING.md, CONFIGURATION.md, DATABASE.md
-├── models/              # Models entrenats: *.pkl, *.pt, *.zip
-├── scripts/             # Tots els punts d'entrada
-└── tests/               # 123 tests (smoke + unit + integration)
+│   ├── processing/      FeatureBuilder, DatasetBuilder, TechnicalIndicators, ExternalLoader
+│   └── observation/     ObservationBuilder
+├── docs/                Documentació completa (veure taula d'índex a dalt)
+├── models/              Models entrenats: *.pkl, *.pt, *.zip
+├── scripts/             Tots els punts d'entrada
+└── tests/               smoke/ + unit/ + integration/
 ```
-
----
-
-## Tests
-
-```bash
-pytest tests/smoke/ tests/unit/ -v          # 123 tests, zero BD necessària
-pytest tests/integration/ -m integration    # necessita PostgreSQL + dades
-```
-
----
-
-## Documentació
-
-- **[docs/PROJECT.md](docs/PROJECT.md)** — Arquitectura, flux d'un tick, walk-forward, scripts
-- **[docs/MODELS.md](docs/MODELS.md)** — Descripció de cada model i els seus paràmetres
-- **[docs/EXTENDING.md](docs/EXTENDING.md)** — Com afegir bots, models, agents i fonts de dades
-- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** — Referència completa dels YAMLs
-- **[docs/DATABASE.md](docs/DATABASE.md)** — Esquema BD, taules, consultes útils
-- **[docs/ROADMAP.md](docs/ROADMAP.md)** — Tasques pendents i visió de futur
 
 ---
 

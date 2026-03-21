@@ -266,7 +266,7 @@ class GRUModel(BaseMLModel):
         return self._evaluate(net, val_loader)
 
     def _evaluate(
-        self, net: BidirectionalGRU, loader: DataLoader, threshold: float = 0.35
+        self, net: BidirectionalGRU, loader: DataLoader, threshold: float = 0.5
     ) -> tuple[float, float, float]:
         net.eval()
         all_preds, all_labels = [], []
@@ -283,7 +283,7 @@ class GRUModel(BaseMLModel):
             recall_score(all_labels, all_preds, zero_division=0),
         )
 
-    def predict(self, X: pd.DataFrame, threshold: float = 0.35) -> tuple[int, float]:
+    def predict(self, X: pd.DataFrame, threshold: float = 0.5) -> tuple[int, float]:
         if not self.is_trained or self.net is None:
             raise RuntimeError("Model not trained. Call train() first.")
         X_scaled = self.scaler.transform(X.values)

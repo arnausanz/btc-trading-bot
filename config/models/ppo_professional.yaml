@@ -1,10 +1,12 @@
 best_params:
-  batch_size: 128
-  gamma: 0.9828921743760681
-  learning_rate: 0.0004597968920314659
-  lookback: 90
+  batch_size: 64
+  clip_range: 0.15618690193747614
+  ent_coef: 0.004037506188440755
+  gamma: 0.9951718375161327
+  learning_rate: 0.00012260057359187533
+  lookback: 60
   n_steps: 2048
-  stop_atr_multiplier: 1.542922994523725
+  stop_atr_multiplier: 2.743106263727894
 bot:
   bot_id: rl_ppo_professional_v1
   trade_size: 1.0
@@ -39,7 +41,7 @@ optimization:
   direction: maximize
   metric: val_return_pct
   n_trials: 15
-  probe_timesteps: 25000
+  probe_timesteps: 50000
   search_space:
     batch_size:
       choices:
@@ -47,6 +49,15 @@ optimization:
       - 128
       - 256
       type: categorical
+    clip_range:
+      high: 0.3
+      low: 0.1
+      type: float
+    ent_coef:
+      high: 0.05
+      log: true
+      low: 0.001
+      type: float
     gamma:
       high: 0.999
       low: 0.95
@@ -83,10 +94,15 @@ training:
   experiment_name: ppo_professional_v1
   model:
     batch_size: 128
+    clip_range: 0.2
+    ent_coef: 0.01
     gamma: 0.99
     learning_rate: 0.0003
     n_epochs: 10
     n_steps: 2048
+    net_arch:
+    - 256
+    - 256
     policy: MlpPolicy
     total_timesteps: 500000
   model_path: models/ppo_professional_v1

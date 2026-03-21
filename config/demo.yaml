@@ -7,7 +7,7 @@
 demo:
   symbol: BTC/USDT
   timeframe: 1h
-  update_interval_seconds: 60   # monitoratge cada minut
+  update_interval_seconds: 300  # poll cada 5 min (candle sync: 1 cop/hora; 12 checks/h suficients)
   # on_observation() es crida 1 cop/hora quan es tanca la candle (candle sync)
 
 bots:
@@ -64,6 +64,10 @@ bots:
   - config_path: config/models/td3_multiframe.yaml
     enabled: false
 
+  # Gate System — activar un cop entrenats els models (python scripts/train_gate_regime.py)
+  - config_path: config/models/gate.yaml
+    enabled: false   # activar desprès de train_gate_regime.py + alembic upgrade head
+
   # Ensemble — activar un cop tots els sub-bots hagin passat el backtest out-of-sample
   - config_path: config/models/ensemble.yaml
     enabled: false   # activar desprès de validació C (Sharpe > 1.0, Drawdown < -25%)
@@ -73,6 +77,9 @@ exchange:
 
 telegram:
   enabled: true
+  inactivity_hours: 4          # Alerta push si un bot porta X hores sense trades
+  drawdown_alert_pct: -10      # Alerta push si max drawdown supera aquest llindar (%)
+  data_stale_minutes: 90       # Alerta push si OHLCV no s'actualitza en X minuts
 
 logging:
   level: INFO

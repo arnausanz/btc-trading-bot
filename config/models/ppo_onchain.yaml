@@ -1,9 +1,9 @@
 best_params:
-  batch_size: 32
-  gamma: 0.9652381337640674
-  learning_rate: 0.00011858906685575279
-  n_steps: 2048
-  reward_type: sharpe
+  batch_size: 64
+  gamma: 0.9649260746894951
+  learning_rate: 0.00012521954287060397
+  n_steps: 512
+  reward_type: sortino
 bot:
   bot_id: rl_ppo_onchain_v1
   trade_size: 0.5
@@ -84,6 +84,6 @@ training:
     n_epochs: 10
     n_steps: 2048
     policy: MlpPolicy
-    total_timesteps: 500000
+    total_timesteps: 1500000
   model_path: models/ppo_onchain_v1
   train_pct: 0.8

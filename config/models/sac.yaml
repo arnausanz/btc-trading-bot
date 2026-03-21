@@ -1,10 +1,10 @@
 best_params:
   batch_size: 128
-  gamma: 0.9731629863262394
-  learning_rate: 0.0009006717398432565
-  lookback: 96
-  reward_type: sortino
-  tau: 0.014099008901679606
+  gamma: 0.9638904324905906
+  learning_rate: 0.00011066970772914828
+  lookback: 30
+  reward_type: simple
+  tau: 0.01818070767100226
 bot:
   bot_id: rl_sac_v1
   trade_size: 0.5
@@ -81,7 +81,7 @@ training:
     - 256
     policy: MlpPolicy
     tau: 0.010970372201012518
-    total_timesteps: 500000
+    total_timesteps: 1500000
     train_freq: 1
   model_path: models/sac_btc_v1
   train_pct: 0.8

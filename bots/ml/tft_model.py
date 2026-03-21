@@ -449,7 +449,7 @@ class TFTModel(BaseMLModel):
         self,
         net: TemporalFusionTransformerNet,
         loader: DataLoader,
-        threshold: float = 0.35,
+        threshold: float = 0.5,
     ) -> tuple[float, float, float]:
         net.eval()
         all_preds, all_labels = [], []
@@ -468,7 +468,7 @@ class TFTModel(BaseMLModel):
 
     # ── Inference ─────────────────────────────────────────────────────────────
 
-    def predict(self, X: pd.DataFrame, threshold: float = 0.35) -> tuple[int, float]:
+    def predict(self, X: pd.DataFrame, threshold: float = 0.5) -> tuple[int, float]:
         if not self.is_trained or self.net is None:
             raise RuntimeError("Model not trained. Call train() first.")
         X_scaled = self.scaler.transform(X.values)
