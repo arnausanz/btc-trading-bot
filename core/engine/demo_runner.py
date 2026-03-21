@@ -1,5 +1,8 @@
 # core/engine/demo_runner.py
 import logging
+import os
+import sys
+import threading
 import time
 import yaml
 import zoneinfo
@@ -7,7 +10,7 @@ from datetime import datetime, timezone
 from data.observation.builder import ObservationBuilder
 from exchanges.paper import PaperExchange
 from core.interfaces.base_bot import BaseBot
-from core.models import Action
+from core.models import Action, Signal
 from core.db.demo_repository import DemoRepository
 
 logger = logging.getLogger(__name__)
@@ -112,6 +115,11 @@ class DemoRunner:
         self._inactivity_alerted:    dict[str, bool]             = {}  # avoid repeat alerts
         self._last_data_stale_alert: datetime | None             = None  # avoid spam
 
+        # ── Control flags (written from Telegram thread, read from main loop) ──
+        self._control_lock    = threading.Lock()
+        self._paused_bots:    set[str] = set()   # bots that skip on_observation
+        self._force_close_bots: set[str] = set() # bots that must SELL at next tick
+
         self.repo = DemoRepository()
 
         if tg_cfg.get("enabled", False):
@@ -131,6 +139,11 @@ class DemoRunner:
             self.notifier.set_trades_fn(self._get_all_trades)
             self.notifier.set_all_histories_fn(self._get_all_histories)
             self.notifier.set_health_fn(self._get_health)
+            self.notifier.set_pause_fn(self.pause_bot)
+            self.notifier.set_resume_fn(self.resume_bot)
+            self.notifier.set_close_fn(self.close_bot)
+            self.notifier.set_restart_fn(self.restart)
+            self.notifier.set_is_paused_fn(self.is_paused)
             self.notifier.start_listener()
 
     # ──────────────────────────────────────────────────────────────────────
@@ -179,6 +192,37 @@ class DemoRunner:
             self._inactivity_alerted[bot.bot_id] = False
 
     # ──────────────────────────────────────────────────────────────────────
+    # Control actions (called from Telegram thread — must be thread-safe)
+    # ──────────────────────────────────────────────────────────────────────
+
+    def pause_bot(self, bot_id: str) -> None:
+        """Pause a bot: it will skip on_observation until resumed."""
+        with self._control_lock:
+            self._paused_bots.add(bot_id)
+        logger.info(f"[{bot_id}] Paused via Telegram.")
+
+    def resume_bot(self, bot_id: str) -> None:
+        """Resume a previously paused bot."""
+        with self._control_lock:
+            self._paused_bots.discard(bot_id)
+        logger.info(f"[{bot_id}] Resumed via Telegram.")
+
+    def close_bot(self, bot_id: str) -> None:
+        """Force-sell all BTC for a bot at the next tick."""
+        with self._control_lock:
+            self._force_close_bots.add(bot_id)
+        logger.info(f"[{bot_id}] Force close queued via Telegram.")
+
+    def restart(self) -> None:
+        """Re-execute this process. State is preserved in DB."""
+        logger.info("Restarting demo runner via Telegram command...")
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    def is_paused(self, bot_id: str) -> bool:
+        with self._control_lock:
+            return bot_id in self._paused_bots
+
+    # ──────────────────────────────────────────────────────────────────────
     # Price fetching
     # ──────────────────────────────────────────────────────────────────────
 
@@ -204,6 +248,59 @@ class DemoRunner:
             exchange = self.exchanges[bot_id]
             builder  = self.builders[bot_id]
             try:
+                # ── Pause check ────────────────────────────────────────────
+                with self._control_lock:
+                    is_paused     = bot_id in self._paused_bots
+                    needs_close   = bot_id in self._force_close_bots
+
+                if is_paused and not needs_close:
+                    logger.debug(f"[{bot_id}] Paused — skipping tick.")
+                    continue
+
+                # ── Force-close (executes immediately, not waiting for candle) ──
+                if needs_close:
+                    exchange.set_current_price(current_price)
+                    if exchange.get_balance("BTC") > 1e-6:
+                        signal = Signal(
+                            bot_id=bot_id,
+                            timestamp=now,
+                            action=Action.SELL,
+                            size=1.0,
+                            confidence=1.0,
+                            reason="Force close via Telegram",
+                        )
+                        order = exchange.send_order(signal)
+                        if order.status.value == "filled":
+                            pv = exchange.get_portfolio_value()
+                            self.repo.save_trade(
+                                bot_id=bot_id,
+                                timestamp=now,
+                                action="sell",
+                                price=current_price,
+                                size_btc=order.size,
+                                size_usdt=order.size * current_price,
+                                fees=order.fees,
+                                portfolio_value=pv,
+                                reason="Force close via Telegram",
+                                confidence=1.0,
+                            )
+                            logger.info(f"[{bot_id}] Force close @ {current_price:.2f}")
+                            if self.notifier:
+                                self.notifier.notify_trade(
+                                    bot_id=bot_id,
+                                    action="sell",
+                                    price=current_price,
+                                    portfolio_value=pv,
+                                    reason="Force close via Telegram",
+                                    confidence=1.0,
+                                    size_btc=order.size,
+                                )
+                    else:
+                        logger.info(f"[{bot_id}] Force close requested but no BTC position.")
+                    with self._control_lock:
+                        self._force_close_bots.discard(bot_id)
+                    continue
+
                 schema = bot.observation_schema()
 
                 # Determine candle bucket for this bot's primary timeframe.

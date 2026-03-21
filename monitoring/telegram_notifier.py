@@ -164,12 +164,24 @@ class TelegramNotifier:
         self._get_all_histories_fn  = None   # () -> dict[bot_id, list]
         self._get_health_fn         = None   # () -> dict
 
+        # Injected control functions
+        self._pause_fn   = None   # (bot_id: str) -> None
+        self._resume_fn  = None   # (bot_id: str) -> None
+        self._close_fn   = None   # (bot_id: str) -> None
+        self._restart_fn = None   # () -> None
+        self._is_paused_fn = None # (bot_id: str) -> bool
+
     # ── injection ──────────────────────────────────────────────────────────
 
     def set_status_fn(self, fn):          self._get_status_fn = fn
     def set_trades_fn(self, fn):          self._get_trades_fn = fn
     def set_all_histories_fn(self, fn):   self._get_all_histories_fn = fn
     def set_health_fn(self, fn):          self._get_health_fn = fn
+    def set_pause_fn(self, fn):           self._pause_fn = fn
+    def set_resume_fn(self, fn):          self._resume_fn = fn
+    def set_close_fn(self, fn):           self._close_fn = fn
+    def set_restart_fn(self, fn):         self._restart_fn = fn
+    def set_is_paused_fn(self, fn):       self._is_paused_fn = fn
 
     # ── low-level Telegram API ─────────────────────────────────────────────
 
@@ -714,10 +726,83 @@ class TelegramNotifier:
             )
         self.send("\n".join(lines))
 
+    # ── control commands ────────────────────────────────────────────────────
+
+    def _valid_bot_ids(self) -> list[str]:
+        status = self._get_status_fn() if self._get_status_fn else {}
+        return list(status.keys())
+
+    def _handle_pause_command(self, chat_id: str, bot_id: str) -> None:
+        if bot_id not in self._valid_bot_ids():
+            self.send(f"⚠️ Bot <code>{bot_id}</code> no trobat.\nBots actius: {self._valid_bot_ids()}", chat_id=chat_id)
+            return
+        paused = self._is_paused_fn(bot_id) if self._is_paused_fn else False
+        if paused:
+            self.send(f"ℹ️ <b>{bot_id}</b> ja està pausat. Usa /resume {bot_id} per reprendre'l.", chat_id=chat_id)
+            return
+        self._send_with_keyboard(
+            f"⏸ Pausar <b>{bot_id}</b>?\n\n"
+            f"El bot deixarà d'executar senyals. Les posicions obertes es mantenen.",
+            [[
+                {"text": "✅ Confirmar", "callback_data": f"confirm_pause:{bot_id}"},
+                {"text": "❌ Cancel·lar", "callback_data": "cancel_action"},
+            ]],
+            chat_id=chat_id,
+        )
+
+    def _handle_resume_command(self, chat_id: str, bot_id: str) -> None:
+        if bot_id not in self._valid_bot_ids():
+            self.send(f"⚠️ Bot <code>{bot_id}</code> no trobat.\nBots actius: {self._valid_bot_ids()}", chat_id=chat_id)
+            return
+        paused = self._is_paused_fn(bot_id) if self._is_paused_fn else False
+        if not paused:
+            self.send(f"ℹ️ <b>{bot_id}</b> no està pausat.", chat_id=chat_id)
+            return
+        self._send_with_keyboard(
+            f"▶️ Reprendre <b>{bot_id}</b>?",
+            [[
+                {"text": "✅ Confirmar", "callback_data": f"confirm_resume:{bot_id}"},
+                {"text": "❌ Cancel·lar", "callback_data": "cancel_action"},
+            ]],
+            chat_id=chat_id,
+        )
+
+    def _handle_close_command(self, chat_id: str, bot_id: str) -> None:
+        if bot_id not in self._valid_bot_ids():
+            self.send(f"⚠️ Bot <code>{bot_id}</code> no trobat.\nBots actius: {self._valid_bot_ids()}", chat_id=chat_id)
+            return
+        status = self._get_status_fn() if self._get_status_fn else {}
+        btc = status.get(bot_id, {}).get("btc_balance", 0.0)
+        if btc < 1e-6:
+            self.send(f"ℹ️ <b>{bot_id}</b> no té cap posició oberta (BTC = 0).", chat_id=chat_id)
+            return
+        self._send_with_keyboard(
+            f"🚨 Tancar posició de <b>{bot_id}</b>?\n\n"
+            f"Es vendrà tot el BTC ({btc:.6f} BTC) al preu de mercat actual.",
+            [[
+                {"text": "✅ Confirmar", "callback_data": f"confirm_close:{bot_id}"},
+                {"text": "❌ Cancel·lar", "callback_data": "cancel_action"},
+            ]],
+            chat_id=chat_id,
+        )
+
+    def _handle_restart_command(self, chat_id: str) -> None:
+        self._send_with_keyboard(
+            "🔄 Reiniciar el demo runner?\n\n"
+            "El procés es reiniciarà i recuperarà l'estat de la DB (capital i posicions conservats).",
+            [[
+                {"text": "✅ Confirmar", "callback_data": "confirm_restart"},
+                {"text": "❌ Cancel·lar", "callback_data": "cancel_action"},
+            ]],
+            chat_id=chat_id,
+        )
+
     # ── command routing ────────────────────────────────────────────────────
 
     def _handle_command(self, text: str, chat_id: str) -> None:
-        cmd = text.strip().lower().split()[0]
+        parts = text.strip().split()
+        cmd   = parts[0].lower()
+        arg   = parts[1] if len(parts) > 1 else ""
         try:
             if cmd == "/status":
                 self._handle_status()
@@ -729,14 +814,37 @@ class TelegramNotifier:
                 self._handle_trades()
             elif cmd == "/health":
                 self._handle_health()
+            elif cmd == "/pause":
+                if not arg:
+                    self.send("Ús: /pause &lt;bot_id&gt;", chat_id=chat_id)
+                else:
+                    self._handle_pause_command(chat_id, arg)
+            elif cmd == "/resume":
+                if not arg:
+                    self.send("Ús: /resume &lt;bot_id&gt;", chat_id=chat_id)
+                else:
+                    self._handle_resume_command(chat_id, arg)
+            elif cmd == "/close":
+                if not arg:
+                    self.send("Ús: /close &lt;bot_id&gt;", chat_id=chat_id)
+                else:
+                    self._handle_close_command(chat_id, arg)
+            elif cmd == "/restart":
+                self._handle_restart_command(chat_id)
             elif cmd == "/help":
                 self.send(
                     "📖 <b>Comandes disponibles</b>\n\n"
+                    "<b>Informació</b>\n"
                     "/status      — taula resum de tots els bots\n"
-                    "/portfolio   — detall interactiu per bot (botons inline)\n"
+                    "/portfolio   — detall interactiu per bot\n"
                     "/compare     — gràfic d'evolució + rànquing\n"
-                    "/trades      — últims trades amb P&amp;L i confiança\n"
-                    "/health      — estat de fonts de dades i components\n"
+                    "/trades      — últims trades amb P&amp;L\n"
+                    "/health      — estat de fonts de dades\n\n"
+                    "<b>Control</b>\n"
+                    "/pause &lt;bot&gt;   — pausar un bot (manté posicions)\n"
+                    "/resume &lt;bot&gt;  — reprendre un bot pausat\n"
+                    "/close &lt;bot&gt;   — vendre tota la posició ara\n"
+                    "/restart      — reiniciar el runner (estat conservat)\n\n"
                     "/help        — aquest missatge"
                 )
             else:
@@ -792,6 +900,37 @@ class TelegramNotifier:
                             self._handle_portfolio_callback(
                                 cb_chat_id, cb_msg_id, selected_bot
                             )
+
+                        elif cb_data.startswith("confirm_pause:"):
+                            bot_id = cb_data[len("confirm_pause:"):]
+                            logger.info(f"Confirm pause: {bot_id}")
+                            if self._pause_fn:
+                                self._pause_fn(bot_id)
+                            self.send(f"⏸ <b>{bot_id}</b> pausat. Usa /resume {bot_id} per reprendre'l.", chat_id=cb_chat_id)
+
+                        elif cb_data.startswith("confirm_resume:"):
+                            bot_id = cb_data[len("confirm_resume:"):]
+                            logger.info(f"Confirm resume: {bot_id}")
+                            if self._resume_fn:
+                                self._resume_fn(bot_id)
+                            self.send(f"▶️ <b>{bot_id}</b> reprès.", chat_id=cb_chat_id)
+
+                        elif cb_data.startswith("confirm_close:"):
+                            bot_id = cb_data[len("confirm_close:"):]
+                            logger.info(f"Confirm close: {bot_id}")
+                            if self._close_fn:
+                                self._close_fn(bot_id)
+                            self.send(f"🚨 Tancant posició de <b>{bot_id}</b>... Rebràs confirmació quan s'executi.", chat_id=cb_chat_id)
+
+                        elif cb_data == "confirm_restart":
+                            logger.info("Confirm restart")
+                            self.send("🔄 Reiniciant el runner... Torna en uns segons.", chat_id=cb_chat_id)
+                            time.sleep(1)  # Allow message to arrive before process dies
+                            if self._restart_fn:
+                                self._restart_fn()
+
+                        elif cb_data == "cancel_action":
+                            self.send("❌ Acció cancel·lada.", chat_id=cb_chat_id)
 
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
                 # Expected during long-polling; silent retry
