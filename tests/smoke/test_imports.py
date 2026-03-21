@@ -21,26 +21,30 @@ def test_import_classical_bots():
 
 
 def test_import_ml_bots():
-    """Import ML bot modules (may be skipped if optional dependencies not installed)."""
+    """Import ML bot modules (may be skipped if optional dependencies not installed).
+
+    Catches both ImportError (missing Python package) and OSError (missing native
+    system library, e.g. libgomp.so.1 required by LightGBM on Linux ARM).
+    """
     try:
         import bots.ml.random_forest
-    except ImportError:
-        pass  # Optional dependency
+    except (ImportError, OSError):
+        pass  # Optional dependency or missing system library
 
     try:
         import bots.ml.xgboost_model
-    except ImportError:
-        pass  # Optional dependency
+    except (ImportError, OSError):
+        pass  # Optional dependency or missing system library
 
     try:
         import bots.ml.lightgbm_model
-    except ImportError:
-        pass  # Optional dependency
+    except (ImportError, OSError):
+        pass  # Optional dependency or missing system library (e.g. libgomp1)
 
     try:
         import bots.ml.catboost_model
-    except ImportError:
-        pass  # Optional dependency
+    except (ImportError, OSError):
+        pass  # Optional dependency or missing system library
 
 
 def test_import_backtesting():
