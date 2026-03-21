@@ -93,7 +93,7 @@ def compute_p1_features(df: pd.DataFrame) -> pd.DataFrame:
     def rolling_slope(series: pd.Series, window: int) -> pd.Series:
         """Pendent lineal en finestra mòbil, normalitzat per l'últim valor."""
         slopes = series.rolling(window).apply(
-            lambda x: _linear_slope(pd.Series(x)) / (x[-1] if x[-1] != 0 else 1.0),
+            lambda x: _linear_slope(x) / (x.iloc[-1] if x.iloc[-1] != 0 else 1.0),
             raw=False,
         )
         return slopes
