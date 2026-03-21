@@ -116,8 +116,6 @@ class MyModel(BaseTreeModel):
     def from_config(cls, cfg: dict) -> "MyModel":
         return cls(**cfg.get("model", {}))
 
-    def _get_mlflow_experiment(self) -> str: return "my_model"
-    def _get_mlflow_params(self) -> dict:    return {"n_estimators": self.n_estimators}
     def _get_model_label(self) -> str:       return "MY"
 
 
@@ -186,11 +184,10 @@ python scripts/run_comparison.py --bots hold my_model
 
 - TimeSeriesSplit 5-fold CV amb tqdm
 - StandardScaler + DataFrames amb feature names
-- MLflow: log params, metrics, run automàtic
 - `save()` / `load()` via pickle `{model, scaler, feature_names}`
 - `predict()` amb threshold configurable
 
-Els models fills implementen **4 mètodes abstractes d'1 línia** + `__init__` + `from_config()`. Tot el bucle d'entrenament és heretat.
+Els models fills implementen **2 mètodes abstractes d'1 línia** + `__init__` + `from_config()`. Tot el bucle d'entrenament és heretat.
 
 ### `TimeSeriesDataset` — Dataset PyTorch compartit
 

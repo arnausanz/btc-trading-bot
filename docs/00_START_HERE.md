@@ -124,8 +124,7 @@ PaperExchange ──── fees 0.1% + slippage 0.01%
     ▼
 PostgreSQL (taules: signals, orders, trades, ticks)
     │
-    ├── Telegram → notificació si trade
-    └── MLflow → mètriques de backtest
+    └── Telegram → notificació si trade
 ```
 
 ---

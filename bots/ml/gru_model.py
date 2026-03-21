@@ -4,7 +4,6 @@ import logging
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import mlflow
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -113,86 +112,63 @@ class GRUModel(BaseMLModel):
                           num_workers=0, pin_memory=False)
 
     def train(self, X: pd.DataFrame, y: pd.Series) -> dict:
-        from core.config import MLFLOW_TRACKING_URI
         self.feature_names = list(X.columns)
         n_features = len(self.feature_names)
 
-        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-        mlflow.set_experiment("gru_bidireccional")
-        run = mlflow.start_run()
+        X_arr = X.values
+        y_arr = y.values
+        n = len(X_arr)
+        fold_size = n // 6
+        accuracies, precisions, recalls = [], [], []
 
-        try:
-            mlflow.log_params({
-                "seq_len": self.seq_len,
-                "hidden_size": self.hidden_size,
-                "num_layers": self.num_layers,
-                "dropout": self.dropout,
-                "epochs": self.epochs,
-                "batch_size": self.batch_size,
-                "learning_rate": self.learning_rate,
-                "n_features": n_features,
-                "n_samples": len(X),
-            })
+        with tqdm(range(5), desc="  GRU folds", unit="fold",
+                  leave=False, dynamic_ncols=True) as fold_bar:
+            for fold in fold_bar:
+                split = fold_size * (fold + 1)
+                val_end = min(split + fold_size, n)
 
-            X_arr = X.values
-            y_arr = y.values
-            n = len(X_arr)
-            fold_size = n // 6
-            accuracies, precisions, recalls = [], [], []
+                X_train_raw = X_arr[:split]
+                y_train_raw = y_arr[:split]
+                X_val_raw = X_arr[split:val_end]
+                y_val_raw = y_arr[split:val_end]
 
-            with tqdm(range(5), desc="  GRU folds", unit="fold",
-                      leave=False, dynamic_ncols=True) as fold_bar:
-                for fold in fold_bar:
-                    split = fold_size * (fold + 1)
-                    val_end = min(split + fold_size, n)
+                if len(X_val_raw) <= self.seq_len:
+                    continue
 
-                    X_train_raw = X_arr[:split]
-                    y_train_raw = y_arr[:split]
-                    X_val_raw = X_arr[split:val_end]
-                    y_val_raw = y_arr[split:val_end]
+                X_train_sc = self.scaler.fit_transform(X_train_raw)
+                X_val_sc = self.scaler.transform(X_val_raw)
 
-                    if len(X_val_raw) <= self.seq_len:
-                        continue
+                net = self._build_net(n_features)
+                acc, prec, rec = self._train_fold(
+                    net, X_train_sc, y_train_raw,
+                    X_val_sc, y_val_raw,
+                    fold_num=fold + 1,
+                )
+                accuracies.append(acc)
+                precisions.append(prec)
+                recalls.append(rec)
+                fold_bar.set_postfix(
+                    {"acc": f"{acc:.3f}", "prec": f"{prec:.3f}", "rec": f"{rec:.3f}"}
+                )
 
-                    X_train_sc = self.scaler.fit_transform(X_train_raw)
-                    X_val_sc = self.scaler.transform(X_val_raw)
+        metrics = {
+            "accuracy_mean": float(np.mean(accuracies)),
+            "accuracy_std": float(np.std(accuracies)),
+            "precision_mean": float(np.mean(precisions)),
+            "recall_mean": float(np.mean(recalls)),
+        }
+        tqdm.write("  Training final GRU model...")
+        X_scaled = self.scaler.fit_transform(X_arr)
+        self.net = self._build_net(n_features)
+        self._train_fold(
+            self.net, X_scaled, y_arr,
+            X_scaled[-fold_size:], y_arr[-fold_size:],
+            fold_num=0,
+        )
+        self.is_trained = True
 
-                    net = self._build_net(n_features)
-                    acc, prec, rec = self._train_fold(
-                        net, X_train_sc, y_train_raw,
-                        X_val_sc, y_val_raw,
-                        fold_num=fold + 1,
-                    )
-                    accuracies.append(acc)
-                    precisions.append(prec)
-                    recalls.append(rec)
-                    fold_bar.set_postfix(
-                        {"acc": f"{acc:.3f}", "prec": f"{prec:.3f}", "rec": f"{rec:.3f}"}
-                    )
-
-            metrics = {
-                "accuracy_mean": float(np.mean(accuracies)),
-                "accuracy_std": float(np.std(accuracies)),
-                "precision_mean": float(np.mean(precisions)),
-                "recall_mean": float(np.mean(recalls)),
-            }
-            mlflow.log_metrics(metrics)
-
-            tqdm.write("  Training final GRU model...")
-            X_scaled = self.scaler.fit_transform(X_arr)
-            self.net = self._build_net(n_features)
-            self._train_fold(
-                self.net, X_scaled, y_arr,
-                X_scaled[-fold_size:], y_arr[-fold_size:],
-                fold_num=0,
-            )
-            self.is_trained = True
-
-            tqdm.write(f"  ✓ GRU  acc={metrics['accuracy_mean']:.3f} ± {metrics['accuracy_std']:.3f}")
-            return metrics
-
-        finally:
-            mlflow.end_run()
+        tqdm.write(f"  ✓ GRU  acc={metrics['accuracy_mean']:.3f} ± {metrics['accuracy_std']:.3f}")
+        return metrics
 
     def _train_fold(
         self,

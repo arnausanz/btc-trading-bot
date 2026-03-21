@@ -37,7 +37,7 @@ class TestDCABot:
 
     def test_dca_buys_on_schedule(self):
         """DCA should buy every N ticks as configured."""
-        bot = DCABot(config_path="config/bots/dca.yaml")
+        bot = DCABot(config_path="config/models/dca.yaml")
         bot.on_start()
         obs = make_synthetic_observation()
 
@@ -57,7 +57,7 @@ class TestDCABot:
 
     def test_dca_holds_between_buys(self):
         """DCA should hold between buy ticks."""
-        bot = DCABot(config_path="config/bots/dca.yaml")
+        bot = DCABot(config_path="config/models/dca.yaml")
         bot.on_start()
         obs = make_synthetic_observation()
         buy_every_n = bot.config["buy_every_n_ticks"]
@@ -73,7 +73,7 @@ class TestDCABot:
 
     def test_dca_produces_signals(self):
         """DCA should produce signals for 50 ticks without error."""
-        bot = DCABot(config_path="config/bots/dca.yaml")
+        bot = DCABot(config_path="config/models/dca.yaml")
         bot.on_start()
         obs = make_synthetic_observation()
 
@@ -89,7 +89,7 @@ class TestHoldBot:
 
     def test_hold_buys_on_first_tick(self):
         """HoldBot should buy on the first observation."""
-        bot = HoldBot(config_path="config/bots/hold.yaml")
+        bot = HoldBot(config_path="config/models/hold.yaml")
         bot.on_start()
         obs = make_synthetic_observation()
 
@@ -100,7 +100,7 @@ class TestHoldBot:
 
     def test_hold_never_buys_again_after_first(self):
         """HoldBot should never buy again after the first tick."""
-        bot = HoldBot(config_path="config/bots/hold.yaml")
+        bot = HoldBot(config_path="config/models/hold.yaml")
         bot.on_start()
         obs = make_synthetic_observation()
 
@@ -116,12 +116,13 @@ class TestHoldBot:
 
     def test_hold_respects_existing_position(self):
         """HoldBot should not buy if it already has BTC in portfolio."""
-        bot = HoldBot(config_path="config/bots/hold.yaml")
+        bot = HoldBot(config_path="config/models/hold.yaml")
         bot.on_start()
 
         obs = make_synthetic_observation()
         # Simulate a portfolio that already has BTC from previous session
-        obs["portfolio"] = {"btc_balance": 0.1}
+        # Key must match what PaperExchange.get_portfolio() returns: "BTC"
+        obs["portfolio"] = {"BTC": 0.1}
 
         # Should skip the buy and go straight to HOLD
         sig = bot.on_observation(obs)
@@ -133,7 +134,7 @@ class TestTrendBot:
 
     def test_trend_bot_holds_without_crossover(self):
         """TrendBot should hold when no EMA crossover is detected."""
-        bot = TrendBot(config_path="config/bots/trend.yaml")
+        bot = TrendBot(config_path="config/models/trend.yaml")
         bot.on_start()
 
         # Flat data (no trend) should not trigger crossover
@@ -156,7 +157,7 @@ class TestTrendBot:
 
     def test_trend_bot_uptrend_crossover(self):
         """TrendBot should buy on bullish EMA crossover."""
-        bot = TrendBot(config_path="config/bots/trend.yaml")
+        bot = TrendBot(config_path="config/models/trend.yaml")
         bot.on_start()
 
         # Strong uptrend: close prices rising
@@ -180,7 +181,7 @@ class TestTrendBot:
 
     def test_trend_bot_never_buys_when_overbought(self):
         """TrendBot should not buy if RSI is above overbought threshold."""
-        bot = TrendBot(config_path="config/bots/trend.yaml")
+        bot = TrendBot(config_path="config/models/trend.yaml")
         bot.on_start()
 
         rng = np.random.default_rng(42)

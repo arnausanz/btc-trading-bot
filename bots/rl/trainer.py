@@ -1,6 +1,5 @@
 # bots/rl/trainer.py
 import logging
-import mlflow
 import yaml
 from bots.rl.agents import SACAgent, PPOAgent, TD3Agent
 from bots.rl.environment import BtcTradingEnvDiscrete, BtcTradingEnvContinuous
@@ -12,7 +11,6 @@ from bots.rl.rewards import builtins, professional  # registers all reward funct
 from bots.rl.rewards import advanced                # registers regime_adaptive        # noqa: F401
 from core.interfaces.base_rl_agent import BaseRLAgent
 from data.processing.feature_builder import FeatureBuilder
-from core.config import MLFLOW_TRACKING_URI
 
 logger = logging.getLogger(__name__)
 
@@ -77,95 +75,84 @@ class RLTrainer:
         train_cfg = self.config["training"]
         features_cfg = self.config["features"]
 
-        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-        mlflow.set_experiment(train_cfg["experiment_name"])
-        mlflow.end_run()
-
-        with mlflow.start_run():
-            agent_type = self.config["model_type"]
-            if agent_type not in _AGENT_REGISTRY:
-                raise ValueError(
-                    f"Unknown agent: '{agent_type}'. "
-                    f"Available: {list(_AGENT_REGISTRY.keys())}"
-                )
-
-            env_cfg = train_cfg["environment"]
-            env_cfg = {**env_cfg, "lookback": features_cfg["lookback"]}
-
-            # Build feature DataFrame
-            if agent_type in _MULTIFRAME_TYPES:
-                from data.processing.multiframe_builder import MultiFrameFeatureBuilder
-                df = MultiFrameFeatureBuilder.from_config(self.config).build()
-            else:
-                df = FeatureBuilder.from_config(self.config).build()
-
-            n_features = len(df.columns)
-            lookback = features_cfg["lookback"]
-            # Professional envs add 4 position-state dims: obs_shape = n_feats×lookback + 4
-            _PROFESSIONAL_ENV_TYPES = {"ppo_professional", "sac_professional", "td3_professional", "td3_multiframe"}
-            pos_state_dims = 4 if agent_type in _PROFESSIONAL_ENV_TYPES else 0
-            obs_shape = lookback * n_features + pos_state_dims
-            logger.info(
-                f"Features: {n_features} columns, lookback={lookback}, "
-                f"obs_shape={obs_shape}"
-                + (f" ({n_features}×{lookback} + {pos_state_dims} pos state)" if pos_state_dims else "")
-            )
-            logger.info(f"  Selected: {features_cfg.get('select')}")
-
-            mlflow.log_params({
-                "model_type": agent_type,
-                "total_timesteps": train_cfg["model"]["total_timesteps"],
-                "lookback": lookback,
-                "reward_type": env_cfg["reward_type"],
-                "timeframe": self.config["timeframe"],
-                "aux_timeframes": str(self.config.get("aux_timeframes", [])),
-                "n_features": n_features,
-                "obs_shape": obs_shape,
-            })
-
-            split = int(len(df) * train_cfg["train_pct"])
-            df_train = df.iloc[:split]
-            df_val = df.iloc[split:]
-            logger.info(f"Train: {len(df_train)} rows | Val: {len(df_val)} rows")
-
-            # Minimum data guard
-            lookback = features_cfg["lookback"]
-            min_rows = lookback + 10
-            if len(df_train) < min_rows:
-                model_type = self.config.get("model_type", "?")
-                raise ValueError(
-                    f"Insufficient training data: {len(df_train)} rows but "
-                    f"lookback={lookback} requires at least {min_rows} rows.\n"
-                    f"Likely cause: an external data source has limited history "
-                    f"and causes most rows to be dropped via dropna().\n"
-                    f"Fix: remove the problematic source from features.external in "
-                    f"config/models/{model_type}.yaml, or collect more historical data."
-                )
-            if len(df_val) < lookback + 2:
-                raise ValueError(
-                    f"Insufficient validation data: {len(df_val)} rows but "
-                    f"lookback={lookback} requires at least {lookback + 2} rows.\n"
-                    f"Consider reducing train_pct (currently {train_cfg['train_pct']}) "
-                    f"or collecting more data."
-                )
-
-            env_class = _ENV_REGISTRY[agent_type]
-            train_env = env_class(df=df_train, **env_cfg)
-            val_env = env_class(df=df_val, **env_cfg)
-
-            agent = _AGENT_REGISTRY[agent_type].from_config(train_cfg)
-            metrics = agent.train(
-                train_env=train_env,
-                val_env=val_env,
-                total_timesteps=train_cfg["model"]["total_timesteps"],
+        agent_type = self.config["model_type"]
+        if agent_type not in _AGENT_REGISTRY:
+            raise ValueError(
+                f"Unknown agent: '{agent_type}'. "
+                f"Available: {list(_AGENT_REGISTRY.keys())}"
             )
 
-            mlflow.log_metrics(metrics)
-            agent.save(train_cfg["model_path"])
+        env_cfg = train_cfg["environment"]
+        env_cfg = {**env_cfg, "lookback": features_cfg["lookback"]}
 
-            logger.info(
-                f"  OK return={metrics['val_return_pct']}% "
-                f"drawdown={metrics['val_max_drawdown_pct']}% "
-                f"trades={metrics['val_trades']}"
+        # Build feature DataFrame
+        if agent_type in _MULTIFRAME_TYPES:
+            from data.processing.multiframe_builder import MultiFrameFeatureBuilder
+            df = MultiFrameFeatureBuilder.from_config(self.config).build()
+        else:
+            df = FeatureBuilder.from_config(self.config).build()
+
+        n_features = len(df.columns)
+        lookback = features_cfg["lookback"]
+        # Professional envs add 4 position-state dims: obs_shape = n_feats×lookback + 4
+        _PROFESSIONAL_ENV_TYPES = {"ppo_professional", "sac_professional", "td3_professional", "td3_multiframe"}
+        pos_state_dims = 4 if agent_type in _PROFESSIONAL_ENV_TYPES else 0
+        obs_shape = lookback * n_features + pos_state_dims
+        logger.info(
+            f"Features: {n_features} columns, lookback={lookback}, "
+            f"obs_shape={obs_shape}"
+            + (f" ({n_features}×{lookback} + {pos_state_dims} pos state)" if pos_state_dims else "")
+        )
+        logger.info(f"  Selected: {features_cfg.get('select')}")
+        logger.info(
+            f"  model_type={agent_type} | "
+            f"total_timesteps={train_cfg['model']['total_timesteps']} | "
+            f"reward_type={env_cfg['reward_type']} | "
+            f"timeframe={self.config['timeframe']}"
+        )
+
+        split = int(len(df) * train_cfg["train_pct"])
+        df_train = df.iloc[:split]
+        df_val = df.iloc[split:]
+        logger.info(f"Train: {len(df_train)} rows | Val: {len(df_val)} rows")
+
+        # Minimum data guard
+        lookback = features_cfg["lookback"]
+        min_rows = lookback + 10
+        if len(df_train) < min_rows:
+            model_type = self.config.get("model_type", "?")
+            raise ValueError(
+                f"Insufficient training data: {len(df_train)} rows but "
+                f"lookback={lookback} requires at least {min_rows} rows.\n"
+                f"Likely cause: an external data source has limited history "
+                f"and causes most rows to be dropped via dropna().\n"
+                f"Fix: remove the problematic source from features.external in "
+                f"config/models/{model_type}.yaml, or collect more historical data."
             )
-            return metrics
+        if len(df_val) < lookback + 2:
+            raise ValueError(
+                f"Insufficient validation data: {len(df_val)} rows but "
+                f"lookback={lookback} requires at least {lookback + 2} rows.\n"
+                f"Consider reducing train_pct (currently {train_cfg['train_pct']}) "
+                f"or collecting more data."
+            )
+
+        env_class = _ENV_REGISTRY[agent_type]
+        train_env = env_class(df=df_train, **env_cfg)
+        val_env = env_class(df=df_val, **env_cfg)
+
+        agent = _AGENT_REGISTRY[agent_type].from_config(train_cfg)
+        metrics = agent.train(
+            train_env=train_env,
+            val_env=val_env,
+            total_timesteps=train_cfg["model"]["total_timesteps"],
+        )
+
+        agent.save(train_cfg["model_path"])
+
+        logger.info(
+            f"  OK return={metrics['val_return_pct']}% "
+            f"drawdown={metrics['val_max_drawdown_pct']}% "
+            f"trades={metrics['val_trades']}"
+        )
+        return metrics

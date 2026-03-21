@@ -7,7 +7,6 @@ Runs 1 Optuna trial + 1 minimal training pass for every ML model and RL agent.
 Saves NOTHING permanently to disk:
   - No .pkl / .pt / .zip model files written to models/
   - No best_params written back to config YAMLs
-  - MLflow is redirected to a temporary directory (auto-cleaned on exit)
 
 Use this script to confirm that data reading, feature building, optimization
 and training all work correctly before running a full optimize + train cycle.
@@ -22,16 +21,14 @@ Usage:
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Environment setup — MUST happen before any model / MLflow imports
+# Environment setup — MUST happen before any model imports
 # ─────────────────────────────────────────────────────────────────────────────
 import os
 import sys
 import tempfile
 
-_MLFLOW_TMPDIR  = tempfile.mkdtemp(prefix="btc_test_mlflow_")
 _RL_MODEL_TMPDIR = tempfile.mkdtemp(prefix="btc_test_rl_")
 
-os.environ["MLFLOW_TRACKING_URI"] = f"file://{_MLFLOW_TMPDIR}"
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -59,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 # Silence noisy third-party loggers
 for _name in (
-    "mlflow", "lightgbm", "catboost", "bots.ml", "bots.rl",
+    "lightgbm", "catboost", "bots.ml", "bots.rl",
     "data.processing", "core.db", "optuna", "stable_baselines3",
 ):
     logging.getLogger(_name).setLevel(logging.WARNING)
@@ -121,15 +118,6 @@ def _run(name: str, fn) -> None:
         logger.error(f"         {exc}")
         logger.debug(traceback.format_exc())
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Patch core.config MLflow URI (before any model module imports it)
-# ─────────────────────────────────────────────────────────────────────────────
-import core.config as _core_cfg
-_core_cfg.MLFLOW_TRACKING_URI = f"file://{_MLFLOW_TMPDIR}"
-
-import mlflow as _mlflow
-_mlflow.set_tracking_uri(f"file://{_MLFLOW_TMPDIR}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Monkey-patch TimeSeriesSplit in base_tree_model to use TEST_ML_N_FOLDS
@@ -241,7 +229,6 @@ def _test_ml(key: str, config_path: str) -> None:
             trial_cfg["training"]["model"]["epochs"]  = TEST_DL_EPOCHS
             trial_cfg["training"]["model"]["seq_len"] = seq_len
 
-        _mlflow.end_run()
         try:
             model   = model_cls.from_config(trial_cfg["training"])
             metrics = model.train(X, y)
@@ -249,8 +236,6 @@ def _test_ml(key: str, config_path: str) -> None:
         except Exception as exc:
             logger.debug(f"  [{key}] trial exception: {exc}")
             return -999.0
-        finally:
-            _mlflow.end_run()
 
     opt._objective = _fast_objective
     study = opt.run()  # n_trials = 1
@@ -430,9 +415,8 @@ def main() -> None:
         logger.info("\nAll tests PASSED ✓")
 
     # ── Cleanup temp dirs ─────────────────────────────────────────────────────
-    shutil.rmtree(_MLFLOW_TMPDIR,   ignore_errors=True)
     shutil.rmtree(_RL_MODEL_TMPDIR, ignore_errors=True)
-    logger.info("Temporary MLflow and RL dirs cleaned up.")
+    logger.info("Temporary RL dir cleaned up.")
 
     if failed:
         sys.exit(1)

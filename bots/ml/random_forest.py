@@ -35,16 +35,5 @@ class RandomForestModel(BaseTreeModel):
             max_features=config["model"].get("max_features", "sqrt"),
         )
 
-    def _get_mlflow_experiment(self) -> str:
-        return "random_forest"
-
-    def _get_mlflow_params(self) -> dict:
-        return {
-            "n_estimators": self.n_estimators,
-            "max_depth": self.max_depth,
-            "min_samples_leaf": self.min_samples_leaf,
-            "max_features": self.max_features,
-        }
-
     def _get_model_label(self) -> str:
         return "RF"

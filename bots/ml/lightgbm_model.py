@@ -59,22 +59,5 @@ class LightGBMModel(BaseTreeModel):
             reg_lambda=config["model"].get("reg_lambda", 1.0),
         )
 
-    def _get_mlflow_experiment(self) -> str:
-        return "lightgbm"
-
-    def _get_mlflow_params(self) -> dict:
-        return {
-            "n_estimators": self.n_estimators,
-            "max_depth": self.max_depth,
-            "learning_rate": self.learning_rate,
-            "num_leaves": self.num_leaves,
-            "scale_pos_weight": self.scale_pos_weight,
-            "min_child_samples": self.min_child_samples,
-            "subsample": self.subsample,
-            "colsample_bytree": self.colsample_bytree,
-            "reg_alpha": self.reg_alpha,
-            "reg_lambda": self.reg_lambda,
-        }
-
     def _get_model_label(self) -> str:
         return "LGB"

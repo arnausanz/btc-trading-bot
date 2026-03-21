@@ -87,7 +87,6 @@ Plataforma de **paper trading** algorísmic per a BTC/USDT. Tres famílies d'est
 4. BACKTEST ENGINE (offline, sobre dades històriques)
    Mateix flux però sobre totes les candles [TEST_FROM .. avui]
    → BacktestMetrics → Sharpe, Drawdown, Win Rate, Calmar
-   → MLflow         → paràmetres i mètriques registrades automàticament
 ```
 
 ---
@@ -221,7 +220,7 @@ Fase 2 — Entrenar
   train_gate_regime.py → models/gate_hmm.pkl + gate_xgb_regime.pkl
           ↓
 Fase 3 — Validar
-  run_comparison.py →  BacktestMetrics + MLflow
+  run_comparison.py →  BacktestMetrics
   (Criteri mínim: Sharpe > 1.0, MaxDrawdown > -25% en TEST)
           ↓
 Fase 4 — Demo

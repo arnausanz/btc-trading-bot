@@ -55,7 +55,7 @@ Capa 3: Models RL             — aprenen política de trading per reward
    Resultat: fitxer .pkl / .pt / .zip al directori models/
 
 3. run_comparison.py                              → backtest i validació walk-forward
-   Resultat: mètriques Sharpe/Calmar a MLflow
+   Resultat: mètriques Sharpe/Calmar per consola i log
 
 4. demo.yaml                                      → activa el bot en paper trading
    Resultat: senyals en temps real registrats a la BD
@@ -853,10 +853,6 @@ python scripts/train_gate_regime.py   # ~30-45 min
 ```bash
 # Smoke test RL (comprova que l'entorn funciona sense entrenar del tot)
 python scripts/train_rl.py --smoke
-
-# Veure resultats a MLflow
-mlflow ui --port 5000
-# Obre http://localhost:5000
 ```
 
 ### Notes sobre re-entrenament

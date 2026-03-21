@@ -589,12 +589,6 @@ class TelegramNotifier:
             f"{'connectat' if db_ok else 'ERROR'}"
         )
 
-        mlflow_ok = health.get("mlflow_ok", False)
-        lines.append(
-            f"{'✅' if mlflow_ok else '⚠️'} MLflow        "
-            f"{'actiu' if mlflow_ok else 'no verificat'}"
-        )
-
         binance_ms = health.get("binance_latency_ms")
         if binance_ms is not None:
             ok = binance_ms < 500

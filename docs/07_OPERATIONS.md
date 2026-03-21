@@ -94,10 +94,6 @@ ls models/
 ```bash
 # Backtest de tots els bots
 python scripts/run_comparison.py --all
-
-# Veure resultats
-mlflow ui --port 5000
-# Obre http://localhost:5000
 ```
 
 **Criteri mínim per activar un bot a la demo:**
@@ -317,16 +313,9 @@ GROUP BY regime, p4_passed
 ORDER BY count DESC;
 ```
 
-### Mètriques de backtest a MLflow
+### Mètriques de backtest
 
-```bash
-mlflow ui --port 5000
-# Obre http://localhost:5000
-
-# Comparar runs:
-# - Metrics: sharpe_ratio, max_drawdown, win_rate, total_return
-# - Paràmetres: model_type, n_estimators, learning_rate, etc.
-```
+Els resultats de cada backtest es mostren per consola i es guarden al log estàndard (`logs/`). Les mètriques principals: `sharpe_ratio`, `max_drawdown_pct`, `win_rate_pct`, `total_return_pct`, `calmar_ratio`.
 
 ---
 

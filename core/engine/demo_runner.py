@@ -376,15 +376,6 @@ class DemoRunner:
         except Exception:
             pass
 
-        # MLflow: just check the tracking URI is reachable (best effort)
-        mlflow_ok = False
-        try:
-            import mlflow
-            mlflow.set_tracking_uri(mlflow.get_tracking_uri())
-            mlflow_ok = True
-        except Exception:
-            pass
-
         # Minutes until next health check (1 hour)
         ticks_per_hour = max(1, 3600 // self.update_interval)
         ticks_done     = len(list(self.histories.values())[0]) if self.histories else 0
@@ -396,7 +387,6 @@ class DemoRunner:
             "last_candle_ts":     last_candle,
             "fear_greed":         fg,
             "binance_latency_ms": binance_ms,
-            "mlflow_ok":          mlflow_ok,
             "next_check_minutes": next_check_min,
         }
 

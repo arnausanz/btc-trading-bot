@@ -1,7 +1,6 @@
 # core/backtesting/ml_optimizer.py
 import copy
 import logging
-import mlflow
 import optuna
 import yaml
 from core.interfaces.base_ml_model import BaseMLModel
@@ -84,7 +83,6 @@ class MLOptimizer:
         config = self._build_config(params)
 
         try:
-            mlflow.end_run()
             # DatasetBuilder.from_config llegeix des del top-level del config unificat
             builder = DatasetBuilder.from_config(config)
             X, y = builder.build()
@@ -106,8 +104,6 @@ class MLOptimizer:
         except Exception as e:
             logger.warning(f"  Trial {trial.number} failed: {e}")
             return -999.0
-        finally:
-            mlflow.end_run()
 
     def run(self) -> optuna.Study:
         logger.info(

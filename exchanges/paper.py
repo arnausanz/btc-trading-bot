@@ -53,13 +53,14 @@ class PaperExchange(BaseExchange):
         if signal.action == Action.BUY:
             fill_price = self._current_price * (1 + self.slippage_rate)
             side = OrderSide.BUY
-            capital_to_use = self._portfolio["USDT"] * signal.size
-            btc_amount = capital_to_use / fill_price
+            # Divide by (1 + fee_rate) so that capital_to_use + fees fits exactly
+            # within the allocated budget even when size == 1.0 (full capital).
+            budget = self._portfolio["USDT"] * signal.size
+            capital_to_use = budget / (1 + self.fee_rate)
             fees = capital_to_use * self.fee_rate
+            btc_amount = capital_to_use / fill_price
 
-            # Check total cost including fees to avoid USDT going negative on full-size buys
-            # (when size==1.0, capital_to_use == USDT_balance but fees would push it negative)
-            if capital_to_use * (1 + self.fee_rate) > self._portfolio["USDT"]:
+            if capital_to_use + fees > self._portfolio["USDT"]:
                 logger.warning("Capital insuficient per executar l'ordre (incloses comissions)")
                 return Order(id=str(uuid.uuid4()), signal_id=signal.bot_id, exchange="paper",
                              symbol="BTC/USDT", side=side, status=OrderStatus.FAILED,

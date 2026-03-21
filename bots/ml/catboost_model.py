@@ -43,18 +43,5 @@ class CatBoostModel(BaseTreeModel):
             min_data_in_leaf=config["model"].get("min_data_in_leaf", 10),
         )
 
-    def _get_mlflow_experiment(self) -> str:
-        return "catboost"
-
-    def _get_mlflow_params(self) -> dict:
-        return {
-            "iterations": self.iterations,
-            "depth": self.depth,
-            "learning_rate": self.learning_rate,
-            "scale_pos_weight": self.scale_pos_weight,
-            "l2_leaf_reg": self.l2_leaf_reg,
-            "min_data_in_leaf": self.min_data_in_leaf,
-        }
-
     def _get_model_label(self) -> str:
         return "CB"
