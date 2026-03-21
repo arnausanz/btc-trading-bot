@@ -192,16 +192,26 @@ git push origin main
 
 **A la VM (connectat per SSH):**
 ```bash
-# 2. Actualitza el codi
+# 2. Atura la demo abans de res
+sudo systemctl stop trading-demo
+
+# 3. Actualitza el codi
 cd ~/trading-bot
 git pull origin main
 
-# 3. Si has canviat el docker-compose.yml, reinicia els serveis
+# 4. Si has canviat el docker-compose.yml, reinicia els serveis Docker
 docker compose down
 docker compose up -d
 
-# 4. Comprova que tot funciona
+# 5. Si hi ha noves migracions de BD
+poetry run alembic upgrade head
+
+# 6. Comprova que Docker funciona
 docker compose ps
+
+# 7. Torna a arrencar la demo
+sudo systemctl start trading-demo
+sudo systemctl status trading-demo
 ```
 
 **Si has entrenat nous models al Mac:**
@@ -212,7 +222,60 @@ scp -i ~/.ssh/id_ed25519 -r /Users/arnau/Documents/Projectes/btc-trading-bot/mod
 
 ---
 
-## 8. Backup automàtic de la base de dades
+## 8. Gestió de la Demo (systemd)
+
+> ℹ️ La demo corre com un **servei del sistema** (systemd). Això significa que s'arrenca automàticament quan la VM arrenca, es reinicia sola si cau, i segueix corrent quan surts de la terminal. **No cal fer res especial per mantenir-la viva.**
+
+### Comprovar l'estat de la demo
+> 📍 Executa **dins de la VM** (qualsevol directori)
+
+```bash
+sudo systemctl status trading-demo
+```
+
+Ha de mostrar **active (running)** en verd.
+
+### Veure els logs de la demo en temps real
+> 📍 Executa **dins de la VM** (qualsevol directori)
+
+```bash
+journalctl -fu trading-demo
+```
+
+> Prem `Ctrl+C` per sortir dels logs. La demo **no s'atura**, només deixes de veure els logs.
+
+### Aturar la demo manualment
+> 📍 Executa **dins de la VM** (qualsevol directori)
+
+```bash
+sudo systemctl stop trading-demo
+```
+
+### Arrencar la demo manualment
+> 📍 Executa **dins de la VM** (qualsevol directori)
+
+```bash
+sudo systemctl start trading-demo
+```
+
+### Reiniciar la demo (després d'un deploy)
+> 📍 Executa **dins de la VM** (qualsevol directori)
+
+```bash
+sudo systemctl restart trading-demo
+```
+
+### Desactivar la demo permanentment (que no arranqui amb la VM)
+> 📍 Executa **dins de la VM** (qualsevol directori)
+
+```bash
+sudo systemctl disable trading-demo
+sudo systemctl enable trading-demo  # per reactivar-la
+```
+
+---
+
+## 9. Backup automàtic de la base de dades
 
 > ℹ️ La VM fa backups automàtics cada dia a les **3:00 AM** (hora de mínim tràfic de mercat). Cada backup és un fitxer comprimit `.sql.gz` que conté **totes les dades** de totes les taules. Els backups dels últims **7 dies** es conserven automàticament — els més antics s'esborren sols a les 3:15 AM del dia següent. No cal fer res manualment.
 
@@ -276,7 +339,21 @@ gunzip -c ~/backup_20260321_0300.sql.gz | docker exec -i btc_trading_db psql -U 
 
 ---
 
-## 9. Resolució de problemes habituals
+## 10. Resolució de problemes habituals
+
+### La demo no arrenca o falla
+```bash
+# Mira els logs detallats
+journalctl -u trading-demo -n 50
+```
+
+### Docker no funciona i la demo falla
+```bash
+cd ~/trading-bot
+docker compose ps
+docker compose up -d
+sudo systemctl restart trading-demo
+```
 
 ### El servei no arrenca (status: exited)
 ```bash
