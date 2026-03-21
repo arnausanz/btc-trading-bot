@@ -56,21 +56,5 @@ class XGBoostModel(BaseTreeModel):
             reg_lambda=config["model"].get("reg_lambda", 1.0),
         )
 
-    def _get_mlflow_experiment(self) -> str:
-        return "xgboost"
-
-    def _get_mlflow_params(self) -> dict:
-        return {
-            "n_estimators": self.n_estimators,
-            "max_depth": self.max_depth,
-            "learning_rate": self.learning_rate,
-            "scale_pos_weight": self.scale_pos_weight,
-            "subsample": self.subsample,
-            "colsample_bytree": self.colsample_bytree,
-            "min_child_weight": self.min_child_weight,
-            "reg_alpha": self.reg_alpha,
-            "reg_lambda": self.reg_lambda,
-        }
-
     def _get_model_label(self) -> str:
         return "XGB"

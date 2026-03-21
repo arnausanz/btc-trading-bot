@@ -60,6 +60,6 @@ def test_import_data_pipeline():
 
 
 def test_import_config():
-    from core.config import TRAIN_UNTIL, TEST_FROM, MLFLOW_TRACKING_URI
+    from core.config import TRAIN_UNTIL, TEST_FROM
     assert isinstance(TRAIN_UNTIL, str)
     assert isinstance(TEST_FROM, str)

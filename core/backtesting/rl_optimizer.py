@@ -1,7 +1,6 @@
 # core/backtesting/rl_optimizer.py
 import copy
 import logging
-import mlflow
 import optuna
 import yaml
 from core.interfaces.base_rl_agent import BaseRLAgent
@@ -101,7 +100,6 @@ class RLOptimizer:
         config = self._build_config(params)
 
         try:
-            mlflow.end_run()
             if self.model_type in _MULTIFRAME_TYPES:
                 from data.processing.multiframe_builder import MultiFrameFeatureBuilder
                 df = MultiFrameFeatureBuilder.from_config(config).build()
@@ -140,8 +138,6 @@ class RLOptimizer:
         except Exception as e:
             logger.warning(f"  Trial {trial.number} failed: {e}")
             return -999.0
-        finally:
-            mlflow.end_run()
 
     def run(self) -> optuna.Study:
         logger.info(

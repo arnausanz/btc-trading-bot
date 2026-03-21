@@ -16,7 +16,6 @@ import logging
 import os
 import sys
 
-import mlflow
 import yaml
 from tqdm import tqdm
 
@@ -65,7 +64,7 @@ if __name__ == "__main__":
     selected_configs = [ALL_CONFIGS[m] for m in args.models]
     logger.info(f"Selected models: {args.models}")
 
-    for _noisy in ("data.processing.technical", "data.observation.builder", "core.db", "mlflow", "bots.ml"):
+    for _noisy in ("data.processing.technical", "data.observation.builder", "core.db", "bots.ml"):
         logging.getLogger(_noisy).setLevel(logging.WARNING)
 
     results = []
@@ -78,7 +77,6 @@ if __name__ == "__main__":
             name       = config["training"]["experiment_name"]
             model_type = config["model_type"]
             model_bar.set_description(f"Training {name}")
-            mlflow.end_run()
 
             tqdm.write(f"\n── {name} ──")
             builder = DatasetBuilder.from_config(config)
