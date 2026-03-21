@@ -16,7 +16,7 @@
 | RL agents — TD3 | ✅ | td3_professional (12H) + td3_multiframe (12H+4H) |
 | Dades externes | ✅ | Fear&Greed, funding rates, open interest, blockchain |
 | Optimize workflow | ✅ | Optuna + best_params in-place al YAML base |
-| BacktestEngine + MLflow | ✅ | Walk-forward, mètriques Sharpe/Calmar |
+| BacktestEngine | ✅ | Walk-forward, mètriques Sharpe/Calmar |
 | DemoRunner | ✅ | Persistència + Telegram |
 | **EnsembleBot v1** | ✅ | majority_vote — `bots/classical/ensemble_bot.py` |
 | **State restore** | ✅ | Portfolio + _in_position restaurats des de BD al reinici |

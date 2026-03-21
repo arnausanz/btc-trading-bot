@@ -67,13 +67,13 @@ Plataforma de trading algorítmic per BTC construïda des de zero amb l'objectiu
 
 ---
 
-### 6. MLflow SQLite local (no PostgreSQL)
+### 6. Eliminar MLflow (Març 2026)
 
-**Decisió:** MLflow amb SQLite (`mlflow.db`) en comptes de PostgreSQL.
+**Decisió:** MLflow eliminat completament del projecte.
 
-**Per què:** Simplicitat. MLflow no necessita concurrència ni alta disponibilitat. SQLite és zero-config i suficient per a un projecte de demo. PostgreSQL seria overkill i afegiria complexitat al Docker Compose.
+**Per què:** Mai s'havia fet servir activament. L'entrenament es fa en local (Mac), no en servidor, i les mètriques importants (Sharpe, Calmar, drawdown) es veuen directament per log. Acumular una dependència pesada que no aporta valor és deute tècnic innecessari.
 
-**Implicació:** El fitxer `mlflow.db` és local i no es fa backup automàtic. Fer `git ignore` d'aquest fitxer és correcte — les mètriques es poden regenerar re-executant els backtests.
+**Implicació:** Els resultats de backtest i entrenament es mostren per log estàndard. Si en el futur es vol tracking d'experiments, Weights & Biases (wandb) o TensorBoard serien alternatives més lleugeres.
 
 ---
 
@@ -104,16 +104,6 @@ Plataforma de trading algorítmic per BTC construïda des de zero amb l'objectiu
 **Per què:** UTC és l'estàndard per a sistemes distribuïts i evita problemes amb canvis d'hora (horari d'estiu). La DB no ha de saber on viu l'usuari.
 
 **Implicació:** Quan es fan queries directament a la DB, els timestamps apareixen en UTC. Al dashboard i als logs es mostren en hora local.
-
----
-
-### 10. Constant `MLFLOW_TRACKING_URI` centralitzada
-
-**Decisió:** La URI de MLflow viu a `core/config.py` i s'importa des d'aquí.
-
-**Per què:** Anteriorment estava duplicada a `BacktestEngine`, `RandomForestModel`, `XGBoostModel`, i `RLTrainer`. Si es canvia la ubicació de MLflow (ex: servidor remot), s'ha de canviar en un sol lloc.
-
-**Implicació:** Qualsevol component nou que necesiti MLflow ha d'importar `from core.config import MLFLOW_TRACKING_URI`.
 
 ---
 

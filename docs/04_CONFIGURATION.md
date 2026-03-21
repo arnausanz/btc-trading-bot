@@ -429,7 +429,6 @@ Veure `ppo_onchain.yaml` o `ppo_professional.yaml` com a exemples complets.
 | `TELEGRAM_CHAT_ID` | — | Chat ID per a notificacions |
 | `OMP_NUM_THREADS` | 1 | Limita threads OpenMP (evita oversubscription) |
 | `MKL_NUM_THREADS` | 1 | Limita threads MKL |
-| `MLFLOW_TRACKING_URI` | `mlruns/` | On guarda els experiments MLflow |
 
 ---
 
@@ -442,18 +441,6 @@ initial_balance_usdt: 10000.0  # Capital inicial
 fee_rate: 0.001                 # 0.1% per operació (Binance taker fee)
 slippage_rate: 0.0005           # 0.05% d'impacte de mercat simulat (mercat líquid)
 ```
-
----
-
-## MLflow — experiments
-
-Tots els backtests i entrenaments queden registrats a MLflow:
-
-```bash
-mlflow ui   # Obre http://localhost:5000
-```
-
-Cada experiment registra: `model_type`, `params`, `sharpe`, `drawdown`, `win_rate`, `total_return`.
 
 ---
 
