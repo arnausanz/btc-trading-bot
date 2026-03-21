@@ -41,7 +41,11 @@ class Runner:
         """
         schema = self.bot.observation_schema()
         self.builder.load(schema=schema, symbol=symbol)
-        df = self.builder.get_dataframe(symbol=symbol, timeframe=timeframe)
+        # Use the bot's declared primary timeframe (schema.timeframes[0]) as the
+        # iteration axis. This allows bots with non-1h primary TFs (e.g. GateBot 4h)
+        # to be run correctly even when the caller passes a different timeframe.
+        primary_tf = schema.timeframes[0]
+        df = self.builder.get_dataframe(symbol=symbol, timeframe=primary_tf)
 
         # ─── Determine iteration indices ───────────────────────────────────────
         iter_start = schema.lookback

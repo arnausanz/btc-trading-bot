@@ -6,12 +6,14 @@ The bot registry is auto-discovered from config/models/*.yaml — no edits
 needed when adding new models or bots.  Just create the YAML and the Python
 class; they will appear automatically in the CLI choices.
 
+By default, ALL comparable bots are included: classical, ML, and RL (if the
+trained model file exists). Meta-strategies like 'gate' are always excluded
+because they are filters/components, not standalone tradeable strategies.
+
 Usage:
-  python scripts/run_comparison.py                             # all non-RL bots
-  python scripts/run_comparison.py --bots hold trend xgboost  # selection
-  python scripts/run_comparison.py --bots ppo sac             # RL agents
-  python scripts/run_comparison.py --no-rl                    # explicit no-RL
-  python scripts/run_comparison.py --all                      # everything (skips untrainied RL)
+  python scripts/run_comparison.py                             # all comparable bots (classical + ML + RL if trained)
+  python scripts/run_comparison.py --bots hold trend xgboost  # explicit selection
+  python scripts/run_comparison.py --no-rl                    # exclude RL agents
 """
 import argparse
 import importlib
@@ -34,16 +36,23 @@ BOT_CONFIGS = BOT_REGISTRY                                  # alias for compatib
 
 # Derive RL keys from the YAML category field
 _RL_KEYS: set[str] = set()
+_NON_COMPARABLE_KEYS: set[str] = set()   # gate, ensemble, meta-bots, etc.
 for _stem, _path in BOT_REGISTRY.items():
     try:
         with open(_path) as _f:
             _cfg = yaml.safe_load(_f)
-        if _cfg and _cfg.get("category") == "RL":
+        _cat = _cfg.get("category") if _cfg else None
+        if _cat == "RL":
             _RL_KEYS.add(_stem)
+        elif _cat not in ("classic", "ML", None):
+            # gate, ensemble, and any future meta-category are not standalone bots
+            _NON_COMPARABLE_KEYS.add(_stem)
     except Exception:
         pass
 
-DEFAULT_BOTS = [k for k in BOT_REGISTRY if k not in _RL_KEYS]
+# Default: everything comparable — classical, ML, and RL (RL skipped at instantiation
+# time if the model file doesn't exist yet, so this is always safe to run).
+DEFAULT_BOTS = [k for k in BOT_REGISTRY if k not in _NON_COMPARABLE_KEYS]
 
 
 def _instantiate_bot(key: str):
@@ -59,6 +68,13 @@ def _instantiate_bot(key: str):
         cfg = yaml.safe_load(f)
 
     category = cfg.get("category", "classic")
+
+    if category not in ("classic", "ML", "RL", None):
+        logger.warning(
+            f"Bot '{key}' has category='{category}' which is not comparable in walk-forward "
+            f"backtesting — skipping. Use the demo runner for meta-strategies like gate."
+        )
+        return None
 
     if category == "RL":
         model_path = cfg["training"]["model_path"]
@@ -95,18 +111,18 @@ if __name__ == "__main__":
         "--bots", nargs="+", default=None,
         choices=list(BOT_REGISTRY.keys()),
         metavar="BOT",
-        help=f"Bots to compare (default: all except RL). Options: {list(BOT_REGISTRY.keys())}",
+        help=f"Bots to compare (default: all comparable). Options: {list(BOT_REGISTRY.keys())}",
     )
-    parser.add_argument("--no-rl", action="store_true", help="Exclude RL agents")
-    parser.add_argument("--all",   action="store_true", help="Include RL if models exist")
+    parser.add_argument(
+        "--no-rl", action="store_true",
+        help="Exclude RL agents (faster run, no trained model required)",
+    )
     args = parser.parse_args()
 
     if args.bots:
         selected_keys = args.bots
-    elif args.all:
-        selected_keys = list(BOT_REGISTRY.keys())
     elif args.no_rl:
-        selected_keys = [k for k in BOT_REGISTRY if k not in _RL_KEYS]
+        selected_keys = [k for k in DEFAULT_BOTS if k not in _RL_KEYS]
     else:
         selected_keys = DEFAULT_BOTS
 
