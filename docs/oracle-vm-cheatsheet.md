@@ -21,7 +21,7 @@ Per sortir de la VM:
 exit
 ```
 
-> ⚠️ Totes les comandes de les seccions 3, 4 i 5 s'executen **dins de la VM** (un cop connectat per SSH). Les de les seccions 2 i 6 s'executen **al Mac**.
+> ⚠️ Cada secció indica explícitament on s'ha d'executar: **al Mac** o **dins de la VM** (connectat per SSH).
 
 ---
 
@@ -212,7 +212,71 @@ scp -i ~/.ssh/id_ed25519 -r /Users/arnau/Documents/Projectes/btc-trading-bot/mod
 
 ---
 
-## 8. Resolució de problemes habituals
+## 8. Backup automàtic de la base de dades
+
+> ℹ️ La VM fa backups automàtics cada dia a les **3:00 AM** (hora de mínim tràfic de mercat). Cada backup és un fitxer comprimit `.sql.gz` que conté **totes les dades** de totes les taules. Els backups dels últims **7 dies** es conserven automàticament — els més antics s'esborren sols a les 3:15 AM del dia següent. No cal fer res manualment.
+
+### Comprovar que el cron està actiu
+> 📍 Executa **dins de la VM** (qualsevol directori)
+
+```bash
+# Comprova que el servei cron està corrent
+sudo systemctl status cron
+
+# Comprova que les línies del crontab estan configurades
+crontab -l
+```
+
+El `systemctl status cron` ha de mostrar **active (running)**. El `crontab -l` ha de mostrar les dues línies del backup.
+
+### Veure els backups disponibles a la VM
+> 📍 Executa **dins de la VM** (qualsevol directori)
+
+```bash
+ls -lh ~/backup_*.sql.gz
+```
+
+Veuràs els fitxers disponibles amb el seu pes. Exemple:
+```
+-rw-r--r-- backup_20260320_0300.sql.gz   45M
+-rw-r--r-- backup_20260321_0300.sql.gz   46M
+```
+
+### Descarregar tots els backups al Mac
+> 📍 Executa des d'un terminal del **Mac** (NO des de la VM)
+
+```bash
+scp -i ~/.ssh/id_ed25519 ubuntu@79.76.110.205:~/backup_*.sql.gz ~/Downloads/
+```
+
+### Descarregar un backup concret al Mac
+> 📍 Executa des d'un terminal del **Mac** (NO des de la VM)
+
+```bash
+# Substitueix el nom pel fitxer que vulguis
+scp -i ~/.ssh/id_ed25519 ubuntu@79.76.110.205:~/backup_20260321_0300.sql.gz ~/Downloads/
+```
+
+### Fer un backup manual puntual (opcional)
+> 📍 Executa **dins de la VM** (qualsevol directori)
+
+```bash
+docker exec btc_trading_db pg_dump -U btc_user btc_trading | gzip > ~/backup_manual_$(date +%Y%m%d_%H%M).sql.gz
+```
+
+### Restaurar la BD des d'un backup (si cal)
+> 📍 Executa **dins de la VM** (qualsevol directori)
+
+```bash
+# Substitueix el nom del fitxer pel que vulguis restaurar
+gunzip -c ~/backup_20260321_0300.sql.gz | docker exec -i btc_trading_db psql -U btc_user btc_trading
+```
+
+> ⚠️ Això sobreescriu les dades actuals de la BD. Només fer-ho si cal recuperar d'un error.
+
+---
+
+## 9. Resolució de problemes habituals
 
 ### El servei no arrenca (status: exited)
 ```bash
