@@ -107,6 +107,50 @@ class DemoRepository:
             session.close()
 
     # ──────────────────────────────────────────────────────────────────────
+    # Reset operations
+    # ──────────────────────────────────────────────────────────────────────
+
+    def reset_bot_state(self, bot_id: str) -> tuple[int, int]:
+        """
+        Deletes all ticks and trades for a bot. Returns (ticks_deleted, trades_deleted).
+        After this, get_last_state() returns None and the bot starts fresh on next run.
+        """
+        session: Session = SessionLocal()
+        try:
+            ticks  = session.query(DemoTickDB).filter_by(bot_id=bot_id).delete()
+            trades = session.query(DemoTradeDB).filter_by(bot_id=bot_id).delete()
+            session.commit()
+            logger.info(f"Reset {bot_id}: deleted {ticks} ticks, {trades} trades.")
+            return ticks, trades
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error resetting bot {bot_id}: {e}")
+            raise
+        finally:
+            session.close()
+
+    def reset_all_states(self) -> dict[str, tuple[int, int]]:
+        """Deletes all demo ticks and trades for every bot. Returns {bot_id: (ticks, trades)}."""
+        session: Session = SessionLocal()
+        try:
+            # Get all distinct bot_ids before deleting
+            bot_ids = [r[0] for r in session.query(DemoTickDB.bot_id).distinct().all()]
+            results = {}
+            for bot_id in bot_ids:
+                ticks  = session.query(DemoTickDB).filter_by(bot_id=bot_id).delete()
+                trades = session.query(DemoTradeDB).filter_by(bot_id=bot_id).delete()
+                results[bot_id] = (ticks, trades)
+            session.commit()
+            logger.info(f"Full reset: {results}")
+            return results
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error in full reset: {e}")
+            raise
+        finally:
+            session.close()
+
+    # ──────────────────────────────────────────────────────────────────────
     # Read operations — trades
     # ──────────────────────────────────────────────────────────────────────
 

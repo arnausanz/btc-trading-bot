@@ -165,11 +165,12 @@ class TelegramNotifier:
         self._get_health_fn         = None   # () -> dict
 
         # Injected control functions
-        self._pause_fn   = None   # (bot_id: str) -> None
-        self._resume_fn  = None   # (bot_id: str) -> None
-        self._close_fn   = None   # (bot_id: str) -> None
-        self._restart_fn = None   # () -> None
-        self._is_paused_fn = None # (bot_id: str) -> bool
+        self._pause_fn     = None   # (bot_id: str) -> None
+        self._resume_fn    = None   # (bot_id: str) -> None
+        self._close_fn     = None   # (bot_id: str) -> None
+        self._restart_fn   = None   # () -> None
+        self._is_paused_fn = None   # (bot_id: str) -> bool
+        self._reset_fn     = None   # (bot_id: str | None) -> dict  — None means all bots
 
     # ── injection ──────────────────────────────────────────────────────────
 
@@ -182,6 +183,7 @@ class TelegramNotifier:
     def set_close_fn(self, fn):           self._close_fn = fn
     def set_restart_fn(self, fn):         self._restart_fn = fn
     def set_is_paused_fn(self, fn):       self._is_paused_fn = fn
+    def set_reset_fn(self, fn):           self._reset_fn = fn
 
     # ── low-level Telegram API ─────────────────────────────────────────────
 
@@ -786,6 +788,33 @@ class TelegramNotifier:
             chat_id=chat_id,
         )
 
+    def _handle_reset_command(self, chat_id: str, bot_id: str | None) -> None:
+        """Show what will be deleted and ask for confirmation."""
+        status = self._get_status_fn() if self._get_status_fn else {}
+        if bot_id and bot_id not in status:
+            self.send(f"⚠️ Bot <code>{bot_id}</code> no trobat.\nBots actius: {list(status.keys())}", chat_id=chat_id)
+            return
+
+        targets = [bot_id] if bot_id else list(status.keys())
+        lines = []
+        for bid in targets:
+            hist = (self._get_all_histories_fn() or {}).get(bid, [])
+            trades = [t for t in (self._get_trades_fn() or []) if t.get("bot_id") == bid]
+            lines.append(f"  • <b>{bid}</b>: {len(hist)} ticks, {len(trades)} trades")
+
+        scope = f"<b>{bot_id}</b>" if bot_id else "<b>TOTS els bots</b>"
+        cb    = f"confirm_reset:{bot_id}" if bot_id else "confirm_reset_all"
+        self._send_with_keyboard(
+            f"🗑 Reiniciar capital de {scope}?\n\n"
+            f"S'esborrarà tot l'historial:\n" + "\n".join(lines) + "\n\n"
+            f"El runner es reiniciarà i tots els bots afectats tornaran a 10.000 USDT.",
+            [[
+                {"text": "✅ Confirmar", "callback_data": cb},
+                {"text": "❌ Cancel·lar", "callback_data": "cancel_action"},
+            ]],
+            chat_id=chat_id,
+        )
+
     def _handle_restart_command(self, chat_id: str) -> None:
         self._send_with_keyboard(
             "🔄 Reiniciar el demo runner?\n\n"
@@ -831,6 +860,10 @@ class TelegramNotifier:
                     self._handle_close_command(chat_id, arg)
             elif cmd == "/restart":
                 self._handle_restart_command(chat_id)
+            elif cmd == "/reset":
+                # /reset          → reset all bots
+                # /reset xgboost  → reset single bot
+                self._handle_reset_command(chat_id, arg if arg else None)
             elif cmd == "/help":
                 self.send(
                     "📖 <b>Comandes disponibles</b>\n\n"
@@ -844,7 +877,8 @@ class TelegramNotifier:
                     "/pause &lt;bot&gt;   — pausar un bot (manté posicions)\n"
                     "/resume &lt;bot&gt;  — reprendre un bot pausat\n"
                     "/close &lt;bot&gt;   — vendre tota la posició ara\n"
-                    "/restart      — reiniciar el runner (estat conservat)\n\n"
+                    "/restart      — reiniciar el runner (estat conservat)\n"
+                    "/reset [bot]  — tornar al capital inicial (esborra historial)\n\n"
                     "/help        — aquest missatge"
                 )
             else:
@@ -926,6 +960,25 @@ class TelegramNotifier:
                             logger.info("Confirm restart")
                             self.send("🔄 Reiniciant el runner... Torna en uns segons.", chat_id=cb_chat_id)
                             time.sleep(1)  # Allow message to arrive before process dies
+                            if self._restart_fn:
+                                self._restart_fn()
+
+                        elif cb_data.startswith("confirm_reset:"):
+                            bot_id = cb_data[len("confirm_reset:"):]
+                            logger.info(f"Confirm reset: {bot_id}")
+                            if self._reset_fn:
+                                self._reset_fn(bot_id)
+                            self.send(f"🗑 <b>{bot_id}</b> reiniciat a 10.000 USDT. Reiniciant runner...", chat_id=cb_chat_id)
+                            time.sleep(1)
+                            if self._restart_fn:
+                                self._restart_fn()
+
+                        elif cb_data == "confirm_reset_all":
+                            logger.info("Confirm reset ALL bots")
+                            if self._reset_fn:
+                                self._reset_fn(None)
+                            self.send("🗑 Tots els bots reiniciats a 10.000 USDT. Reiniciant runner...", chat_id=cb_chat_id)
+                            time.sleep(1)
                             if self._restart_fn:
                                 self._restart_fn()
 

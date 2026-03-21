@@ -144,6 +144,7 @@ class DemoRunner:
             self.notifier.set_close_fn(self.close_bot)
             self.notifier.set_restart_fn(self.restart)
             self.notifier.set_is_paused_fn(self.is_paused)
+            self.notifier.set_reset_fn(self.reset_demo)
             self.notifier.start_listener()
 
     # ──────────────────────────────────────────────────────────────────────
@@ -212,6 +213,19 @@ class DemoRunner:
         with self._control_lock:
             self._force_close_bots.add(bot_id)
         logger.info(f"[{bot_id}] Force close queued via Telegram.")
+
+    def reset_demo(self, bot_id: str | None) -> None:
+        """
+        Deletes all ticks and trades for one or all bots so the next run starts
+        fresh with initial capital. bot_id=None resets all bots.
+        The caller (Telegram) is responsible for triggering restart() afterwards.
+        """
+        if bot_id:
+            self.repo.reset_bot_state(bot_id)
+            logger.info(f"[{bot_id}] State reset via Telegram.")
+        else:
+            self.repo.reset_all_states()
+            logger.info("All bot states reset via Telegram.")
 
     def restart(self) -> None:
         """Re-execute this process. State is preserved in DB."""
