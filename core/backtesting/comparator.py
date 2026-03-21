@@ -56,7 +56,6 @@ class BotComparator:
                     end_date=self.train_until,
                     desc="train",
                 )
-                train_summary = train_metrics.summary()
 
                 # ─── TESTING ──────────────────────────────────────────────────
                 engine_test = BacktestEngine(
@@ -68,7 +67,22 @@ class BotComparator:
                     start_date=self.test_from,
                     desc="test",
                 )
-                test_summary = test_metrics.summary()
+
+                # Skip bots with no data in either period (e.g. date range mismatch)
+                if train_metrics.is_empty and test_metrics.is_empty:
+                    tqdm.write(
+                        f"  ⚠ {bot.bot_id:<20} SKIPPED — no data in train or test period."
+                        f" Check TRAIN_UNTIL/TEST_FROM vs bot's available data range."
+                    )
+                    continue
+
+                train_summary = train_metrics.summary()
+                test_summary  = test_metrics.summary()
+
+                if train_metrics.is_empty:
+                    tqdm.write(f"  ⚠ {bot.bot_id}: no data in TRAIN period — metrics are zero.")
+                if test_metrics.is_empty:
+                    tqdm.write(f"  ⚠ {bot.bot_id}: no data in TEST period — metrics are zero.")
 
                 results.append({
                     "bot_id": bot.bot_id,
@@ -88,6 +102,8 @@ class BotComparator:
         return results
 
     def _count_trades(self, metrics: BacktestMetrics) -> dict:
+        if metrics.is_empty or "signal" not in metrics.df.columns:
+            return {"buy": 0, "sell": 0, "hold": 0}
         signals = metrics.df["signal"].astype(str)
         return {
             "buy":  int(signals.str.contains("buy").sum()),

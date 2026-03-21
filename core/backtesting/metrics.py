@@ -31,13 +31,16 @@ class BacktestMetrics:
     """
 
     def __init__(self, history: list[dict], initial_capital: float, timeframe: str = "1h"):
-        self.df = pd.DataFrame(history)
+        self.df = pd.DataFrame(history) if history else pd.DataFrame()
         self.initial_capital = initial_capital
         self.timeframe = timeframe
         self._periods_per_year = _PERIODS_PER_YEAR.get(timeframe, 365 * 24)
+        self.is_empty = self.df.empty or "portfolio_value" not in self.df.columns
 
     def total_return(self) -> float:
         """Total return in percentage."""
+        if self.is_empty:
+            return 0.0
         final = self.df["portfolio_value"].iloc[-1]
         return (final - self.initial_capital) / self.initial_capital * 100
 
@@ -51,6 +54,8 @@ class BacktestMetrics:
 
         >1 is acceptable, >2 is good, >3 is excellent.
         """
+        if self.is_empty:
+            return 0.0
         returns = self.df["portfolio_value"].pct_change().dropna()
         if returns.std() == 0:
             return 0.0
@@ -63,6 +68,8 @@ class BacktestMetrics:
         Maximum drawdown from a peak to a subsequent trough.
         In percentage. The smaller (more negative) the worse.
         """
+        if self.is_empty:
+            return 0.0
         values = self.df["portfolio_value"]
         peak = values.cummax()
         drawdown = (values - peak) / peak * 100
@@ -74,6 +81,8 @@ class BacktestMetrics:
         Uses timestamps from history if available.
         Fallback: estimates days from number of ticks and timeframe.
         """
+        if self.is_empty:
+            return 0.0
         if "timestamp" in self.df.columns and len(self.df) >= 2:
             try:
                 t0 = pd.Timestamp(self.df["timestamp"].iloc[0])
@@ -107,7 +116,7 @@ class BacktestMetrics:
         Does not count open positions without closure.
         Returns 0.0 if no signals or no closed trades exist.
         """
-        if "signal" not in self.df.columns:
+        if self.is_empty or "signal" not in self.df.columns:
             return 0.0
 
         trades_won = 0
@@ -132,13 +141,19 @@ class BacktestMetrics:
 
     def summary(self) -> dict:
         """Returns all metrics in a single dictionary."""
+        final_capital = (
+            round(self.df["portfolio_value"].iloc[-1], 2)
+            if not self.is_empty
+            else self.initial_capital
+        )
         return {
             "total_return_pct": round(self.total_return(), 2),
-            "sharpe_ratio": round(self.sharpe_ratio(), 3),
+            "sharpe_ratio":     round(self.sharpe_ratio(), 3),
             "max_drawdown_pct": round(self.max_drawdown(), 2),
-            "calmar_ratio": round(self.calmar_ratio(), 3),
-            "win_rate_pct": round(self.win_rate(), 2),
-            "initial_capital": self.initial_capital,
-            "final_capital": round(self.df["portfolio_value"].iloc[-1], 2),
-            "total_ticks": len(self.df),
+            "calmar_ratio":     round(self.calmar_ratio(), 3),
+            "win_rate_pct":     round(self.win_rate(), 2),
+            "initial_capital":  self.initial_capital,
+            "final_capital":    final_capital,
+            "total_ticks":      len(self.df),
+            "no_data":          self.is_empty,   # flag so comparator can warn
         }
