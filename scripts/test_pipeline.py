@@ -7,7 +7,6 @@ Runs 1 Optuna trial + 1 minimal training pass for every ML model and RL agent.
 Saves NOTHING permanently to disk:
   - No .pkl / .pt / .zip model files written to models/
   - No best_params written back to config YAMLs
-  - MLflow is redirected to a temporary directory (auto-cleaned on exit)
 
 Use this script to confirm that data reading, feature building, optimization
 and training all work correctly before running a full optimize + train cycle.

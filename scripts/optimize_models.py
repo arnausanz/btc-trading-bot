@@ -35,7 +35,6 @@ logger = logging.getLogger(__name__)
 # Suppress noisy training logs during optimization
 logging.getLogger("bots.ml").setLevel(logging.WARNING)
 logging.getLogger("bots.rl").setLevel(logging.WARNING)
-logging.getLogger("mlflow").setLevel(logging.WARNING)
 logging.getLogger("lightgbm").setLevel(logging.WARNING)
 logging.getLogger("catboost").setLevel(logging.WARNING)
 
