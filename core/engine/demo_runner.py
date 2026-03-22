@@ -122,9 +122,13 @@ class DemoRunner:
         # All existing bots use "1h" → bucket = epoch // 3600 (identical to before).
         self._last_candle_bucket:    dict[str, int]              = {}
         self._last_trade_time:       dict[str, datetime | None]  = {}  # inactivity tracking
-        # Data update tracking: run once per hour, before any bot processes new candle.
-        # -1 forces an update on the very first tick.
+        # Data update tracking: run once per data_update_interval, before any bot
+        # processes new candle. -1 forces an update on the very first tick.
         self._last_data_update_bucket: int = -1
+        # Wall-clock time of the last successful _update_data() call.
+        # Shown in /health so users can distinguish "fetcher ran recently but last
+        # closed candle is old by design" from "fetcher hasn't run in hours".
+        self._last_update_ran_at: datetime | None = None
         self._inactivity_alerted:    dict[str, bool]             = {}  # avoid repeat alerts
         self._last_data_stale_alert: datetime | None             = None  # avoid spam
 
@@ -295,6 +299,7 @@ class DemoRunner:
         except Exception as e:
             logger.warning(f"Fear & Greed update failed: {e}")
 
+        self._last_update_ran_at = datetime.now(timezone.utc)
         logger.info("Data update complete.")
 
     # ──────────────────────────────────────────────────────────────────────
@@ -519,12 +524,22 @@ class DemoRunner:
         """Assembles health info for /health command."""
         import time as _time
 
+        now = datetime.now(timezone.utc)
+
         # DB ping
         db_ok = self.repo.ping_db()
 
-        # Last OHLCV candle timestamp
+        # Last OHLCV candle stored (open-time of the most recent row in DB).
         last_candle = self.repo.get_candle_last_update(
             symbol=self.symbol, timeframe=self.timeframe
+        )
+
+        # Expected last closed candle: the one that OPENED one period ago.
+        # e.g. at 19:35 UTC with 1h candles → expected open = 18:00 UTC.
+        tf_secs = _TF_SECONDS.get(self.timeframe, 3600)
+        expected_candle_open = datetime.fromtimestamp(
+            (int(now.timestamp()) // tf_secs) * tf_secs - tf_secs,
+            tz=timezone.utc,
         )
 
         # Fear & Greed
@@ -555,11 +570,13 @@ class DemoRunner:
         next_check_min = round(ticks_to_next * self.update_interval / 60)
 
         return {
-            "db_ok":              db_ok,
-            "last_candle_ts":     last_candle,
-            "fear_greed":         fg,
-            "binance_latency_ms": binance_ms,
-            "next_check_minutes": next_check_min,
+            "db_ok":               db_ok,
+            "last_candle_ts":      last_candle,           # open-time of last stored candle
+            "expected_candle_ts":  expected_candle_open,  # open-time of candle we should have
+            "last_data_update_ts": self._last_update_ran_at,  # when _update_data() last ran
+            "fear_greed":          fg,
+            "binance_latency_ms":  binance_ms,
+            "next_check_minutes":  next_check_min,
         }
 
     # ──────────────────────────────────────────────────────────────────────
@@ -623,7 +640,16 @@ class DemoRunner:
                     )
 
     def _check_data_stale_alert(self, now: datetime) -> None:
-        """Sends a push alert if OHLCV candles are too old."""
+        """
+        Sends a push alert if the last stored OHLCV candle is older than expected.
+
+        The correct check is NOT a raw age comparison (the last candle open-time is
+        always 60-120 min old by design for 1h data). Instead, we compare the last
+        stored candle against the *expected* last closed candle:
+          expected = floor(now, tf_secs) - tf_secs
+        If we're missing >= 2 candles (i.e. data is more than one full period behind
+        the expected), something is genuinely wrong.
+        """
         if not self.notifier:
             return
         # Only alert once per hour to avoid spam
@@ -634,9 +660,16 @@ class DemoRunner:
             symbol=self.symbol, timeframe=self.timeframe
         )
         if last_candle:
-            age_min = (now - last_candle).total_seconds() / 60
-            if age_min > self._data_stale_min:
-                self.notifier.notify_data_stale("OHLCV", age_min)
+            tf_secs = _TF_SECONDS.get(self.timeframe, 3600)
+            expected_open = datetime.fromtimestamp(
+                (int(now.timestamp()) // tf_secs) * tf_secs - tf_secs,
+                tz=timezone.utc,
+            )
+            # Stale = missing 2+ candles (one period of tolerance for update lag)
+            periods_behind = (expected_open - last_candle).total_seconds() / tf_secs
+            if periods_behind >= 2:
+                lag_min = (now - last_candle).total_seconds() / 60
+                self.notifier.notify_data_stale("OHLCV", lag_min)
                 self._last_data_stale_alert = now
 
     # ──────────────────────────────────────────────────────────────────────
