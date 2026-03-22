@@ -93,6 +93,11 @@ class DemoRunner:
         self.symbol          = self.config["demo"]["symbol"]
         self.timeframe       = self.config["demo"]["timeframe"]
         self.update_interval = self.config["demo"]["update_interval_seconds"]
+        # How often to pull new data from external sources (OHLCV, futures, F&G).
+        # Default: 1800s (30 min) → 2 updates per 1h candle, never miss a close by more than 30m.
+        self._data_update_interval = int(
+            self.config["demo"].get("data_update_interval_seconds", 1800)
+        )
 
         # Alert thresholds from config (with sensible defaults)
         tg_cfg = self.config.get("telegram", {})
@@ -655,11 +660,13 @@ class DemoRunner:
                 # bottom so every cycle is *exactly* update_interval seconds.
                 _t0 = time.monotonic()
 
-                # ── Data update (once per hour, before any bot calculates) ──
-                current_hour_bucket = int(datetime.now(timezone.utc).timestamp()) // 3600
-                if current_hour_bucket != self._last_data_update_bucket:
+                # ── Data update (every data_update_interval_seconds, default 30m) ──
+                current_data_bucket = (
+                    int(datetime.now(timezone.utc).timestamp()) // self._data_update_interval
+                )
+                if current_data_bucket != self._last_data_update_bucket:
                     self._update_data()
-                    self._last_data_update_bucket = current_hour_bucket
+                    self._last_data_update_bucket = current_data_bucket
 
                 current_price = self._fetch_latest_price()
                 logger.info(f"Current BTC price: {current_price:.2f} USDT")
