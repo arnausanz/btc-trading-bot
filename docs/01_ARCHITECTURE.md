@@ -60,6 +60,13 @@ Plataforma de **paper trading** algorísmic per a BTC/USDT. Tres famílies d'est
 │  PostgreSQL (candles OHLCV + features calculades)        │
 │  ExternalLoader (Fear&Greed, funding rate, on-chain)     │
 └──────────────────────────────────────────────────────────┘
+
+> **Nota sobre `merge_asof(direction='backward')`:** El `FeatureBuilder` alinea les fonts
+> externes (Fear&Greed, funding rates, on-chain) amb les candles via
+> `pd.merge_asof(direction='backward')`. Això significa que cada candle rep el valor
+> **més recent del passat** de la font externa (backward-fill). No introdueix lookahead
+> bias perquè sempre s'usa informació passada. Si la font externa no té dades recents,
+> l'últim valor conegut es propaga endavant fins al primer nou registre.
 ```
 
 ---

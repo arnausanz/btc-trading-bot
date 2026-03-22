@@ -1087,6 +1087,22 @@ class TelegramNotifier:
             f"Portfolio: <b>{portfolio_value:,.2f} €</b> ({bot_ret:+.1f}%)"
         )
 
+    def notify_circuit_breaker(
+        self,
+        bot_id: str,
+        drawdown_pct: float,
+        threshold_pct: float,
+        portfolio_value: float,
+    ) -> None:
+        bot_ret = _bot_return_pct(portfolio_value)
+        self.send(
+            f"🔴 <b>CIRCUIT BREAKER ACTIVAT</b>\n"
+            f"Bot: <b>{bot_id}</b> — AUTO-PAUSAT\n"
+            f"Drawdown: <b>{drawdown_pct:.1f}%</b> (llindar: {threshold_pct:.1f}%)\n"
+            f"Portfolio: <b>{portfolio_value:,.2f} €</b> ({bot_ret:+.1f}%)\n"
+            f"Repren manualment: /resume {bot_id}"
+        )
+
     def notify_data_stale(self, source: str, age_minutes: float) -> None:
         self.send(
             f"⚠️ <b>DADES OBSOLETES</b>\n"

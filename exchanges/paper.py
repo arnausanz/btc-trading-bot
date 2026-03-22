@@ -29,6 +29,8 @@ class PaperExchange(BaseExchange):
         self._current_price = price
 
     def get_candles(self, symbol: str, timeframe: str, limit: int = 500) -> list:
+        # Stub — part of the BaseExchange contract but not used in paper trading.
+        # Candles are loaded directly from the DB via ObservationBuilder.
         return []
 
     def send_order(self, signal: Signal) -> Order:

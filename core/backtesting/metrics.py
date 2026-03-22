@@ -53,6 +53,9 @@ class BacktestMetrics:
         For daily data  (1d): sqrt(365)
 
         >1 is acceptable, >2 is good, >3 is excellent.
+
+        Returns 0.0 when std == 0 (e.g. a strategy that never trades and holds
+        only USDT — constant portfolio value → zero return volatility).
         """
         if self.is_empty:
             return 0.0
@@ -115,21 +118,25 @@ class BacktestMetrics:
         Actual Win Rate: percentage of closed round-trips (buy→sell) with profit.
         Does not count open positions without closure.
         Returns 0.0 if no signals or no closed trades exist.
+
+        Uses numpy arrays instead of iterrows() to avoid O(n) pandas overhead
+        on histories with tens of thousands of ticks.
         """
         if self.is_empty or "signal" not in self.df.columns:
             return 0.0
 
-        trades_won = 0
+        # Extract as numpy arrays — much faster than iterrows() for large histories.
+        signals    = self.df["signal"].astype(str).str.lower().to_numpy()
+        portfolios = self.df["portfolio_value"].to_numpy()
+
+        trades_won   = 0
         trades_total = 0
-        entry_value = None
+        entry_value  = None
 
-        for _, row in self.df.iterrows():
-            signal_str = str(row.get("signal", "")).lower()
-            portfolio = row["portfolio_value"]
-
-            if "buy" in signal_str and entry_value is None:
+        for sig, portfolio in zip(signals, portfolios):
+            if "buy" in sig and entry_value is None:
                 entry_value = portfolio
-            elif "sell" in signal_str and entry_value is not None:
+            elif "sell" in sig and entry_value is not None:
                 trades_total += 1
                 if portfolio > entry_value:
                     trades_won += 1

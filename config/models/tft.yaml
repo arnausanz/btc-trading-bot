@@ -1,3 +1,10 @@
+# STATUS: pending_review — TFT has NOT been optimized or trained due to extreme
+# computational cost (estimated 8-16h optimization + 8-16h training, ~8GB RAM).
+# It will be discarded if GRU/PatchTST provide sufficient performance in the
+# walk-forward comparison. See docs/03_ML_RL_MODELS.md §4.3.
+# To enable: run optimize_models.py --model tft, then train_models.py --model tft.
+status: pending_review
+
 best_params:
   d_model: 128
   dropout: 0.12510442047695985

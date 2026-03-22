@@ -11,6 +11,10 @@ class Base(DeclarativeBase):
 
 class CandleDB(Base):
     __tablename__ = "candles"
+    __table_args__ = (
+        UniqueConstraint("exchange", "symbol", "timeframe", "timestamp",
+                         name="uq_candles_exchange_symbol_tf_ts"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     exchange: Mapped[str] = mapped_column(String(50), nullable=False)

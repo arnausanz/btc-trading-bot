@@ -1,57 +1,54 @@
 # Roadmap — Camí a la Demo 24/7
 
 > **Regla d'or:** cap bot va a demo fins que en backtest out-of-sample superi HoldBot en Sharpe i Calmar.
+>
+> **Versió 7.0 — Març 2026** (reescrit post-auditoria — eliminades seccions completades D i K)
 
 ---
 
 ## Estat del sistema
 
-| Component | Estat | Notes |
-|-----------|-------|-------|
-| Classical bots (6) | ✅ | Trend, DCA, Grid, Hold, MeanReversion, Momentum |
-| ML models (6+1) | ⚠️ Parcial | RF, XGB, LGBM, CB, GRU, PatchTST ✅ · TFT ⏳ Pendent (possiblement descartat) |
-| RL agents — baseline | ⚠️ No comparable | PPO, SAC (1H) · exclosos del backtest per manca de dades on-chain hist. |
-| RL agents — on-chain | ⚠️ No comparable | PPO + SAC on-chain · `comparable: false` · exclosos del walk-forward |
-| RL agents — professional | ✅ | PPO + SAC (12H, ATR stop, position state, reward professional) |
-| RL agents — TD3 | ✅ | td3_professional (12H) + td3_multiframe (12H+4H) |
-| Dades externes | ✅ | Fear&Greed, funding rates, open interest, blockchain |
-| Optimize workflow | ✅ | Optuna + best_params in-place al YAML base |
-| BacktestEngine | ✅ | Walk-forward, mètriques Sharpe/Calmar — bots `comparable: false` exclosos auto. |
-| DemoRunner | ✅ | Persistència + Telegram + actualització de dades integrada (1/hora) |
-| **EnsembleBot v1** | ✅ | majority_vote — `bots/classical/ensemble_bot.py` · `comparable: false` (meta-bot) |
-| **State restore** | ✅ | Portfolio + _in_position restaurats des de BD al reinici |
-| **Gate System v1** | ✅ | 5 portes seqüencials, HMM+XGBoost, swing trading 4H+1D |
-| **Migració servidor** | ✅ | Oracle Cloud Free Tier — systemd + cron actius |
-| Documentació | ✅ | PROJECT, MODELS, EXTENDING, CONFIG, DATABASE, DECISIONS + Gate |
+Tot el sistema base està implementat i operatiu al servidor Oracle Cloud. L'únic pendent per iniciar la demo és completar el camí crític A→B→E i resoldre el deute tècnic DT1.
+
+---
+
+## Deute Tècnic — Resoldre ABANS de la demo
+
+| # | Problema | Fitxer | Prioritat |
+|---|---------|--------|----------|
+| **DT1** | `CandleDB` sense `UniqueConstraint` — duplicats silenciosos possibles | `core/db/models.py:12` | 🔴 CRÍTIC |
+| DT2 | N+1 queries a `OHLCVFetcher._save()` — molt lent per descàrregues grans | `data/sources/ohlcv.py:93` | 🟠 Alta |
+| DT3 | Sense validació `obs_shape` al carregar model RL — crash silent en runtime | `bots/rl/rl_bot.py:60` | 🟠 Alta |
+| DT4 | `win_rate()` usa `iterrows()` — O(n) Python loop, lent amb molts ticks | `core/backtesting/metrics.py:126` | 🟡 Mitjana |
+| DT5 | ATR fallback a `ATR_REFERENCE` sense log warning | `bots/rl/environment_professional.py:158` | 🟡 Mitjana |
+
+**Fix DT1 (concret):**
+```bash
+alembic revision -m "add_unique_constraint_candles"
+# Dins la migració upgrade():
+# 1. Eliminar duplicats: DELETE FROM candles WHERE id NOT IN (SELECT MIN(id) FROM candles GROUP BY exchange, symbol, timeframe, timestamp)
+# 2. CREATE UNIQUE INDEX uq_candles ON candles (exchange, symbol, timeframe, timestamp)
+```
 
 ---
 
 ## Camí crític cap a la demo
 
 ```
-[✅]   EnsembleBot v1 implementat (majority vote)
-[✅]   State persistence (portfolio + posició restaurada des de BD)
-[✅]   Gate System v1 implementat (5 portes, HMM+XGBoost, swing 4H+1D)
-[✅]   Optimització Optuna de tots els models completada
-[✅]   Migració a servidor 24/7 (Oracle Cloud — systemd + cron)
+[DT1] Fix CandleDB UniqueConstraint + migració Alembic
+          ↓
 [ara]  Comparativa walk-forward + selecció de sub-bots per EnsembleBot
           ↓
 [A]    Entrenar tots els models amb hiperparàmetres òptims
-          (pendent del resultat de la comparativa — TFT podria descartar-se)
+          (pendent del resultat de la comparativa — TFT possiblement descartat)
           + entrenar Gate System: alembic upgrade head + train_gate_regime.py
           ↓
 [B]    Backtest EnsembleBot — ha de superar HoldBot
+          (Sharpe > 1.0, Drawdown màx. < -25%, Calmar > 0.5 en test out-of-sample)
           ↓
 [E]    🚀 Iniciar demo — 3-6 mesos de paper trading
-          (commit + python scripts/run_demo.py)
+          (commit + python scripts/run_demo.py al servidor)
 ```
-
-Les tasques G–J es fan **en paral·lel** mentre la demo corre. No bloquegen l'inici.
-La tasca K **no cal**: el servidor té una BD nova i neta.
-
----
-
-## Tasques pendents
 
 ---
 
@@ -59,43 +56,34 @@ La tasca K **no cal**: el servidor té una BD nova i neta.
 
 L'optimització Optuna ja s'ha completat. Abans d'entrenar cal revisar els resultats de la comparativa walk-forward per decidir quins models val la pena reentrenar.
 
-> ⚠️ **TFT (Temporal Fusion Transformer):** El TFT NO ha estat optimitzat ni entrenat per la seva càrrega computacional extrema (estimació: 8-16h d'optimització + 8-16h d'entrenament, ~8 GB de RAM). Es valorarà descartar-lo definitivament un cop la comparativa indiqui si GRU/PatchTST ja ofereixen prou rendiment. Veure `docs/03_ML_RL_MODELS.md §4.3`.
+> ⚠️ **TFT:** No optimitzat ni entrenat per càrrega computacional extrema (~8-16h). Es valorarà descartar-lo si GRU/PatchTST ofereixen prou rendiment.
 
-**Recomanació de steps per a entrenament RL:**
+**Steps recomanats per a entrenament RL:**
 
 | Agent | Steps recomanats | Justificació |
 |-------|-----------------|-------------|
-| PPO / SAC baseline (1H) | **1M–1.5M** | ~35k candles training → 500k = 14 passes; 1M = 28 passes, punt òptim |
-| PPO / SAC on-chain (1H) | **1M–1.5M** | Igual que baseline; les features addicionals necessiten més training |
-| PPO / SAC professional (12H) | **500k** | ~1.2k candles → ja 420 passes amb 500k; augmentar seria overfitting |
+| PPO / SAC baseline (1H) | **1M–1.5M** | ~35k candles training → 1M = 28 passes |
+| PPO / SAC on-chain (1H) | **1M–1.5M** | Features addicionals necessiten més training |
+| PPO / SAC professional (12H) | **500k** | ~1.2k candles → 420 passes; augmentar seria overfitting |
 | TD3 professional / multiframe (12H) | **500k** | Igual que professional |
 
 ```bash
-# Entrenar tot d'una (un cop l'Optuna hagi acabat)
 python scripts/train_models.py          # tots els ML
-python scripts/train_rl.py              # tots els RL (modifica total_timesteps als YAMLs primer)
-
-# Gate System (pipeline propi, no usa train_models.py)
-alembic upgrade head                    # crea gate_positions + gate_near_misses a la BD
-python scripts/train_gate_regime.py     # HMM K=2..6 BIC + XGBoost Optuna → models/gate_*.pkl
+python scripts/train_rl.py              # tots els RL
+alembic upgrade head                    # crea gate_positions + gate_near_misses
+python scripts/train_gate_regime.py     # HMM + XGBoost → models/gate_*.pkl
 ```
 
 ---
 
 ### B — Backtest EnsembleBot (validació pre-demo)
 
-EnsembleBot v1 ja implementat (`bots/classical/ensemble_bot.py`, política `majority_vote`).
-
-Abans d'activar-lo a la demo, cal confirmar que supera HoldBot en backtest out-of-sample:
-
 ```bash
 python scripts/run_comparison.py --bots hold trend mean_reversion momentum \
     ml_xgb ml_lgbm ml_rf rl_ppo rl_sac ensemble
 ```
 
-Criteri mínim d'entrada a la demo: **Sharpe > 1.0 i Drawdown màx. < -25%** en backtest out-of-sample.
-
-**Quins bots entren a l'ensemble:** edita `config/models/ensemble.yaml` (secció `sub_bots`). Descomenta els que hagin superat el criteri. Reinicia el DemoRunner per aplicar el canvi.
+Edita `config/models/ensemble.yaml` (`sub_bots`) per activar els que hagin superat el criteri.
 
 **Polítiques futures (mentre la demo corre):**
 
@@ -106,31 +94,7 @@ Criteri mínim d'entrada a la demo: **Sharpe > 1.0 i Drawdown màx. < -25%** en 
 
 ---
 
-### D — Migrar a servidor 24/7 ✅ COMPLETAT
-
-**Oracle Cloud Free Tier** — 4 vCPU ARM · 24 GB RAM · 200 GB SSD.
-
-**Infraestructura activa al servidor:**
-```bash
-# Cron jobs (dades externes — les candles les actualitza el DemoRunner internament)
-0 8 * * *   python scripts/download_fear_greed.py  # F&G diari
-0 */4 * * * python scripts/update_futures.py       # funding rate
-0 6 * * *   python scripts/update_blockchain.py    # on-chain diari
-0 3 * * *   pg_dump btc_trading | gzip > /backups/btc_$(date +%Y%m%d).sql.gz
-
-# Servei systemd (restart automàtic)
-/etc/systemd/system/btc-demo.service → python scripts/run_demo.py
-```
-
-> **Nota:** Les candles OHLCV (update_data.py) **no necessiten cron** perquè el DemoRunner les actualitza internament cada hora via `_update_data()`. Veure `docs/07_OPERATIONS.md §Cron jobs` per als detalls.
-
-Consultar el **cheatsheet de la VM** (`docs/oracle-vm-cheatsheet.md`) per a les comandes habituals de manteniment.
-
----
-
 ### E — Inici de la demo
-
-Un cop [A] i [B] completats (migració ja feta):
 
 ```bash
 git add . && git commit -m "feat: ensemble bot + optimal models"
@@ -139,7 +103,7 @@ git push
 git pull && python scripts/run_demo.py
 ```
 
-**Objectiu:** mínim **3-6 mesos** de paper trading en temps real, tots els bots que hagin superat el criteri de backtest actius simultàniament, registre complet a la BD.
+**Objectiu:** mínim **3-6 mesos** de paper trading en temps real.
 
 ---
 
@@ -152,6 +116,8 @@ git pull && python scripts/run_demo.py
 - Rànquing setmanal
 - Comandes interactives: `/status`, `/portfolio`, `/ranking`
 
+---
+
 ### H — Dashboard Streamlit complet
 
 Quan hi hagi mesos de dades reals:
@@ -162,32 +128,22 @@ Quan hi hagi mesos de dades reals:
 
 ---
 
-## Nous models i millores futures
-
 ### I — Nous models de ML/RL
 
 | Model | Tipus | Prioritat | Notes |
 |-------|-------|-----------|-------|
-| EnsembleBot weighted | Meta | 🟢 **Alta** | Pes proporcional al Sharpe dels últims N dies — fàcil un cop la demo té dades |
-| Gate System v2 | Gate | 🟢 **Alta** | Afegir shorts + news sentiment en P2 + exchange_netflow; un cop v1 valida el concepte |
-| N-BEATS / N-HiTS | Deep Learning | 🟡 Mitjana | Arquitectures purament de forecasting, eficients sense RNN; sovint superen GRU |
-| TabNet | Tabular | 🟡 Mitjana | Competitiu amb XGBoost, attention-based interpretatiu — bon reemplaçament o complement |
-| BreakoutBot | Clàssic | 🟡 Mitjana | Pivot points + ATR per confirmar ruptures; complement natural a TrendBot |
-| DreamerV3 | RL model-based | 🔴 Baixa | World model (RSSM) — projecte de recerca independent, massa complex per ara |
+| EnsembleBot weighted | Meta | 🟢 **Alta** | Pes proporcional al Sharpe dels últims N dies |
+| Gate System v2 | Gate | 🟢 **Alta** | Shorts + news sentiment en P2 + exchange_netflow |
+| N-BEATS / N-HiTS | Deep Learning | 🟡 Mitjana | Forecasting pur, eficient, sovint supera GRU |
+| TabNet | Tabular | 🟡 Mitjana | Attention-based, bon complement a XGBoost |
+| BreakoutBot | Clàssic | 🟡 Mitjana | Pivot points + ATR per confirmar ruptures |
+| DreamerV3 | RL model-based | 🔴 Baixa | World model — massa complex per ara |
 
 ---
 
 ### J — Capa LLM per a sentiment de notícies ⭐ (Recomanat)
 
-#### La proposta
-
-Afegir una font de dades diària on un LLM analitza headlines de BTC i retorna un senyal de sentiment `[-1.0, 1.0]`. L'objectiu és capturar informació macro que els indicadors tècnics no detecten: aprovació d'ETFs, regulació, col·lapses d'exchanges, moviments institucionals.
-
-#### Té sentit per a swing trading?
-
-**Sí, i especialment per a swing trading.** Per a scalping o day trading, les notícies impacten en mil·lisegons i un LLM seria massa lent. Per a operacions de dies/setmanes (timeframe 1H–12H), el sentiment diari és predictiu: diverses recerques 2023–2025 mostren que senyals LLM basats en notícies milloren la predicció de BTC en horitzons de 24–72h (López-Lira & Tang 2023, Shen et al. 2024).
-
-#### Arquitectura recomanada: LLM com a feature, no com a gatekeeper
+#### Arquitectura
 
 ```
 CryptoPanic/RSS → LLM (GPT-4o-mini / Claude Haiku) → news_sentiment [-1, 1]
@@ -195,15 +151,7 @@ CryptoPanic/RSS → LLM (GPT-4o-mini / Claude Haiku) → news_sentiment [-1, 1]
                    BD: taula `news_sentiment` (timestamp, score, raw_text)
                                     ↓
               FeatureBuilder → columna `news_sentiment` en tots els models
-                                    ↓
-              ML models + RL professional la usen com a feature extra
 ```
-
-**Per què feature i no gatekeeper?** Un gatekeeper LLM que "veta" els senyals dels altres bots eliminaria moltes oportunitats bones. Com a feature, els models aprenen ells mateixos quan el sentiment importa i quan no.
-
-**Fonts de dades:** CryptoPanic API (gratuïta, headlines des de 2014), CoinDesk RSS, CoinTelegraph RSS.
-
-**Freqüència:** una vegada/dia (suficient per swing trading). Cost: ~$0.01–$0.05 USD/dia.
 
 #### Passos d'implementació
 
@@ -213,56 +161,39 @@ CryptoPanic/RSS → LLM (GPT-4o-mini / Claude Haiku) → news_sentiment [-1, 1]
 3. data/processing/external.py        # Loader: retorna DataFrame UTC-indexed
 4. FeatureBuilder                     # Integra news_sentiment com a feature diària
 5. YAMLs dels models                  # features.external.news_sentiment: true
-6. scripts/update_news_sentiment.py   # Cron diari (ex: 07:00h)
+6. scripts/update_news_sentiment.py   # Cron diari (07:00 UTC)
 ```
 
-**Risks i mitigació:**
+**Costs i riscos:**
 
 | Risc | Mitigació |
 |------|-----------|
 | LLM al·lucina / error API | Fallback a 0.0 (neutral) si l'API falla |
 | Biaix de lookahead | Analitzar notícies del dia anterior, no del dia actual |
-| Historial limitat | CryptoPanic té dades des de 2014 — suficient per entrenar |
-| Cost | Cap preocupació: <$20/any |
-
-**Prioritat recomanada:** 🟢 Alta. Implementar un cop la demo estigui en marxa i les primeres comparatives mostrin on fallen els models. El sentiment LLM pot capturar els "black swan" positius i negatius que cap indicador tècnic no detecta.
+| Cost | <$20/any |
 
 ---
 
-### K — Neteja de BD per a la demo ✅ NO CAL
+## Millores de robustesa (sense data límit)
 
-El servidor té una BD nova i neta. No cal truncar res.
-
-Si en algun moment cal reiniciar les estadístiques de paper trading sense perdre les dades de mercat, es pot fer via Telegram (`/reset`) o amb:
-
-```bash
-python scripts/reset_demo.py            # reinicia tots els bots
-python scripts/reset_demo.py ppo_professional  # reinicia un bot concret
-```
-
-O directament via SQL:
-```sql
-TRUNCATE TABLE demo_ticks;
-TRUNCATE TABLE demo_trades;
--- Les taules de candles i dades externes NO s'han de tocar
-```
+| Item | Acció | Fitxer afectat |
+|------|-------|---------------|
+| **Model staleness** | Rolling Sharpe 30d per bot; alarma Telegram si cau < 0.5 | `core/engine/demo_runner.py` |
+| **Refactoritzar `OHLCVFetcher._save()`** | Patró batch (com `FearGreedFetcher`) | `data/sources/ohlcv.py:85` |
+| **Validar `obs_shape`** | Assert a `RLBot._load_agent()` | `bots/rl/rl_bot.py:60` |
+| **Vectoritzar `win_rate()`** | Reemplaçar `iterrows()` | `core/backtesting/metrics.py:113` |
+| **Warning ATR fallback** | LOG WARNING quan s'activa `ATR_REFERENCE` | `bots/rl/environment_professional.py:158` |
 
 ---
 
-## Resposta a la pregunta clau
-
-> *"El desenvolupament de Telegram i Dashboard el puc fer mentre la demo ja vagi corrent?"*
-
-**Sí, completament.** El DemoRunner és independent del Telegram i del Dashboard. Pots iniciar la demo amb el Telegram bàsic que ja tens i millorar-lo mentre les dades s'acumulen. El Dashboard és fins i tot millor fer-lo un cop tens mesos de dades reals.
-
-**Ordre de prioritats real:**
-1. ~~Acabar optimització Optuna~~ ✅ Fet
-2. Comparativa walk-forward → selecció de sub-bots → Backtest EnsembleBot
-3. Entrenar models finals (els que superin la comparativa)
-4. Commit + iniciar demo al servidor
-5. LLM sentiment layer (mentre corre la demo) → candidat per Gate System v2 P2
-6. Dashboard, Telegram millorat, nous models ML/RL, Gate System v2
+> **Nota sobre l'ordre de prioritats real:**
+> 1. Resoldre DT1 (CandleDB)
+> 2. Comparativa walk-forward → selecció → entrenament final
+> 3. Backtest EnsembleBot
+> 4. Commit + iniciar demo al servidor
+> 5. LLM sentiment layer (mentre corre la demo)
+> 6. Dashboard, Telegram millorat, nous models, Gate v2
 
 ---
 
-*Última actualització: Març 2026 · Versió 6.0 (Migració servidor ✅ · Optuna ✅ · D reescrit)*
+*Última actualització: Març 2026 · Versió 7.0 (post-auditoria — D i K eliminats, deute tècnic afegit)*
