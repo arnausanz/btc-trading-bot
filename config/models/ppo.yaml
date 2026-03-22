@@ -1,3 +1,9 @@
+# comparable: false — excluded from walk-forward comparison and demo.
+# Reason: baseline PPO (1H) was trained without on-chain features and has not
+# been validated out-of-sample. To make it comparable, either train it without
+# external features and add comparable: true, or use ppo_professional.yaml instead.
+comparable: false
+
 best_params:
   batch_size: 64
   gamma: 0.9811841101519252

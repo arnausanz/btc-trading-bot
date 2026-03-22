@@ -70,6 +70,13 @@ Dades OHLCV descarregades de Binance. Font principal de tot el sistema.
 
 **Index recomanat:** `(symbol, timeframe, timestamp)` — és la consulta més freqüent.
 
+> ⚠️ **Gap de deduplicació (Deute Tècnic DT1):** La taula `candles` **NO té `UniqueConstraint`**,
+> a diferència de totes les altres taules de dades (`fear_greed`, `funding_rates`, `open_interest`,
+> `blockchain_metrics`). Executar `download_data.py` dues vegades sobre el mateix rang **insereix
+> duplicats silenciosament**. El fetcher fa deduplicació per software (query individual per candle,
+> `data/sources/ohlcv.py:94`) però no és una garantia a nivell de BD.
+> **Fix pendent:** Migració Alembic per afegir `UniqueConstraint(exchange, symbol, timeframe, timestamp)`.
+
 ---
 
 ### `signals` _(legacy — no usada en demo)_

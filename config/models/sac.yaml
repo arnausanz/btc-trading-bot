@@ -1,3 +1,8 @@
+# comparable: false — excluded from walk-forward comparison and demo.
+# Reason: baseline SAC (1H) has not been validated out-of-sample.
+# Use sac_professional.yaml for a validated comparable variant.
+comparable: false
+
 best_params:
   batch_size: 128
   gamma: 0.9638904324905906

@@ -1,3 +1,8 @@
+# comparable: false — excluded from walk-forward comparison and demo.
+# Reason: on-chain SAC (1H) requires historical on-chain data from 2021 onwards,
+# reducing the effective training window. Not yet validated out-of-sample.
+comparable: false
+
 best_params:
   batch_size: 128
   gamma: 0.9622553005920226

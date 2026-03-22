@@ -472,6 +472,19 @@ En general per BTC 1H: **GRU és el millor compromís**. PatchTST si tens paciè
 
 ## 5. Models d'Aprenentatge per Reforç (RL)
 
+> ⚠️ **Invariant Crític — `obs_shape`**
+>
+> L'`obs_shape` del model entrenat i de la inferència han de coincidir **exactament**:
+>
+> - **Agents base/on-chain:** `obs_shape = len(features.select) × lookback`
+> - **Agents professional:** `obs_shape = len(features.select) × lookback + 4`
+>   (+4 dimensions = `pnl_pct`, `position_fraction`, `steps_in_position`, `drawdown_pct`)
+>
+> Si `features.select` al YAML de training ≠ `features` al YAML del bot → **crash en runtime (`ValueError`)**.
+> Si `lookback` al YAML de training ≠ `lookback` al YAML del bot → **crash en runtime**.
+>
+> Verificació manual: comprova que `len(features) × lookback [+ 4]` coincideix entre els dos YAMLs.
+
 ### Arquitectura RL Professional
 
 Tots els agents RL professionals comparteixen:

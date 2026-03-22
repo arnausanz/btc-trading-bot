@@ -22,10 +22,13 @@ Key extensions over _BaseTradingEnv
                    drawdown_pct, steps_since_trade, etc.).
 """
 
+import logging
 import numpy as np
 import pandas as pd
 import gymnasium as gym
 from gymnasium import spaces
+
+logger = logging.getLogger(__name__)
 
 from bots.rl.environment import _BaseTradingEnv
 # Import to trigger @register decorators for both builtin and professional reward fns
@@ -155,6 +158,13 @@ class _ProfessionalBase(_BaseTradingEnv):
         row   = self.df.iloc[self.current_step]
         price = self._get_price()
 
+        if "atr_14" not in row.index or pd.isna(row["atr_14"]):
+            logger.warning(
+                "atr_14 column missing or NaN — falling back to ATR_REFERENCE (%.4f). "
+                "Add 'atr_14' to features.select in the training YAML to avoid "
+                "miscalibrated stop losses.",
+                ATR_REFERENCE,
+            )
         atr_14    = _safe_col(row, "atr_14",    price * ATR_REFERENCE)
         atr_pct   = atr_14 / max(price, 1e-8)
         vol_ratio = _safe_col(row, "vol_ratio", 1.0)

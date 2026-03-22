@@ -99,6 +99,11 @@ class DemoRunner:
         self._inactivity_hours   = float(tg_cfg.get("inactivity_hours",   4.0))
         self._drawdown_alert_pct = float(tg_cfg.get("drawdown_alert_pct", -10.0))
         self._data_stale_min     = float(tg_cfg.get("data_stale_minutes", 90.0))
+        # Circuit breaker: auto-pause a bot when its drawdown from peak exceeds this.
+        # Configurable via config/demo.yaml → telegram.circuit_breaker_pct.
+        # Default -15.0 means pause if portfolio drops 15% from its historical peak.
+        self._circuit_breaker_pct = float(tg_cfg.get("circuit_breaker_pct", -15.0))
+        self._circuit_breaker_triggered: set[str] = set()  # bots already halted
 
         self.bots:      list[BaseBot]                 = []
         self.exchanges: dict[str, PaperExchange]      = {}
@@ -571,19 +576,46 @@ class DemoRunner:
                 self._inactivity_alerted[bot_id] = True
 
     def _check_drawdown_alerts(self, now: datetime) -> None:
-        """Sends a push alert if a bot's max drawdown crosses the threshold."""
-        if not self.notifier:
-            return
+        """
+        Checks per-bot drawdown and fires two levels of response:
+          1. Alert notification when drawdown crosses _drawdown_alert_pct (default -10%).
+          2. Circuit breaker: auto-pause the bot when drawdown crosses
+             _circuit_breaker_pct (default -15%). Fires only once per bot session
+             to avoid re-triggering on every tick after the halt.
+        """
         for bot in self.bots:
             bot_id = bot.bot_id
             pv     = self.exchanges[bot_id].get_portfolio_value()
             max_pv = self._max_portfolio.get(bot_id, 10_000.0)
             self._max_portfolio[bot_id] = max(max_pv, pv)
             drawdown = (pv - max_pv) / max_pv * 100.0
-            if drawdown < self._drawdown_alert_pct:
+
+            # ── Level 1: alert ──────────────────────────────────────────────
+            if self.notifier and drawdown < self._drawdown_alert_pct:
                 self.notifier.notify_drawdown_alert(
                     bot_id=bot_id, drawdown_pct=drawdown, portfolio_value=pv
                 )
+
+            # ── Level 2: circuit breaker — auto-pause ──────────────────────
+            if (
+                drawdown < self._circuit_breaker_pct
+                and bot_id not in self._circuit_breaker_triggered
+            ):
+                self._circuit_breaker_triggered.add(bot_id)
+                with self._control_lock:
+                    self._paused_bots.add(bot_id)
+                logger.warning(
+                    f"CIRCUIT BREAKER triggered for '{bot_id}': "
+                    f"drawdown {drawdown:.1f}% < threshold {self._circuit_breaker_pct:.1f}%. "
+                    f"Bot auto-paused. Resume manually via /resume {bot_id}."
+                )
+                if self.notifier:
+                    self.notifier.notify_circuit_breaker(
+                        bot_id=bot_id,
+                        drawdown_pct=drawdown,
+                        threshold_pct=self._circuit_breaker_pct,
+                        portfolio_value=pv,
+                    )
 
     def _check_data_stale_alert(self, now: datetime) -> None:
         """Sends a push alert if OHLCV candles are too old."""
