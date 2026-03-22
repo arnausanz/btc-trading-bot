@@ -60,6 +60,34 @@ class RLBot(BaseBot):
         agent = _AGENT_REGISTRY[agent_type]()
         agent.load(model_path)
         logger.info(f"RLBot loaded: {agent_type} from {model_path}")
+
+        # Validate obs_shape: mismatch between training config and bot config
+        # causes a cryptic ValueError at act() time, not here. Catch it early.
+        try:
+            features  = self.config["features"]
+            lookback  = self.config["lookback"]
+            expected  = len(features) * lookback
+            if agent_type in self._PROFESSIONAL_TYPES:
+                expected += 4  # pnl_pct, position_fraction, steps_in_position, drawdown_pct
+            actual = agent.model.observation_space.shape[0]
+            if actual != expected:
+                raise ValueError(
+                    f"obs_shape mismatch for '{agent_type}': "
+                    f"model expects {actual} dims, "
+                    f"config generates {expected} "
+                    f"({len(features)} features × {lookback} lookback"
+                    f"{' + 4 pos_state' if agent_type in self._PROFESSIONAL_TYPES else ''}).\n"
+                    f"Fix: ensure features.select and lookback in the training YAML "
+                    f"match the bot YAML exactly."
+                )
+        except (AttributeError, TypeError):
+            # agent.model not available or observation_space not accessible —
+            # skip validation rather than crash (e.g. custom agent implementations).
+            logger.warning(
+                f"Could not validate obs_shape for '{agent_type}' — "
+                "agent.model.observation_space not accessible."
+            )
+
         return agent
 
     def observation_schema(self) -> ObservationSchema:
