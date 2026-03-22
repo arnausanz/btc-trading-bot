@@ -47,6 +47,9 @@ for _stem, _path in BOT_REGISTRY.items():
         elif _cat not in ("classic", "ML", None):
             # gate, ensemble, and any future meta-category are not standalone bots
             _NON_COMPARABLE_KEYS.add(_stem)
+        elif _cfg and _cfg.get("comparable", True) is False:
+            # Explicitly marked as non-comparable (e.g. missing historical external data)
+            _NON_COMPARABLE_KEYS.add(_stem)
     except Exception:
         pass
 

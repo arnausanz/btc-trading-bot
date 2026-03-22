@@ -92,8 +92,14 @@ ls models/
 ### Fase 3 — Validar (walk-forward backtest)
 
 ```bash
-# Backtest de tots els bots
-python scripts/run_comparison.py --all
+# Backtest de tots els bots comparables (clàssics + ML + RL; exclou comparable:false)
+python scripts/run_comparison.py
+
+# Sense RL (més ràpid si els models RL no estan entrenats)
+python scripts/run_comparison.py --no-rl
+
+# Selecció manual
+python scripts/run_comparison.py --bots hold trend xgboost ppo_professional
 ```
 
 **Criteri mínim per activar un bot a la demo:**
@@ -204,22 +210,26 @@ python -m pytest unit/ -v
 
 ### Calendari recomanat
 
-| Component | Freqüència | Motiu |
-|-----------|-----------|-------|
-| **Candles OHLCV** | Cada hora (cron) | Actualitzar dades de mercat |
-| **Fear & Greed** | Diàriament (cron) | Actualitzar sentiment |
-| **Funding rate** | Cada 4h (cron) | Actualitzar dades de futures |
-| **Gate System P1 (HMM+XGBoost)** | Mensualment | El règim de mercat canvia gradualment |
-| **Models ML (XGBoost, GRU, etc.)** | Cada 1-3 mesos | Quan arriben dades noves suficients |
-| **Models RL (PPO, SAC, TD3)** | Cada 3-6 mesos | Molt costós; prioritat baixa |
+| Component | Freqüència | Mecanisme | Motiu |
+|-----------|-----------|-----------|-------|
+| **Candles OHLCV** | Cada hora | **DemoRunner intern** (`_update_data()`) | Integrat al runner — no cal cron |
+| **Fear & Greed** | Diàriament | Cron | Actualitzar sentiment (1 valor/dia) |
+| **Funding rate** | Cada 4h | Cron | Actualitzar dades de futures |
+| **Blockchain / on-chain** | Diàriament | Cron | Hash-rate, exchange flows, etc. |
+| **Gate System P1 (HMM+XGBoost)** | Mensualment | Manual | El règim de mercat canvia gradualment |
+| **Models ML (XGBoost, GRU, etc.)** | Cada 1-3 mesos | Manual | Quan arriben dades noves suficients |
+| **Models RL (PPO, SAC, TD3)** | Cada 3-6 mesos | Manual | Molt costós; prioritat baixa |
 
 ### Cron jobs per a la demo 24/7
 
+> **Les candles OHLCV no necessiten cron.** El `DemoRunner` les actualitza internament cada hora via `_update_data()` (crida `OHLCVFetcher`, `FuturesFetcher` i `FearGreedFetcher` de cop). Afegir un cron independent crearia una condició de carrera (cron escrivint mentre el runner llegeix).
+
 ```bash
 # Afegir a crontab: crontab -e
-0 * * * *   cd /path/to/btc-trading-bot && python scripts/download_data.py
+# Les dades externes de baixa freqüència SÍ necessiten cron:
 0 8 * * *   cd /path/to/btc-trading-bot && python scripts/download_fear_greed.py
 0 */4 * * * cd /path/to/btc-trading-bot && python scripts/update_futures.py
+0 6 * * *   cd /path/to/btc-trading-bot && python scripts/update_blockchain.py
 ```
 
 ### Systemd per mantenir el DemoRunner actiu
@@ -353,8 +363,22 @@ gunzip -c backup_YYYYMMDD.sql.gz | psql btc_trading
 
 ## Iniciar la demo des de zero (neteja de dades de demo)
 
-Quan vols reiniciar les estadístiques de paper trading sense perdre les dades de mercat:
+Quan vols reiniciar les estadístiques de paper trading sense perdre les dades de mercat.
 
+**Opció 1 — Via Telegram (recomanat mentre la demo corre):**
+```
+/reset all        → demana confirmació, reinicia tots els bots
+/reset ppo_professional  → reinicia un bot concret
+```
+
+**Opció 2 — Via CLI:**
+```bash
+python scripts/reset_demo.py              # tots els bots (demana confirmació)
+python scripts/reset_demo.py ppo_professional  # un bot concret
+python scripts/reset_demo.py --yes        # saltar confirmació (scripts)
+```
+
+**Opció 3 — Via SQL directe:**
 ```sql
 -- IMPORTANT: no tocar les taules candles ni les de dades externes!
 TRUNCATE TABLE demo_signals;
@@ -365,8 +389,7 @@ TRUNCATE TABLE gate_positions;
 TRUNCATE TABLE gate_near_misses;
 ```
 
-Després reiniciar el DemoRunner:
-
+Després reiniciar el DemoRunner (si estava parat):
 ```bash
 python scripts/run_demo.py
 ```
@@ -387,4 +410,24 @@ Configuració mínima al servidor:
 
 ---
 
-*Última actualització: Març 2026*
+---
+
+## Comandes de control via Telegram
+
+El DemoRunner exposa comandes de control a través de Telegram amb confirmació de doble clic.
+
+| Comanda | Acció |
+|---------|-------|
+| `/status` | Estat de tots els bots actius (capital, posició, PnL) |
+| `/portfolio` | Resum del portafoli global |
+| `/pause bot_id` | Pausa el bot (no genera nous senyals) — demana confirmació |
+| `/resume bot_id` | Reprèn un bot pausat |
+| `/close bot_id` | Força una venda immediata i pausa el bot |
+| `/restart` | Reinicia el DemoRunner (aplica nous paràmetres de config) |
+| `/reset all` | Reinicia l'estat de TOTS els bots (capital → initial_capital) |
+| `/reset bot_id` | Reinicia l'estat d'un bot concret |
+| `/help` | Llista totes les comandes disponibles |
+
+---
+
+*Última actualització: Març 2026 · v2 (DemoRunner data-update integrat · reset via Telegram · run_comparison sense --all)*

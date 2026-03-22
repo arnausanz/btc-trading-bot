@@ -27,6 +27,7 @@
    - 5.2 [SAC Professional](#52-sac-professional)
    - 5.3 [TD3 Professional](#53-td3-professional)
    - 5.4 [TD3 Multiframe](#54-td3-multiframe)
+   - 5.5 [Bots RL inoperatius (no comparables)](#55-bots-rl-inoperatius-no-comparables)
 6. [Models clàssics (referència)](#6-models-clàssics-referència)
 7. [EnsembleBot](#7-ensemblebot)
 8. [Decisions de disseny globals](#8-decisions-de-disseny-globals)
@@ -422,7 +423,7 @@ training:
 **Classe:** `bots.ml.tft_model.TFTModel`
 **Tipus:** Transformer especialitzat per TS (Lim et al., Google 2021)
 
-> ⚠️ **Estat: NO optimitzat ni entrenat.** El TFT és extremadament pesat en temps de computació (8-16h d'optimització, 8-16h d'entrenament). Pendent d'optimitzar i entrenar en un futur quan el hardware o el temps disponible ho permeti. Veure [ROADMAP.md](./ROADMAP.md) per a la planificació.
+> ⚠️ **Estat: NO optimitzat ni entrenat. Possible candidat a descartar.** El TFT és extremadament pesat (8-16h d'optimització Optuna + 8-16h d'entrenament, ~8 GB de RAM). Es valorarà definitivament un cop la comparativa walk-forward mostri si GRU i PatchTST ja aporten prou rendiment. Si cap dels dos supera clarament el XGBoost, el TFT podria aportar valor per la seva capacitat d'integrar variables de múltiples freqüències temporals; en cas contrari, es descartarà. Veure [ROADMAP.md §A](./ROADMAP.md) per a la decisió pendent.
 
 #### Descripció
 
@@ -693,6 +694,29 @@ Amb features multi-timeframe, l'agent té prou informació per aprofitar el règ
 
 ---
 
+### 5.5 Bots RL inoperatius (no comparables)
+
+Els bots següents existeixen al codi i estan implementats correctament, però **no s'inclouen en el walk-forward backtest** (`comparable: false` al YAML). La raó és que les dades externes que necesiten (blockchain metrics, hash-rate, exchange netflows) no estaven disponibles prou enrere per cobrir el període de TRAIN del backtest (fins a 2024-12-31).
+
+| Bot | YAML | Problema |
+|-----|------|---------|
+| `ppo_onchain` | `config/models/ppo_onchain.yaml` | Necessita blockchain data des de ~2022; el fetcher on-chain només té dades des de finals 2024 |
+| `sac_onchain` | `config/models/sac_onchain.yaml` | Ídem |
+
+**Estat real:**
+- El codi és funcional: poden córrer en demo (on les dades on-chain sí estan disponibles en temps real).
+- Exclosos del backtesting via `comparable: false`: `run_comparison.py` els salta automàticament.
+- Decisió pendent: continuar omplint l'historial on-chain per fer-los backtestables, o descartar-los en favor dels agents professionals (que usen fear_greed + funding rate, que sí tenim des de 2019).
+
+**Com activar-los a la demo si es vol:**
+```yaml
+# config/demo.yaml
+ppo_onchain:
+  enabled: true   # funciona en temps real; no té historial per backtesting
+```
+
+---
+
 ## 6. Models clàssics (referència)
 
 Els models clàssics no tenen entrenament ni optimització. Es documenten aquí per completesa.
@@ -714,10 +738,13 @@ Els models clàssics no tenen entrenament ni optimització. Es documenten aquí 
 
 **Fitxer:** `config/models/ensemble.yaml`
 **Classe:** `bots.classical.ensemble_bot.EnsembleBot`
+**Backtest:** `comparable: false` — exclòs del walk-forward (és una meta-estratègia, no un bot independent)
 
 #### Descripció
 
 Meta-bot que combina senyals de múltiples sub-bots via majority vote. Un senyal s'emet quan >50% dels sub-bots actius coincideixen en BUY o SELL a la mateixa candle.
+
+> **Per què `comparable: false`?** El backtest walk-forward compara estratègies independents. L'EnsembleBot depèn del rendiment dels seus sub-bots, que ja apareixen individualment en la comparativa. S'ha de validar per separat — veure [ROADMAP.md §B](./ROADMAP.md).
 
 #### Configuració actual i problemes
 

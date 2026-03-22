@@ -68,21 +68,27 @@ class BotComparator:
                     desc="test",
                 )
 
-                # Skip bots with no data in either period (e.g. date range mismatch)
-                if train_metrics.is_empty and test_metrics.is_empty:
+                # Skip bots that can't be properly evaluated.
+                # A bot without TRAIN data can't be walk-forward compared (no baseline).
+                # A bot without either period is simply broken for this date range.
+                if train_metrics.is_empty:
+                    reason = (
+                        "no data in TRAIN period — likely missing historical external data "
+                        f"(e.g. onchain/oi) before {self.train_until}. "
+                        "Run historical download or adjust TRAIN_UNTIL."
+                    )
+                    tqdm.write(f"  ⚠ {bot.bot_id:<20} SKIPPED — {reason}")
+                    continue
+
+                if test_metrics.is_empty:
                     tqdm.write(
-                        f"  ⚠ {bot.bot_id:<20} SKIPPED — no data in train or test period."
-                        f" Check TRAIN_UNTIL/TEST_FROM vs bot's available data range."
+                        f"  ⚠ {bot.bot_id:<20} SKIPPED — no data in TEST period. "
+                        f"Check TEST_FROM={self.test_from} vs bot's available data range."
                     )
                     continue
 
                 train_summary = train_metrics.summary()
                 test_summary  = test_metrics.summary()
-
-                if train_metrics.is_empty:
-                    tqdm.write(f"  ⚠ {bot.bot_id}: no data in TRAIN period — metrics are zero.")
-                if test_metrics.is_empty:
-                    tqdm.write(f"  ⚠ {bot.bot_id}: no data in TEST period — metrics are zero.")
 
                 results.append({
                     "bot_id": bot.bot_id,

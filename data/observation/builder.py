@@ -28,28 +28,48 @@ class ObservationBuilder:
 
         External features config is read from schema.extras['external'].
         EMA periods are auto-detected from schema.features names.
+
+        If schema.extras contains 'aux_timeframes', MultiFrameFeatureBuilder is used
+        to merge auxiliary timeframes (e.g. 4h) into the base timeframe DataFrame.
+        This matches the same builder used during training for multi-TF RL bots.
         """
-        external = schema.extras.get("external", {})
+        external        = schema.extras.get("external", {})
+        aux_timeframes  = schema.extras.get("aux_timeframes", [])
 
         for timeframe in schema.timeframes:
             key = f"{symbol}_{timeframe}"
             if key not in self._cache:
                 logger.info(f"Loading features for {symbol} {timeframe}...")
 
-                # Auto-detect EMA periods from feature names (e.g. "ema_9" → 9)
-                ema_periods = [
-                    int(f.split("_")[1])
-                    for f in schema.features
-                    if f.startswith("ema_")
-                ] or None
+                if aux_timeframes:
+                    # Multi-timeframe bot: use MultiFrameFeatureBuilder so columns
+                    # like 'rsi_14_4h' are created by the same merging logic as
+                    # during training. select=None → load all, validate below.
+                    from data.processing.multiframe_builder import MultiFrameFeatureBuilder
+                    fb = MultiFrameFeatureBuilder(
+                        symbol=symbol,
+                        base_timeframe=timeframe,
+                        aux_timeframes=aux_timeframes,
+                        external=external,
+                        select=None,
+                    )
+                else:
+                    # Single-timeframe bot: regular FeatureBuilder.
+                    # Auto-detect EMA periods from base (non-suffixed) feature names.
+                    ema_periods = [
+                        int(f.split("_")[1])
+                        for f in schema.features
+                        if f.startswith("ema_") and "_" not in f[4:]
+                    ] or None
 
-                fb = FeatureBuilder(
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    external=external,
-                    select=None,  # Load all; build() will filter to schema.features
-                    ema_periods=ema_periods,
-                )
+                    fb = FeatureBuilder(
+                        symbol=symbol,
+                        timeframe=timeframe,
+                        external=external,
+                        select=None,  # Load all; validate below
+                        ema_periods=ema_periods,
+                    )
+
                 self._cache[key] = fb.build()
                 df = self._cache[key]
                 logger.info(f"  {len(df)} rows, {len(df.columns)} columns loaded")

@@ -112,6 +112,9 @@ class DemoRunner:
         # All existing bots use "1h" → bucket = epoch // 3600 (identical to before).
         self._last_candle_bucket:    dict[str, int]              = {}
         self._last_trade_time:       dict[str, datetime | None]  = {}  # inactivity tracking
+        # Data update tracking: run once per hour, before any bot processes new candle.
+        # -1 forces an update on the very first tick.
+        self._last_data_update_bucket: int = -1
         self._inactivity_alerted:    dict[str, bool]             = {}  # avoid repeat alerts
         self._last_data_stale_alert: datetime | None             = None  # avoid spam
 
@@ -235,6 +238,54 @@ class DemoRunner:
     def is_paused(self, bot_id: str) -> bool:
         with self._control_lock:
             return bot_id in self._paused_bots
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Data update (runs once per hour, before bot calculations)
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _update_data(self) -> None:
+        """
+        Updates all data sources (OHLCV, futures, fear & greed) from their
+        respective APIs. Called once per hour, BEFORE any bot processes its
+        new candle, so all bots always calculate with fresh data.
+
+        Failures are logged but never crash the runner — a missed update
+        means bots use the last cached DB data, which is still valid.
+        """
+        logger.info("Updating data sources...")
+        try:
+            from data.sources.ohlcv import OHLCVFetcher
+            fetcher = OHLCVFetcher(exchange_id="binance")
+            # Collect all timeframes needed by active bots
+            timeframes: set[str] = set()
+            for bot in self.bots:
+                schema = bot.observation_schema()
+                timeframes.update(schema.timeframes)
+                timeframes.update(schema.extras.get("aux_timeframes", []))
+            for tf in sorted(timeframes):
+                try:
+                    new = fetcher.update(symbol=self.symbol, timeframe=tf)
+                    logger.info(f"  OHLCV {tf}: +{new} candles")
+                except Exception as e:
+                    logger.warning(f"  OHLCV {tf} update failed: {e}")
+        except Exception as e:
+            logger.warning(f"OHLCV update failed: {e}")
+
+        try:
+            from data.sources.futures import FuturesFetcher
+            result = FuturesFetcher().update()
+            logger.info(f"  Futures: +{result.get('funding_rates', 0)} FR, +{result.get('open_interest', 0)} OI")
+        except Exception as e:
+            logger.warning(f"Futures update failed: {e}")
+
+        try:
+            from data.sources.fear_greed import FearGreedFetcher
+            new = FearGreedFetcher().update()
+            logger.info(f"  Fear & Greed: +{new} records")
+        except Exception as e:
+            logger.warning(f"Fear & Greed update failed: {e}")
+
+        logger.info("Data update complete.")
 
     # ──────────────────────────────────────────────────────────────────────
     # Price fetching
@@ -564,6 +615,20 @@ class DemoRunner:
 
         while True:
             try:
+                # ── Drift-free timing: measure loop start, sleep only the remainder ──
+                # time.sleep(fixed_interval) accumulates drift because each iteration
+                # takes fixed_interval + work_time. After N iterations the total drift
+                # is N × work_time (minutes per hour with ~1s/iter work).
+                # Solution: record t0 at the top and sleep(interval - elapsed) at the
+                # bottom so every cycle is *exactly* update_interval seconds.
+                _t0 = time.monotonic()
+
+                # ── Data update (once per hour, before any bot calculates) ──
+                current_hour_bucket = int(datetime.now(timezone.utc).timestamp()) // 3600
+                if current_hour_bucket != self._last_data_update_bucket:
+                    self._update_data()
+                    self._last_data_update_bucket = current_hour_bucket
+
                 current_price = self._fetch_latest_price()
                 logger.info(f"Current BTC price: {current_price:.2f} USDT")
                 self._process_tick(current_price=current_price)
@@ -598,7 +663,15 @@ class DemoRunner:
                     self.notifier.notify_daily_summary(self.get_status())
                     self._last_daily_summary = now
 
-                time.sleep(self.update_interval)
+                # Sleep only the time remaining to complete exactly update_interval.
+                _elapsed = time.monotonic() - _t0
+                _remaining = max(0.0, self.update_interval - _elapsed)
+                if _elapsed > self.update_interval:
+                    logger.warning(
+                        f"Loop iteration took {_elapsed:.1f}s > update_interval "
+                        f"({self.update_interval}s). Consider increasing update_interval."
+                    )
+                time.sleep(_remaining)
 
             except KeyboardInterrupt:
                 logger.info("Demo stopped by user.")

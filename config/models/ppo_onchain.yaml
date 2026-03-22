@@ -8,6 +8,7 @@ bot:
   bot_id: rl_ppo_onchain_v1
   trade_size: 0.5
 category: RL
+comparable: false
 features:
   external:
     blockchain:

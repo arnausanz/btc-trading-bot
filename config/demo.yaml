@@ -1,8 +1,23 @@
 # config/demo.yaml
 # Bots actius en el Demo Runner.
 # Posa enabled: false per desactivar un bot sense eliminar-lo.
-# El DemoRunner detecta automàticament el tipus (classic/ML/RL) pel camp
-# category del YAML unificat.
+#
+# Estat post-backtest walk-forward (Març 2026)
+# ─────────────────────────────────────────────────────────────────────────────
+# ACTIUS (superen o estan a prop del tall):
+#   hold_v1        → benchmark pur (seguiment BTC spot sense estratègia)
+#   ml_rf_v1       → únic bot amb TEST positiu (+4.44% Sharpe 1.14)  ✅
+#   ml_xgb_v1      → borderline TEST -3.53%, inclòs per observació   ⚠️
+#   ensemble_v1    → AND(rf, xgb) — senyal molt conservador           ✅
+#
+# DESACTIVATS:
+#   Clàssics       → tots negatius en TEST 2025 (BTC lateral/baixista)
+#   GRU/LGBM/CB/PTST → overfit extrem (TRAIN 80k–275k% → TEST -8...-55%)
+#   RL baseline    → broken (PPO -77%, SAC -95% en test)
+#   RL professional → negatiu en test (PPO -31%, SAC -16%)
+#   RL TD3         → professional inactiu (0 trades test), multiframe overtrading
+#   Gate           → pendent d'entrenar (train_gate_regime.py)
+# ─────────────────────────────────────────────────────────────────────────────
 
 demo:
   symbol: BTC/USDT
@@ -11,66 +26,79 @@ demo:
   # on_observation() es crida 1 cop/hora quan es tanca la candle (candle sync)
 
 bots:
-  # Classics
+  # ── Benchmark ───────────────────────────────────────────────────────────────
   - config_path: config/models/hold.yaml
-    enabled: true
+    enabled: true    # benchmark pur — mostra com va BTC sense estratègia
+
+  # ── Clàssics ────────────────────────────────────────────────────────────────
   - config_path: config/models/trend.yaml
-    enabled: true
+    enabled: false   # TEST -5.68% — negatiu en mercat 2025
   - config_path: config/models/dca.yaml
-    enabled: true
+    enabled: false   # TEST -22.58% — segueix BTC a la baixa
   - config_path: config/models/grid.yaml
-    enabled: false
-
+    enabled: false   # TEST -1.45%
   - config_path: config/models/mean_reversion.yaml
-    enabled: false   # activar després de fer backtest i superar HoldBot
+    enabled: false   # TEST -13.20%
   - config_path: config/models/momentum.yaml
-    enabled: false   # activar després de fer backtest i superar HoldBot
+    enabled: false   # TEST -8.80%
 
-  # ML supervisat
+  # ── ML supervisat ───────────────────────────────────────────────────────────
   - config_path: config/models/random_forest.yaml
-    enabled: true
+    enabled: true    # TEST +4.44% Sharpe 1.14 — l'únic bot clarament bo  ✅
+
   - config_path: config/models/xgboost.yaml
-    enabled: true
+    enabled: true    # TEST -3.53% borderline — inclòs per observació      ⚠️
+
   - config_path: config/models/lightgbm.yaml
-    enabled: true
+    enabled: false   # overfit extrem: TRAIN 124k% → TEST -55%
+
   - config_path: config/models/catboost.yaml
-    enabled: true
+    enabled: false   # overfit extrem: TRAIN 81k% → TEST -42%
+
   - config_path: config/models/gru.yaml
-    enabled: true
+    enabled: false   # overfit extrem: TRAIN 114k% → TEST -8%
+
   - config_path: config/models/patchtst.yaml
-    enabled: true
+    enabled: false   # overfit extrem: TRAIN 275k% → TEST -30%
 
-  # RL - activar despres d'executar train_rl.py
+  - config_path: config/models/tft.yaml
+    enabled: false   # no entrenat (0 trades en backtest)
+
+  # ── RL baseline ─────────────────────────────────────────────────────────────
   - config_path: config/models/ppo.yaml
-    enabled: false
+    enabled: false   # broken: TEST -76.62%
+
   - config_path: config/models/sac.yaml
-    enabled: false
-  # RL on-chain - requereix dades externes a la BD + entrenament explícit
-  # python scripts/train_rl.py --agents ppo_onchain sac_onchain
+    enabled: false   # broken: TEST -95.24% (quasi en fallida)
+
+  # ── RL on-chain ─────────────────────────────────────────────────────────────
   - config_path: config/models/ppo_onchain.yaml
-    enabled: false
+    enabled: false   # comparable: false — manca historial on-chain
+
   - config_path: config/models/sac_onchain.yaml
-    enabled: false
-  # RL professional (12H, ATR stop, position state) — obs_shape = n_features × lookback + 4
-  # python scripts/train_rl.py --agents ppo_professional sac_professional
+    enabled: false   # comparable: false — manca historial on-chain
+
+  # ── RL professional ─────────────────────────────────────────────────────────
   - config_path: config/models/ppo_professional.yaml
-    enabled: false
+    enabled: false   # TEST -31.67% Sharpe -2.35
+
   - config_path: config/models/sac_professional.yaml
-    enabled: false
-  # RL TD3 (12H + multi-frame 12H+4H) — generació C3
-  # python scripts/train_rl.py --agents td3_professional td3_multiframe
+    enabled: false   # TEST -16.26% Sharpe -3.57
+
+  # ── RL TD3 ──────────────────────────────────────────────────────────────────
   - config_path: config/models/td3_professional.yaml
-    enabled: false
+    enabled: false   # TEST 0 trades (inactiu) — no perd però tampoc aporta
+
   - config_path: config/models/td3_multiframe.yaml
-    enabled: false
+    enabled: false   # overtrading (32k BUY en training) + TEST negatiu
 
-  # Gate System — activar un cop entrenats els models (python scripts/train_gate_regime.py)
+  # ── Gate System ─────────────────────────────────────────────────────────────
   - config_path: config/models/gate.yaml
-    enabled: false   # activar desprès de train_gate_regime.py + alembic upgrade head
+    enabled: true    # models entrenats: gate_hmm.pkl + gate_xgb_regime.pkl ✅
 
-  # Ensemble — activar un cop tots els sub-bots hagin passat el backtest out-of-sample
+  # ── Ensemble ────────────────────────────────────────────────────────────────
   - config_path: config/models/ensemble.yaml
-    enabled: false   # activar desprès de validació C (Sharpe > 1.0, Drawdown < -25%)
+    enabled: true    # AND(rf_v1, xgb_v1) — senyal molt conservador  ✅
 
 exchange:
   config_path: config/exchanges/paper.yaml

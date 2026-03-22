@@ -6,6 +6,48 @@
 
 ---
 
+## Mapa de taules per grup
+
+Les taules estan completament separades: **no hi ha cap FK entre grups**. Pots truncar o esborrar les taules d'un grup sense afectar els altres.
+
+| Grup | Taules | Pots truncar/esborrar? |
+|------|--------|----------------------|
+| **Dades de mercat** | `candles` | ⚠️ Mai — cal re-descarregar tot des de 2019 |
+| **Dades externes lleugeres** | `fear_greed`, `funding_rates` | ✅ Sí — `download_fear_greed.py` / `download_futures.py` recreen tot |
+| **Dades on-chain** | `open_interest`, `blockchain_metrics` | ✅ Sí — scripts de re-descàrrega disponibles; si els bots on-chain es descarten, es poden esborrar sense conseqüències |
+| **Demo trading** | `demo_ticks`, `demo_trades` | ✅ Sí — via `/reset` Telegram o `reset_demo.py` (tots els bots tornen a `initial_capital`) |
+| **Gate System** | `gate_positions`, `gate_near_misses` | ⚠️ `gate_positions` s'esborra automàticament en reset del bot. `gate_near_misses` és un log d'anàlisi — pots esborrar-lo sense impacte operatiu |
+| **Legacy (no usades en demo)** | `signals`, `orders`, `trades` | ✅ Sí — infraestructura de live trading futur; no s'usen en paper trading |
+
+---
+
+## Reset d'un bot — Què passa exactament?
+
+Quan fas `/reset bot_id` via Telegram o `python scripts/reset_demo.py bot_id`:
+
+1. **S'esborren** tots els registres de `demo_ticks` per a `bot_id` — el portfolio history desapareix.
+2. **S'esborren** tots els registres de `demo_trades` per a `bot_id` — el trade log desapareix.
+3. **S'esborren** totes les `gate_positions` obertes per a `bot_id` — evita inconsistència de capital si el Gate bot tenia posicions actives.
+4. La propera vegada que el DemoRunner arrenca, `get_last_state()` retorna `None` → el bot **torna a `initial_capital`** (el que declara el seu YAML) i opera com si fos el primer dia.
+
+> ⚠️ **El reset és destructiu i permanent.** No hi ha arxiu ni soft-delete. Si vols conservar les estadístiques passades, fes un backup previ: `pg_dump -t demo_ticks -t demo_trades btc_trading > backup_pre_reset.sql`.
+
+---
+
+## Índexos
+
+| Índex | Taula | Columnes | Per a |
+|-------|-------|---------|-------|
+| `ix_demo_ticks_bot_id_ts` | `demo_ticks` | `(bot_id, timestamp)` | `get_last_state()`, `get_portfolio_history()` |
+| `ix_demo_trades_bot_id_ts` | `demo_trades` | `(bot_id, timestamp)` | `get_trades()` |
+| `ix_blockchain_metrics_metric_timestamp` | `blockchain_metrics` | `(metric, timestamp)` | Queries de features on-chain |
+| `ix_open_interest_symbol_tf_timestamp` | `open_interest` | `(symbol, timeframe, timestamp)` | Queries de features OI |
+| `ix_funding_rates_symbol_timestamp` | `funding_rates` | `(symbol, timestamp)` | Queries de funding rate |
+
+Els índexos de `demo_*` es creen amb la migració `c1d2e3f4a5b6_add_indexes_demo_tables.py`.
+
+---
+
 ## Taules
 
 ### `candles`
@@ -30,8 +72,8 @@ Dades OHLCV descarregades de Binance. Font principal de tot el sistema.
 
 ---
 
-### `signals`
-Senyals generats pels bots durant el backtesting. Persistits per auditoria.
+### `signals` _(legacy — no usada en demo)_
+Infraestructura de live trading futur. No s'usa en paper trading — el DemoRunner registra les decisions directament a `demo_ticks` i `demo_trades`.
 
 | Columna | Tipus | Descripció |
 |---------|-------|-----------|
@@ -45,8 +87,8 @@ Senyals generats pels bots durant el backtesting. Persistits per auditoria.
 
 ---
 
-### `orders`
-Ordres enviades a l'exchange (paper o real). Una ordre per senyal accionable.
+### `orders` _(legacy — no usada en demo)_
+Infraestructura de live trading futur. Una ordre per senyal accionable.
 
 | Columna | Tipus | Descripció |
 |---------|-------|-----------|
@@ -67,8 +109,8 @@ Ordres enviades a l'exchange (paper o real). Una ordre per senyal accionable.
 
 ---
 
-### `trades`
-Round-trips completats: cada parell (ordre d'obertura, ordre de tancament).
+### `trades` _(legacy — no usada en demo)_
+Round-trips completats per live trading: cada parell (ordre d'obertura, ordre de tancament). Té FK cap a `orders`.
 
 | Columna | Tipus | Descripció |
 |---------|-------|-----------|
@@ -98,7 +140,8 @@ Registre de cada tick del DemoRunner (cada ~60s per bot actiu).
 | `btc_balance` | float | Saldo BTC |
 | `reason` | str(500) | Explicació de la decisió |
 
-**Volum:** ~60 registres/hora per bot actiu. Amb 6 bots → ~360 files/hora → ~8.600/dia.
+**Volum:** ~60 registres/hora per bot actiu (1 tick/min). Amb 10 bots → ~600 files/hora → ~14.400/dia → ~5.3M/any.
+**Índex:** `ix_demo_ticks_bot_id_ts` — garanteix queries ràpides fins i tot amb milions de files.
 
 ---
 
@@ -399,4 +442,4 @@ GROUP BY p1_regime ORDER BY near_misses DESC;
 
 ---
 
-*Última actualització: Març 2026 · Versió 2.0 (Gate System: gate_positions + gate_near_misses)*
+*Última actualització: Març 2026 · Versió 3.0 (Mapa de grups + reset documentat + índexos demo_ticks/trades + legacy signals/orders/trades)*
