@@ -30,8 +30,13 @@ exit
 > ⚠️ Aquestes comandes s'executen des d'un terminal del **Mac**, NO des de la VM.
 
 ### Copiar els models entrenats
+> ⚠️ Usa `rsync` (no `scp -r`). Amb `scp -r` i la carpeta `models/` ja existent al servidor,
+> els fitxers acabarien a `models/models/` en lloc de `models/`. El trailing slash del source
+> és obligatori: indica "copia el *contingut*", no la carpeta en si.
 ```bash
-scp -i ~/.ssh/id_ed25519 -r /Users/arnau/Documents/Projectes/btc-trading-bot/models ubuntu@79.76.110.205:~/trading-bot/models
+rsync -av --progress -e "ssh -i ~/.ssh/id_ed25519" \
+  /Users/arnau/Documents/Projectes/btc-trading-bot/models/ \
+  ubuntu@79.76.110.205:~/trading-bot/models/
 ```
 
 ### Copiar el fitxer .env (si el modifiques en local)
@@ -216,8 +221,10 @@ sudo systemctl status trading-demo
 
 **Si has entrenat nous models al Mac:**
 ```bash
-# Des del Mac (terminal separada)
-scp -i ~/.ssh/id_ed25519 -r /Users/arnau/Documents/Projectes/btc-trading-bot/models ubuntu@79.76.110.205:~/trading-bot/models
+# Des del Mac (terminal separada) — el trailing slash del source és obligatori
+rsync -av --progress -e "ssh -i ~/.ssh/id_ed25519" \
+  /Users/arnau/Documents/Projectes/btc-trading-bot/models/ \
+  ubuntu@79.76.110.205:~/trading-bot/models/
 ```
 
 ---

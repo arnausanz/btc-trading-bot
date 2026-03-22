@@ -92,8 +92,8 @@ def check_packages() -> dict[str, bool]:
             ver = getattr(mod, "__version__", "?")
             ok(f"{label:<25} v{ver}")
             results[pkg] = True
-        except ImportError as e:
-            fail(f"{label:<25} NO instal·lat  ({e})")
+        except Exception as e:
+            fail(f"{label:<25} ERROR: {type(e).__name__}: {e}")
             results[pkg] = False
     return results
 
