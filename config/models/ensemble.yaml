@@ -10,6 +10,7 @@
 # Per afegir/treure sub-bots: edita la llista sub_bots i reinicia el DemoRunner.
 # ─────────────────────────────────────────────────────────────────────────────
 category: classic
+comparable: false
 model_type: ensemble
 module: bots.classical.ensemble_bot
 class_name: EnsembleBot

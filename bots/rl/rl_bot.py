@@ -63,11 +63,16 @@ class RLBot(BaseBot):
         return agent
 
     def observation_schema(self) -> ObservationSchema:
+        extras: dict = {"external": self.config.get("external", {})}
+        # Multi-timeframe bots (e.g. td3_multiframe) declare aux_timeframes in YAML.
+        # Pass them through so ObservationBuilder uses MultiFrameFeatureBuilder.
+        if self.config.get("aux_timeframes"):
+            extras["aux_timeframes"] = self.config["aux_timeframes"]
         return ObservationSchema(
             features=self.config["features"],
             timeframes=[self.config["timeframe"]],
             lookback=self.config["lookback"],
-            extras={"external": self.config.get("external", {})},
+            extras=extras,
         )
 
     # Professional agent types that append +4 position-state dims during training
