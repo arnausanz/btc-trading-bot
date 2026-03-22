@@ -112,15 +112,26 @@ class DemoRepository:
 
     def reset_bot_state(self, bot_id: str) -> tuple[int, int]:
         """
-        Deletes all ticks and trades for a bot. Returns (ticks_deleted, trades_deleted).
-        After this, get_last_state() returns None and the bot starts fresh on next run.
+        Deletes all ticks, trades and open gate positions for a bot.
+        Returns (ticks_deleted, trades_deleted).
+
+        After this, get_last_state() returns None → bot starts fresh with
+        initial_capital on next run.
+
+        Gate positions are also cleared to avoid a capital inconsistency:
+        if the bot had open positions, their cost basis would mismatch the
+        freshly reset portfolio_value.
         """
         session: Session = SessionLocal()
         try:
-            ticks  = session.query(DemoTickDB).filter_by(bot_id=bot_id).delete()
-            trades = session.query(DemoTradeDB).filter_by(bot_id=bot_id).delete()
+            ticks     = session.query(DemoTickDB).filter_by(bot_id=bot_id).delete()
+            trades    = session.query(DemoTradeDB).filter_by(bot_id=bot_id).delete()
+            positions = session.query(GatePositionDB).filter_by(bot_id=bot_id).delete()
             session.commit()
-            logger.info(f"Reset {bot_id}: deleted {ticks} ticks, {trades} trades.")
+            logger.info(
+                f"Reset {bot_id}: deleted {ticks} ticks, {trades} trades, "
+                f"{positions} gate positions."
+            )
             return ticks, trades
         except Exception as e:
             session.rollback()
@@ -130,7 +141,10 @@ class DemoRepository:
             session.close()
 
     def reset_all_states(self) -> dict[str, tuple[int, int]]:
-        """Deletes all demo ticks and trades for every bot. Returns {bot_id: (ticks, trades)}."""
+        """
+        Deletes all demo ticks, trades and open gate positions for every bot.
+        Returns {bot_id: (ticks, trades)}.
+        """
         session: Session = SessionLocal()
         try:
             # Get all distinct bot_ids before deleting
@@ -139,6 +153,7 @@ class DemoRepository:
             for bot_id in bot_ids:
                 ticks  = session.query(DemoTickDB).filter_by(bot_id=bot_id).delete()
                 trades = session.query(DemoTradeDB).filter_by(bot_id=bot_id).delete()
+                session.query(GatePositionDB).filter_by(bot_id=bot_id).delete()
                 results[bot_id] = (ticks, trades)
             session.commit()
             logger.info(f"Full reset: {results}")
