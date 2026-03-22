@@ -412,22 +412,51 @@ Configuració mínima al servidor:
 
 ---
 
-## Comandes de control via Telegram
+## Comandes de Telegram
 
-El DemoRunner exposa comandes de control a través de Telegram amb confirmació de doble clic.
+El DemoRunner exposa comandes d'informació i de control a través de Telegram.  Totes les comandes d'informació envien el missatge amb un botó **🔄 Actualitzar** que edita el missatge en el lloc sense necessitat de reescriure la comanda.
+
+### Comandes d'informació
+
+| Comanda | Descripció |
+|---------|-----------|
+| `/status` | Taula compacta de tots els bots: retorn %, alpha vs B&H, capital en € |
+| `/portfolio` | Detall interactiu per bot amb tabs inline. Inclou: capital, retorn, alpha, max drawdown, Sharpe, win-rate, nre trades, posició actual BTC/USDT. Botons: tab per bot + **📈 Gràfic** + **🔄 Actualitzar** |
+| `/compare` | Envia dos missatges: (1) foto del gràfic d'evolució de retorn acumulat (tots els bots + B&H) i (2) taula rànquing live amb botó 🔄. El gràfic és un snapshot estàtic; la taula es pot refrescar en el lloc. |
+| `/trades` | Últims 15 trades de tots els bots combinats, amb P&L i % de confiança. Inclou resum del dia (total trades + P&L net). Botó 🔄 per refrescar. |
+| `/health` | Estat de fonts de dades (OHLCV, Fear & Greed, DB, Binance API) + estat de cada bot (actiu/inactiu). Botó 🔄 per refrescar. |
+| `/help` | Llista totes les comandes disponibles |
+
+### Botó 📈 Gràfic (dins /portfolio)
+
+Quan visualitzes un bot a `/portfolio`, el botó **📈 Gràfic** envia una nova foto amb la corba d'equity individual del bot: línia del bot, referència B&H puntejada, zones de guany/pèrdua acolorides, i marcadors ▲/▼ per als BUY/SELL executats.
+
+### Patró de refresh
+
+Cada comanda d'informació s'envia amb un botó inline `🔄 Actualitzar`.  En prémer-lo, Telegram fa una crida `editMessageText` que reemplaça el contingut del missatge en el lloc amb dades fresques — sense crear un missatge nou ni haver de reescriure la comanda.  `/compare` és l'excepció: el refresh actualitza la taula de text però **no** regenera el gràfic (la foto és un snapshot immutable).
+
+### Alertes proactives (sense comanda)
+
+| Alerta | Condició |
+|--------|---------|
+| ⚠️ Inactivitat | Bot sense activitat > `inactivity_hours` (default: 4h) |
+| ⚠️ Dades obsoletes | Candles OHLCV > `data_stale_minutes` (default: 90 min) |
+| ⚠️ Drawdown | Drawdown < `drawdown_alert_pct` (default: -10%) |
+| 🟢/🔴 Trade executat | Cada BUY o SELL amb preu, mida, portfolio, confiança i F&G actual |
+| 🌅 Resum diari | BTC % avui, total trades (BUY/SELL), rànquing bots, snapshot F&G |
+
+### Comandes de control (amb confirmació de doble clic)
 
 | Comanda | Acció |
 |---------|-------|
-| `/status` | Estat de tots els bots actius (capital, posició, PnL) |
-| `/portfolio` | Resum del portafoli global |
-| `/pause bot_id` | Pausa el bot (no genera nous senyals) — demana confirmació |
-| `/resume bot_id` | Reprèn un bot pausat |
-| `/close bot_id` | Força una venda immediata i pausa el bot |
-| `/restart` | Reinicia el DemoRunner (aplica nous paràmetres de config) |
-| `/reset all` | Reinicia l'estat de TOTS els bots (capital → initial_capital) |
-| `/reset bot_id` | Reinicia l'estat d'un bot concret |
-| `/help` | Llista totes les comandes disponibles |
+| `/pause <bot_id>` | Pausa el bot (no genera nous senyals; les posicions obertes es mantenen) |
+| `/resume <bot_id>` | Reprèn un bot pausat |
+| `/close <bot_id>` | Força venda immediata de tota la posició BTC del bot |
+| `/restart` | Reinicia el DemoRunner (estat conservat a la BD) |
+| `/reset [bot_id]` | Reinicia el capital al valor inicial. Sense argument, reinicia tots els bots. |
+
+Totes les comandes de control mostren primer un missatge de confirmació amb botons **✅ Confirmar** / **❌ Cancel·lar** per evitar accions accidentals.
 
 ---
 
-*Última actualització: Març 2026 · v2 (DemoRunner data-update integrat · reset via Telegram · run_comparison sense --all)*
+*Última actualització: Març 2026 · v3 (Telegram refresh buttons · gràfic per bot · /compare dos missatges · F&G en alertes · resum diari enriquit)*
