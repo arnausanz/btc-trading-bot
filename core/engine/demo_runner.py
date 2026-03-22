@@ -615,6 +615,14 @@ class DemoRunner:
 
         while True:
             try:
+                # ── Drift-free timing: measure loop start, sleep only the remainder ──
+                # time.sleep(fixed_interval) accumulates drift because each iteration
+                # takes fixed_interval + work_time. After N iterations the total drift
+                # is N × work_time (minutes per hour with ~1s/iter work).
+                # Solution: record t0 at the top and sleep(interval - elapsed) at the
+                # bottom so every cycle is *exactly* update_interval seconds.
+                _t0 = time.monotonic()
+
                 # ── Data update (once per hour, before any bot calculates) ──
                 current_hour_bucket = int(datetime.now(timezone.utc).timestamp()) // 3600
                 if current_hour_bucket != self._last_data_update_bucket:
@@ -655,7 +663,15 @@ class DemoRunner:
                     self.notifier.notify_daily_summary(self.get_status())
                     self._last_daily_summary = now
 
-                time.sleep(self.update_interval)
+                # Sleep only the time remaining to complete exactly update_interval.
+                _elapsed = time.monotonic() - _t0
+                _remaining = max(0.0, self.update_interval - _elapsed)
+                if _elapsed > self.update_interval:
+                    logger.warning(
+                        f"Loop iteration took {_elapsed:.1f}s > update_interval "
+                        f"({self.update_interval}s). Consider increasing update_interval."
+                    )
+                time.sleep(_remaining)
 
             except KeyboardInterrupt:
                 logger.info("Demo stopped by user.")
