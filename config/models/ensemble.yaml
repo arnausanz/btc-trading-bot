@@ -19,44 +19,39 @@ bot_id: ensemble_v1
 policy: majority_vote   # majority_vote | weighted (futur) | stacking (futur)
 trade_size: 0.5         # fracció del capital per compra
 
-# ── Sub-bots participants ────────────────────────────────────────────────────
-# ⚠️  PROBLEMA DETECTAT (backtest Març 2026):
-#   Amb només 3 bots clàssics (trend, mean_reversion, momentum), l'ensemble
-#   NO genera cap trade. Causa: TrendBot senyalitza <0.1% de les candles;
-#   la probabilitat que 2/3 bots coincideixin en la mateixa candle és ~0.
-#   SOLUCIÓ: afegir els models ML un cop retrenats amb precision_mean com a mètrica.
-#   XGB i LGBM generen ~900 senyals per 52k candles (1.7%) → molt més viable.
+# ── Sub-bots participants (actualitzat Març 2026, backtest walk-forward) ─────
 #
-# Ordre recomanat per habilitar sub-bots:
-#   1. Clàssics que superin HoldBot en TEST (trend ✅, grid ✅ ja verificats)
-#   2. ML retrenats amb metric: precision_mean (xgb, lgbm prioritaris)
-#   3. RL professionals un cop validats
+# DIAGNÒSTIC: de tots els bots testats, només 2 superen el tall mínim en TEST:
+#
+#   ml_rf_v1   TRAIN +153% Sharpe 1.13 | TEST +4.44% Sharpe 1.14 MaxDD -1.38%  ✅
+#   ml_xgb_v1  TRAIN  +67% Sharpe 1.21 | TEST -3.53% Sharpe -0.42 MaxDD -7.51% ⚠️ borderline
+#
+# Descartats per overfit extrem (TRAIN 81k-275k% → TEST -8% a -55%):
+#   gru, lgbm, catboost, patchtst
+# Descartats per ser RL trencat o inactiu:
+#   ppo_v1, sac_v1, ppo_professional, sac_professional, td3_multiframe
+#   td3_professional (0 trades en TEST), td3_multiframe (overtrading)
+# Descartats per negatiu en TEST 2025:
+#   trend (-5.7%), mean_reversion (-13.2%), momentum (-8.8%), grid (-1.5%)
+#
+# Amb 2 sub-bots, majority_vote >50% = TOTS DOS han de coincidir (AND lògic).
+# Resultat: senyal molt conservador, quasi zero falsos positius.
 sub_bots:
-  # Clàssics — senyals molt esparsos, vot de majoria quasi mai dispara sol
-  - config/models/trend.yaml
-  - config/models/mean_reversion.yaml
-  - config/models/momentum.yaml
+  - config/models/random_forest.yaml   # TEST +4.44% Sharpe 1.14 ✅
+  - config/models/xgboost.yaml         # TEST -3.53% borderline ⚠️ (inclòs per resolució)
 
-  # ML supervisat — HABILITAR UN COP RETRENATS amb metric: precision_mean
-  # Prioritat: xgb i lgbm (generen prou senyals per fer funcionar la majoria)
-  # - config/models/random_forest.yaml
-  # - config/models/xgboost.yaml
-  # - config/models/lightgbm.yaml
-  # - config/models/catboost.yaml
-  # - config/models/gru.yaml
-  # - config/models/patchtst.yaml
-  # - config/models/tft.yaml
-
-  # RL — activar després de train_rl.py + backtest out-of-sample
-  # - config/models/ppo_professional.yaml
-  # - config/models/sac_professional.yaml
-  # - config/models/td3_professional.yaml
+  # ── Candidats futurs ──────────────────────────────────────────────────────
+  # Afegir quan es reentreni amb més regularització i superin TEST > 0%:
+  # - config/models/lightgbm.yaml      # TRAIN 124k% → TEST -55% — overfit
+  # - config/models/catboost.yaml      # TRAIN 81k%  → TEST -42% — overfit
+  # - config/models/gru.yaml           # TRAIN 114k% → TEST -8%  — overfit
+  # - config/models/patchtst.yaml      # TRAIN 275k% → TEST -30% — overfit
+  # - config/models/ppo_professional.yaml   # TEST -31%
+  # - config/models/sac_professional.yaml   # TEST -16%
+  # - config/models/td3_professional.yaml   # TEST 0 trades
 
 # ── Notes ────────────────────────────────────────────────────────────────────
 # - EnsembleBot gestiona el seu propi PaperExchange (cartera independent).
-# - Els sub-bots també poden córrer en paral·lel com a bots independents
-#   (demo.yaml) sense interferir amb l'ensemble.
-# - No afegis HoldBot com a sub-bot: el seu HOLD permanent distorsiona el vot.
-# - Criteris mínims per entrar a l'ensemble: Sharpe > 1.0, Drawdown < -25%
-#   en backtest out-of-sample (TEST_FROM en endavant).
-# - Mínim recomanat: 5 sub-bots actius per a majority_vote efectiu.
+# - Els sub-bots corren en paral·lel com a bots independents a demo.yaml.
+# - No afegis HoldBot: HOLD permanent distorsiona el vot.
+# - Criteri per afegir un sub-bot: Return TEST > 0% i Sharpe TEST > 0.5.
