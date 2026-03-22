@@ -407,11 +407,28 @@ class TelegramNotifier:
         lines: list[str] = []
 
         lines.append("── Fonts de dades ──────────────────────")
-        last_candle = health.get("last_candle_ts")
-        if last_candle:
-            age_min = (now - last_candle).total_seconds() / 60
-            ok_c    = age_min < self.data_stale_minutes
-            lines.append(f"{'✅' if ok_c else '⚠️'} OHLCV         fa {age_min:.0f} min")
+        last_candle    = health.get("last_candle_ts")
+        expected_candle = health.get("expected_candle_ts")
+        last_update_ts  = health.get("last_data_update_ts")
+        if last_candle and expected_candle:
+            # ✅ if we have the candle we're supposed to have (or newer).
+            # The last_candle open-time should equal expected_candle open-time.
+            # Allow 1 period of tolerance (e.g. data updated between closes).
+            has_expected = last_candle >= expected_candle
+            # How long ago did the fetcher run?
+            fetch_age = (
+                f"actualitzat fa {(now - last_update_ts).total_seconds() / 60:.0f} min"
+                if last_update_ts else "fetcher no executat"
+            )
+            candle_str = last_candle.strftime("%H:%M UTC")
+            # How long ago did the last candle CLOSE (open_time + 1 period)?
+            close_ago_min = (now - last_candle).total_seconds() / 60 - 60
+            close_ago_min = max(0, close_ago_min)
+            lines.append(
+                f"{'✅' if has_expected else '⚠️'} OHLCV         {fetch_age}\n"
+                f"   └ última candle: {candle_str}"
+                f"  (tancada fa {close_ago_min:.0f} min)"
+            )
         else:
             lines.append("⚠️ OHLCV         sense dades")
 

@@ -108,7 +108,9 @@ telegram:
   enabled: true
   inactivity_hours: 4          # Alerta push si un bot porta X hores sense trades
   drawdown_alert_pct: -10      # Alerta push si max drawdown supera aquest llindar (%)
-  data_stale_minutes: 60       # Alerta push si OHLCV no s'actualitza en X minuts (2x data_update_interval)
+  data_stale_minutes: 60       # Llegat — ja no s'utilitza per al check primari.
+                               # L'alerta ara es basa en candles perdudes (≥2 períodes de retard),
+                               # no en minuts en brut. Mantingut per compatibilitat de config.
 
 logging:
   level: INFO
