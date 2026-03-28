@@ -76,7 +76,7 @@ p3:
 # ── Porta 4 — Momentum ───────────────────────────────────────────────────────
 p4:
   ewm_span: 3                 # span de l'EWM per suavitzar el preu
-  rsi2_oversold: 10           # llindar RSI-2 Connors (sobrevenut extrem)
+  rsi2_oversold: 20           # llindar RSI-2 Connors (sobrevenut en 4H)
 
 # ── Porta 5 — Risc i Gestió ──────────────────────────────────────────────────
 # V1 long-only: STRONG_BULL i WEAK_BULL → entrades llargues
